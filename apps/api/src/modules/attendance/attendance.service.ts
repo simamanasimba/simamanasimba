@@ -174,6 +174,23 @@ export class AttendanceService {
       throw new ForbiddenException("This event does not allow walk-in registration");
     }
 
+    if (event.limitOneResponsePerPerson && input.phone) {
+      const existingMember = await this.prisma.member.findFirst({
+        where: { organizationId: event.organizationId, phone: input.phone },
+      });
+      if (existingMember) {
+        const existingRegistration = await this.prisma.eventRegistration.findUnique({
+          where: { eventId_memberId: { eventId, memberId: existingMember.id } },
+        });
+        if (existingRegistration) {
+          const attendance = await this.prisma.attendanceRecord.findUnique({
+            where: { eventId_memberId: { eventId, memberId: existingMember.id } },
+          });
+          return { member: existingMember, attendance, alreadyRegistered: true, registrationId: existingRegistration.id, checkedIn: Boolean(attendance) };
+        }
+      }
+    }
+
     const member = await this.members.create(
       event.organizationId,
       {

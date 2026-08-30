@@ -56,6 +56,10 @@ export class CreateEventDto {
   autoCheckInNewMembers?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  limitOneResponsePerPerson?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   monitoringKeywords?: string[];

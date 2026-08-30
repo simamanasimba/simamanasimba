@@ -365,6 +365,11 @@ model Event {
   requireApproval       Boolean  @default(false) @map("require_approval")
   requirePhoneVerification Boolean @default(false) @map("require_phone_verification")
   autoCheckInNewMembers Boolean  @default(true) @map("auto_check_in_new_members")
+  // When on, a walk-in registration matching an existing registrant's phone number
+  // (within this event) is treated as already-registered instead of creating a
+  // second Member/EventRegistration — a configurable "one response per person" cap
+  // for the public walk-in form. Off by default (existing behavior unchanged).
+  limitOneResponsePerPerson Boolean @default(false) @map("limit_one_response_per_person")
   monitoringKeywords    Json     @default("[]") @map("monitoring_keywords")
   customFields          Json     @default("{}") @map("custom_fields")
   createdByUserId       String   @map("created_by_user_id")

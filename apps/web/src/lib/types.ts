@@ -70,6 +70,7 @@ export interface EventRecord {
   allowWalkIns: boolean;
   allowNewMemberReg: boolean;
   autoCheckInNewMembers: boolean;
+  limitOneResponsePerPerson: boolean;
   createdBy?: { firstName: string; lastName: string } | null;
   attendanceCount?: number;
 }

@@ -52,6 +52,7 @@ function EditEventModal({
     endDatetime: toDatetimeLocalValue(event.endDatetime),
   });
   const [allowWalkIn, setAllowWalkIn] = useState(event.allowWalkIns && event.allowNewMemberReg);
+  const [limitOneResponse, setLimitOneResponse] = useState(event.limitOneResponsePerPerson);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,6 +67,7 @@ function EditEventModal({
         endDatetime: new Date(form.endDatetime).toISOString(),
         allowWalkIns: allowWalkIn,
         allowNewMemberReg: allowWalkIn,
+        limitOneResponsePerPerson: limitOneResponse,
       });
       onSaved();
     } catch (err) {
@@ -107,6 +109,15 @@ function EditEventModal({
             <span className="block text-xs font-normal text-muted">{t("allowWalkInHelp")}</span>
           </span>
         </label>
+        {allowWalkIn && (
+          <label className="flex items-start gap-2 pl-6 text-sm text-ink">
+            <input type="checkbox" className="mt-0.5" checked={limitOneResponse} onChange={(e) => setLimitOneResponse(e.target.checked)} />
+            <span>
+              {t("limitOneResponseLabel")}
+              <span className="block text-xs font-normal text-muted">{t("limitOneResponseHelp")}</span>
+            </span>
+          </label>
+        )}
         {error && <p className="text-sm text-brand">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>

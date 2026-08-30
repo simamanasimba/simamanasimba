@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Download, FileText } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { getDeviceId } from "@/lib/deviceId";
 import { enqueue, loadQueue, clearSynced, type QueuedCheckIn } from "@/lib/offlineQueue";
@@ -358,39 +357,8 @@ export default function AttendPage() {
               {registrationResult && !registrationResult.alreadyRegistered && !registrationResult.checkedIn && (
                 <p className="mt-1 max-w-xs text-sm text-muted">{t("registeredBody")}</p>
               )}
-
-              {registrationResult && (
-                <>
-                  <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-muted">{t("yourTicketLabel")}</p>
-                  <div className="mt-2 w-fit rounded-xl border border-line bg-white p-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`${API_BASE}/api/v1/public/attendance/events/${eventId}/ticket/${registrationResult.registrationId}/qr.png`}
-                      alt={t("yourTicketLabel")}
-                      width={168}
-                      height={168}
-                    />
-                  </div>
-                  <p className="mt-3 max-w-xs text-xs text-muted">{t("ticketHint")}</p>
-                  <div className="mt-4 flex w-full gap-2">
-                    <a
-                      href={`${API_BASE}/api/v1/public/attendance/events/${eventId}/ticket/${registrationResult.registrationId}/qr.png`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary flex-1 justify-center text-sm"
-                    >
-                      <Download size={14} /> {t("downloadTicketImage")}
-                    </a>
-                    <a
-                      href={`${API_BASE}/api/v1/public/attendance/events/${eventId}/ticket/${registrationResult.registrationId}/pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary flex-1 justify-center text-sm"
-                    >
-                      <FileText size={14} /> {t("downloadTicketPdf")}
-                    </a>
-                  </div>
-                </>
+              {registrationResult && !registrationResult.alreadyRegistered && (
+                <p className="mt-4 max-w-xs text-sm text-muted">{t("thankYouForAttending")}</p>
               )}
 
               <button onClick={resetForNext} className="btn-primary mt-8 w-full py-3.5 text-base">{t("nextPerson")}</button>
