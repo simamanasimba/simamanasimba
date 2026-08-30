@@ -82,8 +82,8 @@ export default function LoginPage() {
         ))}
         <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/20 to-ink/10" />
         <div className="relative flex h-full flex-col justify-end p-12 text-white">
-          <p className="font-display text-2xl font-extrabold">Tunasimama na Simba</p>
-          <p className="mt-3 max-w-sm text-white/85">{t("heroBody")}</p>
+          <p className="animate-rise-in font-display text-2xl font-extrabold">Tunasimama na Simba</p>
+          <p className="animate-rise-in mt-3 max-w-sm text-white/85" style={{ animationDelay: "0.1s" }}>{t("heroBody")}</p>
         </div>
         {slides.length > 1 && (
           <div className="absolute bottom-5 left-12 z-10 flex gap-1.5">
@@ -107,7 +107,7 @@ export default function LoginPage() {
         </div>
         <div className="w-full max-w-sm">
           <div className="mb-6 text-center lg:mb-8">
-            <Link href="/" className="mx-auto mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-brand-gradient text-white shadow-pop lg:h-12 lg:w-12 lg:rounded-xl">
+            <Link href="/" className="animate-pop-in mx-auto mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-brand-gradient text-white shadow-pop lg:h-12 lg:w-12 lg:rounded-xl">
               {logoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoSrc} alt="" className="h-full w-full object-cover" />
@@ -115,11 +115,11 @@ export default function LoginPage() {
                 <BrandMark className="h-8 w-8 lg:h-7 lg:w-7" color="white" />
               )}
             </Link>
-            <p className="font-display text-sm font-bold uppercase tracking-wide text-brand-700 lg:hidden">Tunasimama na Simba</p>
-            <h1 className="font-display mt-1 text-2xl font-extrabold text-ink lg:mt-0">{t("signInTitle")}</h1>
+            <p className="animate-rise-in font-display text-sm font-bold uppercase tracking-wide text-brand-700 lg:hidden" style={{ animationDelay: "0.1s" }}>Tunasimama na Simba</p>
+            <h1 className="animate-rise-in font-display mt-1 text-2xl font-extrabold text-ink lg:mt-0" style={{ animationDelay: "0.15s" }}>{t("signInTitle")}</h1>
           </div>
 
-          <form onSubmit={onSubmit} className="card space-y-4 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+          <form onSubmit={onSubmit} className="animate-rise-in card space-y-4 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none" style={{ animationDelay: "0.2s" }}>
             <div>
               <label className="label" htmlFor="email">{t("email")}</label>
               <input id="email" type="email" autoComplete="username" required className="input" value={email} onChange={(e) => setEmail(e.target.value)} />

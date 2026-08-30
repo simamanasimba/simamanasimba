@@ -56,8 +56,11 @@ export function ReachGauge({
           <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
           <RadialBar dataKey="value" cornerRadius={16} background={{ fill: "#EFE7E5" }} fill={color} isAnimationActive={false} />
         </RadialBarChart>
-        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex flex-col items-center">
-          <p className="nums text-3xl font-extrabold" style={{ color }}>{hasTarget ? `${pct}%` : "—"}</p>
+        {/* Centered in the arc's hollow (from its inner edge at cy-innerRadius=52 down to
+            cy=140), not glued to the container's bottom edge — that hollow, not the full
+            260x150 box, is this half-circle's true visual center. */}
+        <div className="pointer-events-none absolute inset-x-0 flex flex-col items-center justify-center" style={{ top: 52, bottom: 0 }}>
+          <p className="nums text-2xl font-extrabold" style={{ color }}>{hasTarget ? `${pct}%` : "—"}</p>
           <p className="mt-0.5 text-xs text-muted">
             {hasTarget ? `${value.toLocaleString()} ${t("ofLabel")} ${target!.toLocaleString()}` : t("tooltipNoTarget")}
           </p>
