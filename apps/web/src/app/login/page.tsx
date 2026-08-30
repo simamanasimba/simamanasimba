@@ -108,7 +108,8 @@ export default function LoginPage() {
           <LanguageToggle />
         </div>
         <div className="relative flex h-full flex-col justify-end p-6 pb-12 text-white">
-          <p className="animate-rise-in font-display text-3xl font-extrabold leading-tight">Tunasimama na Simba</p>
+          <p className="animate-rise-in font-display text-3xl font-extrabold leading-tight">Tunasimama</p>
+          <p className="animate-rise-in font-display text-3xl font-extrabold leading-tight text-white/80" style={{ animationDelay: "0.1s" }}>na Simba</p>
         </div>
         {renderHeroDots("bottom-4 left-6")}
       </div>
