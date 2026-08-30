@@ -108,8 +108,7 @@ export default function LoginPage() {
           <LanguageToggle />
         </div>
         <div className="relative flex h-full flex-col justify-end p-6 pb-12 text-white">
-          <p className="animate-rise-in font-display text-3xl font-extrabold leading-tight">{t("helloGreeting")}</p>
-          <p className="animate-rise-in font-display text-3xl font-extrabold leading-tight" style={{ animationDelay: "0.1s" }}>{t("signInTitle")}</p>
+          <p className="animate-rise-in font-display text-3xl font-extrabold leading-tight">Tunasimama na Simba</p>
         </div>
         {renderHeroDots("bottom-4 left-6")}
       </div>
@@ -143,7 +142,7 @@ export default function LoginPage() {
                 <BrandMark className="h-7 w-7" color="white" />
               )}
             </Link>
-            <h1 className="animate-rise-in font-display text-xl font-extrabold text-ink lg:text-2xl" style={{ animationDelay: "0.15s" }}>{t("loginCardSubtitle")}</h1>
+            <h1 className="animate-rise-in font-display text-xl font-medium text-ink lg:text-2xl lg:font-extrabold" style={{ animationDelay: "0.15s" }}>{t("signInTitle")}</h1>
           </div>
 
           <form onSubmit={onSubmit} className="animate-rise-in card space-y-4 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none" style={{ animationDelay: "0.2s" }}>
