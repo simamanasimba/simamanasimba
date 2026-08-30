@@ -51,6 +51,7 @@ function EditEventModal({
     startDatetime: toDatetimeLocalValue(event.startDatetime),
     endDatetime: toDatetimeLocalValue(event.endDatetime),
   });
+  const [allowWalkIn, setAllowWalkIn] = useState(event.allowWalkIns && event.allowNewMemberReg);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -63,6 +64,8 @@ function EditEventModal({
         ...form,
         startDatetime: new Date(form.startDatetime).toISOString(),
         endDatetime: new Date(form.endDatetime).toISOString(),
+        allowWalkIns: allowWalkIn,
+        allowNewMemberReg: allowWalkIn,
       });
       onSaved();
     } catch (err) {
@@ -97,6 +100,13 @@ function EditEventModal({
             <input type="datetime-local" required className="input" value={form.endDatetime} onChange={(e) => setForm((f) => ({ ...f, endDatetime: e.target.value }))} />
           </div>
         </div>
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input type="checkbox" className="mt-0.5" checked={allowWalkIn} onChange={(e) => setAllowWalkIn(e.target.checked)} />
+          <span>
+            {t("allowWalkInLabel")}
+            <span className="block text-xs font-normal text-muted">{t("allowWalkInHelp")}</span>
+          </span>
+        </label>
         {error && <p className="text-sm text-brand">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>

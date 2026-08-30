@@ -18,6 +18,7 @@ function NewEventModal({ organizationId, onClose, onCreated }: { organizationId:
   const { t } = useLang();
   const EVENT_TYPE_SUGGESTIONS = [t("etMatch"), t("etTraining"), t("etMeeting"), t("etBoardMeeting"), t("etCampaign"), t("etFanEvent")];
   const [form, setForm] = useState({ name: "", eventType: "", location: "", startDatetime: "", endDatetime: "" });
+  const [allowWalkIn, setAllowWalkIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,6 +31,8 @@ function NewEventModal({ organizationId, onClose, onCreated }: { organizationId:
         ...form,
         startDatetime: new Date(form.startDatetime).toISOString(),
         endDatetime: new Date(form.endDatetime).toISOString(),
+        allowWalkIns: allowWalkIn,
+        allowNewMemberReg: allowWalkIn,
       });
       onCreated(created);
     } catch (err) {
@@ -75,6 +78,13 @@ function NewEventModal({ organizationId, onClose, onCreated }: { organizationId:
             <input type="datetime-local" required className="input" value={form.endDatetime} onChange={(e) => setForm((f) => ({ ...f, endDatetime: e.target.value }))} />
           </div>
         </div>
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input type="checkbox" className="mt-0.5" checked={allowWalkIn} onChange={(e) => setAllowWalkIn(e.target.checked)} />
+          <span>
+            {t("allowWalkInLabel")}
+            <span className="block text-xs font-normal text-muted">{t("allowWalkInHelp")}</span>
+          </span>
+        </label>
         {error && <p className="text-sm text-brand">{error}</p>}
         <p className="text-xs text-muted">{t("qrAutoHelp")}</p>
         <div className="flex justify-end gap-2 pt-2">
