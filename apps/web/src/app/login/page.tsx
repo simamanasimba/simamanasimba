@@ -99,25 +99,27 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* Right half — login form */}
-      <div className="relative flex flex-1 items-center justify-center bg-white px-4 py-10">
+      {/* Right half — login form. On mobile (no hero panel) this gets its own
+          soft brand wash + card so the page doesn't read as a bare white form. */}
+      <div className="app-bg relative flex flex-1 items-center justify-center px-4 py-10 lg:bg-none lg:bg-white">
         <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
           <LanguageToggle />
         </div>
         <div className="w-full max-w-sm">
-          <div className="mb-8 text-center">
-            <Link href="/" className="mx-auto mb-4 flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-brand-gradient text-white shadow-pop">
+          <div className="mb-6 text-center lg:mb-8">
+            <Link href="/" className="mx-auto mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-brand-gradient text-white shadow-pop lg:h-12 lg:w-12 lg:rounded-xl">
               {logoSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoSrc} alt="" className="h-full w-full object-cover" />
               ) : (
-                <BrandMark className="h-7 w-7" color="white" />
+                <BrandMark className="h-8 w-8 lg:h-7 lg:w-7" color="white" />
               )}
             </Link>
-            <h1 className="font-display text-2xl font-extrabold text-ink">{t("signInTitle")}</h1>
+            <p className="font-display text-sm font-bold uppercase tracking-wide text-brand-700 lg:hidden">Tunasimama na Simba</p>
+            <h1 className="font-display mt-1 text-2xl font-extrabold text-ink lg:mt-0">{t("signInTitle")}</h1>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="card space-y-4 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
             <div>
               <label className="label" htmlFor="email">{t("email")}</label>
               <input id="email" type="email" autoComplete="username" required className="input" value={email} onChange={(e) => setEmail(e.target.value)} />

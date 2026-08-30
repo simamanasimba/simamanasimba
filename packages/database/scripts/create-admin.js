@@ -3,6 +3,9 @@ const { hashPassword } = require("@event-intel/security");
 
 const prisma = new PrismaClient();
 
+const ADMIN_EMAIL = "admin@simamanasimba.com";
+const OLD_ADMIN_EMAIL = "admin@simamanasima.com";
+
 async function main() {
   const passwordHash = await hashPassword(process.env.NEW_ADMIN_PASSWORD);
 
@@ -12,10 +15,20 @@ async function main() {
     update: {},
   });
 
+  const existingUnderOldEmail = await prisma.user.findUnique({ where: { email: OLD_ADMIN_EMAIL } });
+  if (existingUnderOldEmail) {
+    await prisma.user.update({
+      where: { id: existingUnderOldEmail.id },
+      data: { email: ADMIN_EMAIL, passwordHash, status: "ACTIVE", isPlatformOwner: true },
+    });
+    console.log("Renamed " + OLD_ADMIN_EMAIL + " -> " + ADMIN_EMAIL);
+    return;
+  }
+
   const admin = await prisma.user.upsert({
-    where: { email: "admin@simamanasima.com" },
+    where: { email: ADMIN_EMAIL },
     create: {
-      email: "admin@simamanasima.com",
+      email: ADMIN_EMAIL,
       passwordHash,
       firstName: "Admin",
       lastName: "User",
