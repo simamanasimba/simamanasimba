@@ -1,0 +1,16 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.simamanasimba.com" }],
+      "destination": "https://simamanasimba.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "simamanasimba.vercel.app" }],
+      "destination": "https://simamanasimba.com/:path*",
+      "permanent": true
+    }
+  ]
+}

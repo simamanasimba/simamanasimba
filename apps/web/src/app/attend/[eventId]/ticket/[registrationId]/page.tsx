@@ -7,6 +7,8 @@ import { api, ApiError } from "@/lib/api";
 import { BrandMark } from "@/components/BrandMark";
 import { useLang } from "@/lib/i18n";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
 interface Ticket {
   registrationId: string;
   event: { id: string; name: string; location: string | null; startDatetime: string; endDatetime: string; hasEnded: boolean };
@@ -24,6 +26,14 @@ export default function TicketCheckInPage() {
   const [state, setState] = useState<State>("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<{ logoUrl: string | null }>("/api/v1/public/branding")
+      .then((b) => setLogoSrc(b.logoUrl ? (b.logoUrl.startsWith("http") ? b.logoUrl : `${API_BASE}${b.logoUrl}`) : null))
+      .catch(() => setLogoSrc(null));
+  }, []);
 
   useEffect(() => {
     api
@@ -51,8 +61,13 @@ export default function TicketCheckInPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col items-center bg-white px-5 py-8 text-center">
-      <div className="mb-6 flex h-9 w-9 items-center justify-center rounded-lg bg-brand-gradient text-white shadow-pop">
-        <BrandMark className="h-5 w-5" color="white" />
+      <div className="mb-6 flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-brand-gradient text-white shadow-pop">
+        {logoSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoSrc} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <BrandMark className="h-5 w-5" color="white" />
+        )}
       </div>
 
       {state === "loading" && <p className="mt-16 text-sm text-muted">…</p>}

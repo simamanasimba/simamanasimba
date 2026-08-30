@@ -31,6 +31,14 @@ export default function AttendPage() {
   const token = useSearchParams().get("token") ?? "";
   const deviceId = getDeviceId();
 
+  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .get<{ logoUrl: string | null }>("/api/v1/public/branding")
+      .then((b) => setLogoSrc(b.logoUrl ? (b.logoUrl.startsWith("http") ? b.logoUrl : `${API_BASE}${b.logoUrl}`) : null))
+      .catch(() => setLogoSrc(null));
+  }, []);
+
   const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
   const [screen, setScreen] = useState<Screen>("start");
   const [membershipNumber, setMembershipNumber] = useState("");
@@ -187,8 +195,13 @@ export default function AttendPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-white px-5 py-6">
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-gradient text-white shadow-pop">
-          <BrandMark className="h-5 w-5" color="white" />
+        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-brand-gradient text-white shadow-pop">
+          {logoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoSrc} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <BrandMark className="h-5 w-5" color="white" />
+          )}
         </div>
         <span className={`badge ${statusColor[syncStatus]}`}>
           {syncStatusLabel[syncStatus]}

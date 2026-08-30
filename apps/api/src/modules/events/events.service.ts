@@ -4,6 +4,7 @@ import { generateOpaqueToken } from "@event-intel/security";
 import type { Event, EventStatus, Prisma } from "@event-intel/database";
 import { PrismaService } from "../../prisma/prisma.service";
 import { SearchIndexService } from "../search-index/search-index.service";
+import { StorageService } from "../storage/storage.service";
 import { renderQrCardPdf } from "../attendance/qr-card-pdf.util";
 import type { CreateEventDto } from "./dto/create-event.dto";
 import type { UpdateEventDto } from "./dto/update-event.dto";
@@ -15,6 +16,7 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly searchIndex: SearchIndexService,
+    private readonly storage: StorageService,
   ) {}
 
   private indexEvent(event: Event): void {
@@ -220,16 +222,18 @@ export class EventsService {
 
   async getQrPdf(organizationId: string, eventId: string, token: string) {
     const event = await this.ensureEvent(organizationId, eventId);
-    const org = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, logoUrl: true } });
     const checkInUrl = `${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/attend/${eventId}?token=${token}`;
     const qrPng = await QRCode.toBuffer(checkInUrl, { width: 480, margin: 1 });
     const dateLabel = event.startDatetime.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const logo = org?.logoUrl ? await this.storage.readAsBuffer(org.logoUrl) : null;
     const pdf = await renderQrCardPdf({
       title: org?.name ?? event.name,
       subtitle: `${event.name} — ${dateLabel}`,
       lines: ["Scan to register or check in"],
       qrPng,
       footer: event.location ?? undefined,
+      logo,
     });
     return pdf;
   }

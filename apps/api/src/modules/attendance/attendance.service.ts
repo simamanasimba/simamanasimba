@@ -4,6 +4,7 @@ import { hashToken } from "@event-intel/security";
 import type { AttendanceMethod, Event, Gender } from "@event-intel/database";
 import { PrismaService } from "../../prisma/prisma.service";
 import { MembersService } from "../members/members.service";
+import { StorageService } from "../storage/storage.service";
 import { renderQrCardPdf } from "./qr-card-pdf.util";
 
 export interface ResolvedEventToken {
@@ -15,6 +16,7 @@ export class AttendanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly members: MembersService,
+    private readonly storage: StorageService,
   ) {}
 
   async resolveEventByToken(eventId: string, token: string): Promise<ResolvedEventToken> {
@@ -276,15 +278,17 @@ export class AttendanceService {
 
   async getTicketPdf(eventId: string, registrationId: string): Promise<Buffer> {
     const ticket = await this.getTicket(eventId, registrationId);
-    const event = await this.prisma.event.findUnique({ where: { id: eventId }, include: { organization: { select: { name: true } } } });
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, include: { organization: { select: { name: true, logoUrl: true } } } });
     const qrPng = await QRCode.toBuffer(this.ticketUrl(eventId, registrationId), { width: 480, margin: 1 });
     const dateLabel = new Date(ticket.event.startDatetime).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const logo = event?.organization.logoUrl ? await this.storage.readAsBuffer(event.organization.logoUrl) : null;
     return renderQrCardPdf({
       title: event?.organization.name ?? ticket.event.name,
       subtitle: `${ticket.event.name} — ${dateLabel}`,
       lines: [`${ticket.member.firstName} ${ticket.member.lastName}`, "Entry ticket — scan at the door"],
       qrPng,
       footer: ticket.event.location ?? undefined,
+      logo,
     });
   }
 
