@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { Plus, MapPin, CalendarDays, User, Users, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Plus, MapPin, CalendarDays, User, Users, LayoutGrid, List as ListIcon, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { EventRecord } from "@/lib/types";
 import { Modal } from "@/components/Modal";
+import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 
 interface CreatedEvent extends EventRecord {
@@ -111,11 +112,14 @@ export default function EventsPage() {
   const { organizationId } = useParams<{ organizationId: string }>();
   const { t } = useLang();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [showNew, setShowNew] = useState(false);
   const [eventType, setEventType] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [view, setView] = useState<"cards" | "list">("cards");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: eventTypes } = useQuery({
     queryKey: ["event-types", organizationId],
@@ -139,6 +143,22 @@ export default function EventsPage() {
       sessionStorage.setItem(`eip:new-qr:${event.id}`, JSON.stringify(event.qr));
     }
     router.push(`/org/${organizationId}/events/${event.id}`);
+  }
+
+  async function onDelete(e: React.MouseEvent, eventId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(t("confirmDeleteEvent"))) return;
+    setDeletingId(eventId);
+    try {
+      await api.delete(`/api/v1/organizations/${organizationId}/events/${eventId}`);
+      queryClient.invalidateQueries({ queryKey: ["events", organizationId] });
+      showToast("success", t("eventDeleted"));
+    } catch (err) {
+      showToast("error", err instanceof ApiError ? err.message : t("failedDeleteEvent"));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -195,7 +215,18 @@ export default function EventsPage() {
               <Link key={e.id} href={`/org/${organizationId}/events/${e.id}`} className="card block transition hover:-translate-y-0.5 hover:shadow-pop/40">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="truncate font-display font-bold text-ink">{e.name}</h3>
-                  <span className="badge shrink-0 bg-surface text-muted">{e.status}</span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="badge bg-surface text-muted">{e.status}</span>
+                    <button
+                      type="button"
+                      onClick={(ev) => onDelete(ev, e.id)}
+                      disabled={deletingId === e.id}
+                      aria-label={t("deleteCta")}
+                      className="rounded-md p-1 text-muted transition hover:bg-brand-100 hover:text-brand disabled:opacity-40"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
                 {e.eventType && <span className="badge mt-1.5 bg-brand-50 text-brand-700">{e.eventType}</span>}
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
@@ -221,6 +252,7 @@ export default function EventsPage() {
                 <th className="px-4 py-2 font-semibold">{t("organizerLabel")}</th>
                 <th className="px-4 py-2 font-semibold">{t("attendeesLabel")}</th>
                 <th className="px-4 py-2 font-semibold">{t("statusLabel")}</th>
+                <th className="px-4 py-2 font-semibold"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line/60">
@@ -233,11 +265,22 @@ export default function EventsPage() {
                   <td className="px-4 py-2 text-muted">{e.createdBy ? `${e.createdBy.firstName} ${e.createdBy.lastName}` : "—"}</td>
                   <td className="nums px-4 py-2 text-muted">{e.attendanceCount ?? 0}</td>
                   <td className="px-4 py-2"><span className="badge bg-surface text-muted">{e.status}</span></td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={(ev) => onDelete(ev, e.id)}
+                      disabled={deletingId === e.id}
+                      aria-label={t("deleteCta")}
+                      className="rounded-md p-1 text-muted transition hover:bg-brand-100 hover:text-brand disabled:opacity-40"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {data?.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-muted">{t("noEventsMatch")}</td>
+                  <td colSpan={8} className="px-4 py-6 text-center text-muted">{t("noEventsMatch")}</td>
                 </tr>
               )}
             </tbody>
