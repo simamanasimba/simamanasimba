@@ -6,6 +6,7 @@ import { UpdateInfluencerDto } from "./dto/update-influencer.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
@@ -13,6 +14,8 @@ import { StorageService, MAX_UPLOAD_BYTES, sanitizeExtension } from "../storage/
 
 @Controller("api/v1/organizations/:organizationId/influencers")
 @UseGuards(OrgMembershipGuard, RolesGuard)
+@Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
+@RequiresArea("influencers")
 export class InfluencersController {
   constructor(
     private readonly influencers: InfluencersService,

@@ -1639,12 +1639,16 @@ model OrgRolePermission {
   organizationId String   @map("organization_id")
   role           RoleKey
   area           String
+  // "view" | "create" | "edit" | "delete" — see permissions.constants.ts's ACTIONS.
+  // Defaulted to "view" so pre-existing rows (written before this column existed)
+  // keep meaning exactly what they always meant: area-level access.
+  action         String   @default("view")
   allowed        Boolean  @default(true)
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, role, area])
+  @@unique([organizationId, role, area, action])
   @@index([organizationId])
   @@map("org_role_permissions")
 }

@@ -8,12 +8,15 @@ import { RegisterMemberDto } from "./dto/register-member.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
 
 @Controller("api/v1/organizations/:organizationId/events")
 @UseGuards(OrgMembershipGuard, RolesGuard)
+@Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+@RequiresArea("events")
 export class EventsController {
   constructor(
     private readonly events: EventsService,

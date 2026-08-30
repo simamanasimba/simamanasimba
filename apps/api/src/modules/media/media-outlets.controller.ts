@@ -5,9 +5,12 @@ import { CreateMediaOutletDto } from "./dto/create-media-outlet.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 
 @Controller("api/v1/organizations/:organizationId/media-outlets")
 @UseGuards(OrgMembershipGuard, RolesGuard)
+@Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
+@RequiresArea("media-hosts")
 export class MediaOutletsController {
   constructor(private readonly mediaOutlets: MediaOutletsService) {}
 

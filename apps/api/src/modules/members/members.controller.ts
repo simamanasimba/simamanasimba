@@ -19,6 +19,8 @@ import { toCsv, parseCsv } from "../../common/csv.util";
 
 @Controller("api/v1/organizations/:organizationId/members")
 @UseGuards(OrgMembershipGuard, RolesGuard)
+@Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+@RequiresArea("members")
 export class MembersController {
   constructor(
     private readonly members: MembersService,

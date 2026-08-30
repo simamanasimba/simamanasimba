@@ -10,7 +10,7 @@ import { useLang, type DictKey } from "@/lib/i18n";
 import { RequireAccess } from "@/components/RequireAccess";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useAuth } from "@/hooks/useAuth";
-import type { PermissionArea, RoleKey } from "@/lib/permissions";
+import type { PermissionArea, PermissionAction, RoleKey } from "@/lib/permissions";
 
 interface OrgUser {
   userId: string;
@@ -37,11 +37,19 @@ const CAPABILITY_ROWS: { labelKey: DictKey; area: PermissionArea }[] = [
   { labelKey: "capabilityInfluencers", area: "influencers" },
   { labelKey: "capabilityMediaHosts", area: "media-hosts" },
   { labelKey: "capabilityEvents", area: "events" },
+  { labelKey: "capabilityTracker", area: "tracker" },
   { labelKey: "capabilityReports", area: "reports" },
   { labelKey: "capabilityFinance", area: "finance" },
   { labelKey: "capabilityPaymentApproval", area: "payment-approval" },
   { labelKey: "capabilitySettings", area: "settings" },
   { labelKey: "capabilityAccessControlArea", area: "access-control" },
+];
+
+const ACTIONS: { action: PermissionAction; labelKey: DictKey }[] = [
+  { action: "view", labelKey: "actionView" },
+  { action: "create", labelKey: "actionCreate" },
+  { action: "edit", labelKey: "actionEdit" },
+  { action: "delete", labelKey: "actionDelete" },
 ];
 
 function CapabilityMatrix({ organizationId }: { organizationId: string }) {
@@ -50,12 +58,13 @@ function CapabilityMatrix({ organizationId }: { organizationId: string }) {
   const queryClient = useQueryClient();
   const { data: perms } = useRolePermissions(organizationId);
   const [pending, setPending] = useState<string | null>(null);
+  const [action, setAction] = useState<PermissionAction>("view");
 
   async function toggle(role: string, area: PermissionArea, allowed: boolean) {
-    const key = `${role}:${area}`;
+    const key = `${role}:${area}:${action}`;
     setPending(key);
     try {
-      await api.patch(`/api/v1/organizations/${organizationId}/role-permissions`, { role, area, allowed });
+      await api.patch(`/api/v1/organizations/${organizationId}/role-permissions`, { role, area, action, allowed });
       queryClient.invalidateQueries({ queryKey: ["role-permissions", organizationId] });
       showToast("success", t("permissionUpdated"));
     } catch (err) {
@@ -67,7 +76,21 @@ function CapabilityMatrix({ organizationId }: { organizationId: string }) {
 
   return (
     <div className="card overflow-x-auto">
-      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">{t("whatEachRoleCanSeeTitle")}</h2>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{t("whatEachRoleCanSeeTitle")}</h2>
+        <div className="flex gap-1 rounded-lg border border-line/60 bg-surface p-1">
+          {ACTIONS.map((a) => (
+            <button
+              key={a.action}
+              type="button"
+              onClick={() => setAction(a.action)}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${action === a.action ? "bg-white text-ink shadow-sm" : "text-muted"}`}
+            >
+              {t(a.labelKey)}
+            </button>
+          ))}
+        </div>
+      </div>
       <p className="mb-4 max-w-2xl text-xs text-muted">{t("permissionMatrixHelp")}</p>
       <table className="w-full min-w-[900px] border-collapse text-sm">
         <thead>
@@ -83,7 +106,7 @@ function CapabilityMatrix({ organizationId }: { organizationId: string }) {
             <tr key={row.area} className="border-b border-line/60">
               <td className="py-2 pr-3 font-medium text-ink">{t(row.labelKey)}</td>
               {ROLES.map((role) => {
-                const cell = perms?.matrix?.[row.area]?.[role as RoleKey];
+                const cell = perms?.matrix?.[row.area]?.[action]?.[role as RoleKey];
                 if (!cell) {
                   return <td key={role} className="px-2 py-2 text-center text-muted/40">—</td>;
                 }
@@ -98,7 +121,7 @@ function CapabilityMatrix({ organizationId }: { organizationId: string }) {
                   <td key={role} className="px-2 py-2 text-center">
                     <input
                       type="checkbox"
-                      disabled={pending === `${role}:${row.area}`}
+                      disabled={pending === `${role}:${row.area}:${action}`}
                       checked={cell.allowed}
                       onChange={(e) => toggle(role, row.area, e.target.checked)}
                       className="h-4 w-4 rounded border-line accent-brand-600 disabled:opacity-40"

@@ -52,7 +52,10 @@ const ADMIN_ROLES: RoleKey[] = ["ORG_SUPER_ADMIN", "ORG_ADMIN"];
  * operational "finance" page (recording payments) has its own fixed, non-overridable rule —
  * only the read-only Reports page ("finance-reports") is part of this system, under the
  * combined backend area "finance". */
-export type PermissionArea = "dashboard" | "members" | "influencers" | "media-hosts" | "events" | "reports" | "finance" | "payment-approval" | "settings" | "access-control";
+export type PermissionArea = "dashboard" | "members" | "influencers" | "media-hosts" | "events" | "tracker" | "reports" | "finance" | "payment-approval" | "settings" | "access-control";
+
+/** The CRUD dimension layered on top of area — mirrors permissions.constants.ts's ACTIONS. */
+export type PermissionAction = "view" | "create" | "edit" | "delete";
 
 export interface PermissionMatrixCell {
   allowed: boolean;
@@ -61,9 +64,10 @@ export interface PermissionMatrixCell {
 
 export interface PermissionMatrixResponse {
   areas: PermissionArea[];
+  actions: PermissionAction[];
   roles: RoleKey[];
-  matrix: Record<PermissionArea, Record<RoleKey, PermissionMatrixCell>>;
-  grants: Record<PermissionArea, RoleKey[]>;
+  matrix: Record<PermissionArea, Record<PermissionAction, Record<RoleKey, PermissionMatrixCell>>>;
+  grants: Record<PermissionArea, Record<PermissionAction, RoleKey[]>>;
 }
 
 const NAV_TO_PERMISSION_AREA: Partial<Record<NavKey, PermissionArea>> = {
@@ -88,9 +92,19 @@ const NAV_TO_PERMISSION_AREA: Partial<Record<NavKey, PermissionArea>> = {
 export function canAccess(role: string | undefined | null, area: NavKey, matrix?: PermissionMatrixResponse["matrix"]): boolean {
   if (!role) return false;
   const permArea = NAV_TO_PERMISSION_AREA[area];
-  const cell = permArea ? matrix?.[permArea]?.[role as RoleKey] : undefined;
+  const cell = permArea ? matrix?.[permArea]?.view?.[role as RoleKey] : undefined;
   if (cell) return cell.allowed;
   return NAV_ACCESS[area]?.includes(role as RoleKey) ?? false;
+}
+
+/** Whether `role` can perform `action` (create/edit/delete — "view" is canAccess's job) in `area`,
+ * per the live matrix. Locked/admin-equivalent roles always resolve true via the matrix itself
+ * (see permissions.service.ts's getMatrix); this only meaningfully gates non-admin roles. */
+export function canDo(role: string | undefined | null, area: PermissionArea, action: Exclude<PermissionAction, "view">, matrix?: PermissionMatrixResponse["matrix"]): boolean {
+  if (!role) return false;
+  const cell = matrix?.[area]?.[action]?.[role as RoleKey];
+  if (cell) return cell.allowed;
+  return ADMIN_ROLES.includes(role as RoleKey);
 }
 
 /** Only admins and the Finance role are allowed to record/edit payments — everyone else can view what finance shares with them but not act. */
@@ -104,7 +118,7 @@ export function canRecordPayment(role: string | undefined | null): boolean {
  * Access control page's matrix. */
 export function canApprovePayment(role: string | undefined | null, matrix?: PermissionMatrixResponse["matrix"]): boolean {
   if (!role) return false;
-  const cell = matrix?.["payment-approval"]?.[role as RoleKey];
+  const cell = matrix?.["payment-approval"]?.edit?.[role as RoleKey];
   if (cell) return cell.allowed;
   return ADMIN_ROLES.includes(role as RoleKey);
 }

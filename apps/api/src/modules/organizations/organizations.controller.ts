@@ -92,6 +92,8 @@ export class OrganizationsController {
   }
 
   @Get("users")
+  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+  @RequiresArea("access-control")
   listMembers(@Param("organizationId") organizationId: string) {
     return this.organizations.listMembers(organizationId);
   }
@@ -123,6 +125,7 @@ export class OrganizationsController {
   // invite/role-change/suspend above which a normal Admin can also do.
   @Delete("users/:userId")
   @Roles("ORG_SUPER_ADMIN")
+  @RequiresArea("access-control")
   async removeMember(@Param("organizationId") organizationId: string, @Param("userId") userId: string, @CurrentUser() user: RequestUser) {
     const membership = await this.organizations.removeMember(organizationId, userId);
     await this.audit.record({ organizationId, userId: user.id, action: "organization.user_removed", entityType: "user", entityId: userId });

@@ -16,6 +16,7 @@ import { AuditService } from "../../common/audit.service";
 @Controller("api/v1/organizations/:organizationId/expenses")
 @UseGuards(OrgMembershipGuard, RolesGuard)
 @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
+@RequiresArea("finance")
 export class ExpensesController {
   constructor(
     private readonly expenses: ExpensesService,
@@ -23,13 +24,11 @@ export class ExpensesController {
   ) {}
 
   @Get()
-  @RequiresArea("finance")
   list(@Param("organizationId") organizationId: string, @Query("category") category?: ExpenseCategory) {
     return this.expenses.list(organizationId, category);
   }
 
   @Get("totals")
-  @RequiresArea("finance")
   totals(@Param("organizationId") organizationId: string) {
     return this.expenses.totalsByCategory(organizationId);
   }

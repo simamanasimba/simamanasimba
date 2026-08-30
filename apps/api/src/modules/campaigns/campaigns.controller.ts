@@ -4,6 +4,7 @@ import { SendCampaignDto } from "./dto/send-campaign.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
@@ -18,6 +19,7 @@ export class CampaignsController {
 
   @Post("send")
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+  @RequiresArea("members")
   async send(@Param("organizationId") organizationId: string, @Body() dto: SendCampaignDto, @CurrentUser() user: RequestUser) {
     const result = await this.campaigns.send(organizationId, dto.subject, dto.message, {
       region: dto.region,

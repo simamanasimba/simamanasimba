@@ -10,6 +10,7 @@ import { SubmitMetricsDto } from "./dto/submit-metrics.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
@@ -19,6 +20,8 @@ const WRITE_ROLES = ["ORG_SUPER_ADMIN", "ORG_ADMIN"] as const;
 
 @Controller("api/v1/organizations/:organizationId/influencer2/campaigns")
 @UseGuards(OrgMembershipGuard, RolesGuard)
+@Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
+@RequiresArea("influencers")
 export class Influencer2CampaignsController {
   constructor(
     private readonly campaigns: Influencer2CampaignsService,

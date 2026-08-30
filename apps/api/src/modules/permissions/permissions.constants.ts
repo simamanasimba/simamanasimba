@@ -10,6 +10,7 @@ export const AREAS = [
   "influencers",
   "media-hosts",
   "events",
+  "tracker",
   "reports",
   "finance",
   "payment-approval",
@@ -18,6 +19,26 @@ export const AREAS = [
 ] as const;
 
 export type PermissionArea = (typeof AREAS)[number];
+
+/** The CRUD dimension layered on top of area — inferred from the request's HTTP method by
+ * RolesGuard (GET→view, POST→create, PATCH/PUT→edit, DELETE→delete), never set explicitly by
+ * route decorators. An override now targets one (area, action) pair, not the whole area. */
+export const ACTIONS = ["view", "create", "edit", "delete"] as const;
+export type PermissionAction = (typeof ACTIONS)[number];
+
+export function actionForMethod(method: string): PermissionAction {
+  switch (method.toUpperCase()) {
+    case "POST":
+      return "create";
+    case "PATCH":
+    case "PUT":
+      return "edit";
+    case "DELETE":
+      return "delete";
+    default:
+      return "view";
+  }
+}
 
 /** The one role that can never be edited out of any area, in either direction — the account's
  * permanent safety net. If every other role's access to an area gets misconfigured (including
@@ -43,6 +64,7 @@ export const AREA_DEFAULT_ROLES: Record<PermissionArea, RoleKey[]> = {
   influencers: ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER"],
   "media-hosts": ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER"],
   events: ["ORG_SUPER_ADMIN", "ORG_ADMIN"],
+  tracker: ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER"],
   reports: ["ORG_SUPER_ADMIN", "ORG_ADMIN"],
   finance: ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER"],
   // Who may approve/reject a pending payment — deliberately narrower than "finance" itself
@@ -55,11 +77,21 @@ export const AREA_DEFAULT_ROLES: Record<PermissionArea, RoleKey[]> = {
 };
 
 /** Areas where an override is actually consulted by a backend guard (RolesGuard, via
- * @RequiresArea on the relevant routes) — members/finance/settings/access-control map onto real
- * @Roles-protected controllers. The rest (influencers, media-hosts, events, reports) have no
- * role-restricted GET routes today, so an override there only changes frontend nav visibility —
- * same level of protection those areas already have. */
-export const BACKEND_ENFORCED_AREAS: PermissionArea[] = ["members", "finance", "payment-approval", "settings", "access-control"];
+ * @RequiresArea — now class-level on every relevant controller, so every view/create/edit/delete
+ * route in these areas is covered, not just GETs). "dashboard" has no controller of its own (it's
+ * an aggregate view over other endpoints' own guards) so it's intentionally left out here. */
+export const BACKEND_ENFORCED_AREAS: PermissionArea[] = [
+  "members",
+  "influencers",
+  "media-hosts",
+  "events",
+  "tracker",
+  "reports",
+  "finance",
+  "payment-approval",
+  "settings",
+  "access-control",
+];
 
 /** "access-control" is the one area where even ORG_ADMIN's default access stays locked
  * (non-editable), on top of ORG_SUPER_ADMIN above — it's the only door back into this page. If

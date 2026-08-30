@@ -16,6 +16,8 @@ import { StorageService, MAX_UPLOAD_BYTES, sanitizeExtension } from "../storage/
 
 @Controller("api/v1/organizations/:organizationId/payments")
 @UseGuards(OrgMembershipGuard, RolesGuard)
+@Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
+@RequiresArea("finance")
 export class PaymentsController {
   constructor(
     private readonly payments: PaymentsService,
@@ -24,8 +26,6 @@ export class PaymentsController {
   ) {}
 
   @Get()
-  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
-  @RequiresArea("finance")
   list(
     @Param("organizationId") organizationId: string,
     @Query("campaignId") campaignId?: string,

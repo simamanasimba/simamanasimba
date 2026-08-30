@@ -26,13 +26,13 @@ export class PermissionsController {
   @Patch()
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
   async setOverride(@Param("organizationId") organizationId: string, @Body() dto: SetRolePermissionDto, @CurrentUser() user: RequestUser) {
-    const result = await this.permissions.setOverride(organizationId, dto.role, dto.area, dto.allowed);
+    const result = await this.permissions.setOverride(organizationId, dto.role, dto.area, dto.action, dto.allowed);
     await this.audit.record({
       organizationId,
       userId: user.id,
       action: "organization.role_permission_updated",
       entityType: "org_role_permission",
-      entityId: `${dto.role}:${dto.area}`,
+      entityId: `${dto.role}:${dto.area}:${dto.action}`,
       metadata: { allowed: dto.allowed },
     });
     return result;

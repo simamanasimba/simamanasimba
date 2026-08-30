@@ -29,7 +29,7 @@ function ApproversLine({ organizationId }: { organizationId: string }) {
     queryKey: ["org-users", organizationId],
     queryFn: () => api.get<OrgUserRow[]>(`/api/v1/organizations/${organizationId}/users`),
   });
-  const approvalMatrix = perms?.matrix?.["payment-approval"];
+  const approvalMatrix = perms?.matrix?.["payment-approval"]?.edit;
   const canRoleApprove = (role: string) => (approvalMatrix?.[role as keyof typeof approvalMatrix]?.allowed ?? ADMIN_ROLES.includes(role));
   const approvers = (users ?? []).filter((u) => u.status === "ACTIVE" && canRoleApprove(u.role));
 
