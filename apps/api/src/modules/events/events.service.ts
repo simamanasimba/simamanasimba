@@ -257,4 +257,10 @@ export class EventsService {
     if (!event) throw new NotFoundException("Event not found");
     return event;
   }
+
+  async delete(organizationId: string, eventId: string) {
+    const result = await this.prisma.event.deleteMany({ where: { id: eventId, organizationId } });
+    if (result.count === 0) throw new NotFoundException("Event not found");
+    return { success: true };
+  }
 }

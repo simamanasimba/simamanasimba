@@ -53,13 +53,11 @@ export class RegisterWalkInDto {
   @IsEnum(Gender)
   gender?: Gender;
 
-  @IsOptional()
   @IsString()
-  phone?: string;
+  phone!: string;
 
-  @IsOptional()
   @IsEmail()
-  email?: string;
+  email!: string;
 
   @IsOptional()
   @IsString()
@@ -76,6 +74,10 @@ export class RegisterWalkInDto {
   @IsOptional()
   @IsString()
   ward?: string;
+
+  @IsOptional()
+  @IsString()
+  branch?: string;
 
   @IsOptional()
   @IsString()

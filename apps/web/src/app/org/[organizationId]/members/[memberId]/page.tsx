@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
-import { api } from "@/lib/api";
+import { Pencil, Trash2 } from "lucide-react";
+import { api, ApiError } from "@/lib/api";
 import type { Member } from "@/lib/types";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
 import { EditMemberModal } from "@/components/EditMemberModal";
+import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 
 interface MemberProfile {
@@ -21,12 +22,28 @@ interface MemberProfile {
 export default function MemberProfilePage() {
   const { t } = useLang();
   const { organizationId, memberId } = useParams<{ organizationId: string; memberId: string }>();
+  const router = useRouter();
+  const { showToast } = useToast();
 
   const { data, refetch } = useQuery({
     queryKey: ["member", organizationId, memberId],
     queryFn: () => api.get<MemberProfile>(`/api/v1/organizations/${organizationId}/members/${memberId}`),
   });
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function onDelete() {
+    if (!confirm(t("confirmDeleteMember"))) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/api/v1/organizations/${organizationId}/members/${memberId}`);
+      showToast("success", t("memberDeleted"));
+      router.push(`/org/${organizationId}/members`);
+    } catch (err) {
+      showToast("error", err instanceof ApiError ? err.message : t("failedDeleteMember"));
+      setDeleting(false);
+    }
+  }
 
   if (!data) return <LoadingWord />;
   const { member, stats } = data;
@@ -44,6 +61,7 @@ export default function MemberProfilePage() {
             {member.isLeader && <span className="badge bg-brand-50 text-brand-700">{t("leaderBadge")}</span>}
             <span className="badge bg-success/10 text-success">{member.membershipStatus}</span>
             <button className="btn-secondary text-sm" onClick={() => setEditing(true)}><Pencil size={14} /> {t("edit")}</button>
+            <button className="btn-secondary text-sm text-brand hover:bg-brand-100" onClick={onDelete} disabled={deleting} aria-label={t("deleteCta")}><Trash2 size={14} /></button>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">

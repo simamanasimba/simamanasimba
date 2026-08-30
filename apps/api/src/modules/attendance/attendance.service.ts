@@ -165,6 +165,8 @@ export class AttendanceService {
       address?: string;
       region?: string;
       district?: string;
+      ward?: string;
+      branch?: string;
       deviceId?: string;
       clientRecordId?: string;
     },
@@ -172,23 +174,6 @@ export class AttendanceService {
     const { event } = await this.resolveEventByToken(eventId, token);
     if (!event.allowWalkIns || !event.allowNewMemberReg) {
       throw new ForbiddenException("This event does not allow walk-in registration");
-    }
-
-    if (event.limitOneResponsePerPerson && input.phone) {
-      const existingMember = await this.prisma.member.findFirst({
-        where: { organizationId: event.organizationId, phone: input.phone },
-      });
-      if (existingMember) {
-        const existingRegistration = await this.prisma.eventRegistration.findUnique({
-          where: { eventId_memberId: { eventId, memberId: existingMember.id } },
-        });
-        if (existingRegistration) {
-          const attendance = await this.prisma.attendanceRecord.findUnique({
-            where: { eventId_memberId: { eventId, memberId: existingMember.id } },
-          });
-          return { member: existingMember, attendance, alreadyRegistered: true, registrationId: existingRegistration.id, checkedIn: Boolean(attendance) };
-        }
-      }
     }
 
     const member = await this.members.create(
@@ -204,8 +189,11 @@ export class AttendanceService {
         address: input.address,
         region: input.region,
         district: input.district,
+        ward: input.ward,
+        branch: input.branch,
       },
       "EVENT_WALK_IN",
+      event.limitOneResponsePerPerson,
     );
 
     const { registration, alreadyRegistered } = await this.ensureRegistration(eventId, member.id, "WALK_IN");

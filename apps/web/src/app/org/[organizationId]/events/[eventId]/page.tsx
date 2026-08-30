@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { Download, Image as ImageIcon, FileText, RefreshCw, Search, CheckCircle2, Copy, Check } from "lucide-react";
+import { Download, Image as ImageIcon, FileText, RefreshCw, Search, CheckCircle2, Copy, Check, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { EventRecord, EventWithStats, LiveStats } from "@/lib/types";
 import { StatCard } from "@/components/StatCard";
@@ -145,8 +145,10 @@ interface SearchedMember {
 export default function EventDetailPage() {
   const { t } = useLang();
   const { organizationId, eventId } = useParams<{ organizationId: string; eventId: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const [deleting, setDeleting] = useState(false);
   const [qr, setQr] = useState<QrResult | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -217,6 +219,19 @@ export default function EventDetailPage() {
   async function publish() {
     await api.patch(`/api/v1/organizations/${organizationId}/events/${eventId}`, { status: "OPEN" });
     queryClient.invalidateQueries({ queryKey: ["event", organizationId, eventId] });
+  }
+
+  async function onDelete() {
+    if (!confirm(t("confirmDeleteEvent"))) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/api/v1/organizations/${organizationId}/events/${eventId}`);
+      showToast("success", t("eventDeleted"));
+      router.push(`/org/${organizationId}/events`);
+    } catch (err) {
+      showToast("error", err instanceof ApiError ? err.message : t("failedDeleteEvent"));
+      setDeleting(false);
+    }
   }
 
   async function exportBanner() {
@@ -304,6 +319,9 @@ export default function EventDetailPage() {
           <span className="badge bg-surface text-muted">{event.status}</span>
           <button onClick={() => setEditing(true)} className="btn-secondary">{t("editEvent")}</button>
           {event.status === "DRAFT" && <button onClick={publish} className="btn-secondary">{t("publish")}</button>}
+          <button onClick={onDelete} disabled={deleting} className="btn-secondary text-brand hover:bg-brand-100" aria-label={t("deleteCta")}>
+            <Trash2 size={14} />
+          </button>
         </div>
       </div>
 

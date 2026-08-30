@@ -73,9 +73,17 @@ export class MembersService {
    * are deduplicated by phone so re-registering returns the existing
    * profile instead of minting a second identity for the same person.
    */
-  async create(organizationId: string, dto: CreateMemberDto, source: "ADMIN" | "SELF_REGISTRATION" | "EVENT_WALK_IN" | "IMPORT" = "ADMIN") {
+  /**
+   * @param dedupeExisting For EVENT_WALK_IN, this is the event's own
+   * `limitOneResponsePerPerson` setting — off lets one contact phone
+   * register several distinct people (a parent signing up their kids),
+   * on collapses a repeat submission into the existing member. Always on
+   * for SELF_REGISTRATION regardless of the caller's argument, since that
+   * flow has no per-event setting to defer to.
+   */
+  async create(organizationId: string, dto: CreateMemberDto, source: "ADMIN" | "SELF_REGISTRATION" | "EVENT_WALK_IN" | "IMPORT" = "ADMIN", dedupeExisting = true) {
     const isSelfService = source === "SELF_REGISTRATION" || source === "EVENT_WALK_IN";
-    if (isSelfService) {
+    if (isSelfService && (dedupeExisting || source === "SELF_REGISTRATION")) {
       // Phone is the most reliable match; fall back to an exact name match when no phone was
       // given, so someone re-submitting the same walk-in form doesn't create a second Member
       // record every time (MySQL's default collation is already case-insensitive).

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import type { EventStatus } from "@event-intel/database";
 import { EventsService } from "./events.service";
@@ -60,6 +60,14 @@ export class EventsController {
     const event = await this.events.update(organizationId, eventId, dto);
     await this.audit.record({ organizationId, userId: user.id, action: "event.updated", entityType: "event", entityId: eventId });
     return event;
+  }
+
+  @Delete(":eventId")
+  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+  async remove(@Param("organizationId") organizationId: string, @Param("eventId") eventId: string, @CurrentUser() user: RequestUser) {
+    const result = await this.events.delete(organizationId, eventId);
+    await this.audit.record({ organizationId, userId: user.id, action: "event.deleted", entityType: "event", entityId: eventId });
+    return result;
   }
 
   @Get(":eventId/registrations")

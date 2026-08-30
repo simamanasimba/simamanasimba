@@ -138,8 +138,8 @@ export default function RegisterPage() {
           <input required className="input" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
         </div>
         <div>
-          <label className="label">{t("emailOptionalLabel")}</label>
-          <input type="email" className="input" value={form.email} onChange={(e) => set("email", e.target.value)} />
+          <label className="label">{t("email")}</label>
+          <input type="email" required className="input" value={form.email} onChange={(e) => set("email", e.target.value)} />
         </div>
         <LocationSelect value={location} onChange={setLocation} required />
         <div>

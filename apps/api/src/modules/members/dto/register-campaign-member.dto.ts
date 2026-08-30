@@ -14,9 +14,8 @@ export class RegisterCampaignMemberDto {
   @IsString()
   phone?: string;
 
-  @IsOptional()
   @IsEmail()
-  email?: string;
+  email!: string;
 
   @IsOptional()
   @IsString()

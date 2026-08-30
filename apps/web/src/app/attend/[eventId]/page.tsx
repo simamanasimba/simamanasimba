@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { getDeviceId } from "@/lib/deviceId";
 import { enqueue, loadQueue, clearSynced, type QueuedCheckIn } from "@/lib/offlineQueue";
 import { BrandMark } from "@/components/BrandMark";
+import { LocationSelect, type LocationValue } from "@/components/LocationSelect";
 import { useLang } from "@/lib/i18n";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -46,7 +47,8 @@ export default function AttendPage() {
   const [busy, setBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("ONLINE");
   const [queueSize, setQueueSize] = useState(0);
-  const [walkIn, setWalkIn] = useState({ membershipNumber: "", firstName: "", middleName: "", lastName: "", phone: "", email: "" });
+  const [walkIn, setWalkIn] = useState({ membershipNumber: "", firstName: "", middleName: "", lastName: "", gender: "", phone: "", email: "", branch: "" });
+  const [walkInLocation, setWalkInLocation] = useState<LocationValue>({ region: "", district: "", ward: "" });
   const [invalidMessage, setInvalidMessage] = useState<string | null>(null);
   const [registrationResult, setRegistrationResult] = useState<{ registrationId: string; alreadyRegistered: boolean; checkedIn: boolean } | null>(null);
 
@@ -154,6 +156,11 @@ export default function AttendPage() {
       const result = await api.post<{ registrationId: string; alreadyRegistered: boolean; checkedIn: boolean }>(`/api/v1/public/attendance/events/${eventId}/register`, {
         token,
         ...walkIn,
+        gender: walkIn.gender || undefined,
+        branch: walkIn.branch || undefined,
+        region: walkInLocation.region || undefined,
+        district: walkInLocation.district || undefined,
+        ward: walkInLocation.ward || undefined,
         deviceId,
         clientRecordId: crypto.randomUUID(),
       });
@@ -170,7 +177,8 @@ export default function AttendPage() {
     setMembershipNumber("");
     setLookup(null);
     setError(null);
-    setWalkIn({ membershipNumber: "", firstName: "", middleName: "", lastName: "", phone: "", email: "" });
+    setWalkIn({ membershipNumber: "", firstName: "", middleName: "", lastName: "", gender: "", phone: "", email: "", branch: "" });
+    setWalkInLocation({ region: "", district: "", ward: "" });
     setRegistrationResult(null);
     setScreen("start");
   }
@@ -326,12 +334,25 @@ export default function AttendPage() {
                 </div>
               </div>
               <div>
+                <label className="label">{t("genderLabel")}</label>
+                <select required className="input" value={walkIn.gender} onChange={(e) => setWalkIn((w) => ({ ...w, gender: e.target.value }))}>
+                  <option value="" disabled>—</option>
+                  <option value="MALE">{t("genderMale")}</option>
+                  <option value="FEMALE">{t("genderFemale")}</option>
+                </select>
+              </div>
+              <div>
                 <label className="label">{t("phone")}</label>
-                <input className="input" value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} />
+                <input required className="input" value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} />
               </div>
               <div>
                 <label className="label">{t("email")}</label>
-                <input type="email" className="input" value={walkIn.email} onChange={(e) => setWalkIn((w) => ({ ...w, email: e.target.value }))} />
+                <input type="email" required className="input" value={walkIn.email} onChange={(e) => setWalkIn((w) => ({ ...w, email: e.target.value }))} />
+              </div>
+              <LocationSelect value={walkInLocation} onChange={setWalkInLocation} required />
+              <div>
+                <label className="label">{t("branchLabel")}</label>
+                <input className="input" value={walkIn.branch} onChange={(e) => setWalkIn((w) => ({ ...w, branch: e.target.value }))} />
               </div>
               {error && <p className="text-sm text-brand">{error}</p>}
               <button type="submit" disabled={busy} className="btn-primary w-full py-3.5 text-base">
