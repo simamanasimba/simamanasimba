@@ -32,10 +32,24 @@ export const metadata: Metadata = {
   },
 };
 
+// Structured data — tells search engines this URL *is* the "Simama Nasimba" entity,
+// under every name/spelling someone might actually type (with/without spaces, the
+// tagline). This is the real lever for a brand-name query resolving here once Google
+// has crawled the site; there's no way to "register" a keyword outside of that.
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Simama Nasimba",
+  alternateName: ["Simamanasimba", "Tunasimama na Simba"],
+  url: SITE_URL,
+  description: SITE_DESCRIPTION,
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${montserrat.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-surface text-ink antialiased">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
         <Providers>{children}</Providers>
       </body>
     </html>
