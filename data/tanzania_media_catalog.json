@@ -1,0 +1,174 @@
+{
+  "catalog_name": "Tanzania Media Reference Catalog",
+  "country": "Tanzania",
+  "country_code": "TZ",
+  "language": "sw",
+  "version": "3.0.0",
+  "purpose": "Reference data only, used to populate the Media/Channel/Kipindi dropdown suggestions when registering a media host. Never presented as 'existing' media anywhere else in the app until a host is actually registered against it.",
+  "hierarchy": "media_house -> channel -> program",
+  "media_types": ["television", "radio", "online_tv", "news_website", "newspaper", "digital_publisher"],
+  "media_houses": [
+    {
+      "id": "mh_001",
+      "name": "IPP Media",
+      "channels": [
+        { "id": "mh_001_ch_001", "name": "ITV", "type": "television", "programs": [
+          { "id": "mh_001_ch_001_pg_001", "name": "Habari", "category": "news" },
+          { "id": "mh_001_ch_001_pg_002", "name": "Kumekucha", "category": "morning" }
+        ] },
+        { "id": "mh_001_ch_002", "name": "Radio One", "type": "radio", "programs": [] },
+        { "id": "mh_001_ch_003", "name": "East Africa Radio", "type": "radio", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_002",
+      "name": "Clouds Media Group",
+      "channels": [
+        { "id": "mh_002_ch_001", "name": "Clouds TV", "type": "television", "programs": [] },
+        { "id": "mh_002_ch_002", "name": "Clouds FM", "type": "radio", "programs": [
+          { "id": "mh_002_ch_002_pg_001", "name": "XXL", "category": "entertainment" }
+        ] }
+      ]
+    },
+    {
+      "id": "mh_003",
+      "name": "Wasafi Media",
+      "channels": [
+        { "id": "mh_003_ch_001", "name": "Wasafi FM", "type": "radio", "programs": [
+          { "id": "mh_003_ch_001_pg_001", "name": "Mashamsham", "category": "entertainment" },
+          { "id": "mh_003_ch_001_pg_002", "name": "The Switch", "category": "entertainment" }
+        ] },
+        { "id": "mh_003_ch_002", "name": "Wasafi TV", "type": "television", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_004",
+      "name": "Azam Media",
+      "channels": [
+        { "id": "mh_004_ch_001", "name": "Azam One", "type": "television", "programs": [] },
+        { "id": "mh_004_ch_002", "name": "Azam Two", "type": "television", "programs": [] },
+        { "id": "mh_004_ch_003", "name": "Azam Sports", "type": "television", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_005",
+      "name": "Tanzania Broadcasting Corporation (TBC)",
+      "channels": [
+        { "id": "mh_005_ch_001", "name": "TBC1", "type": "television", "programs": [
+          { "id": "mh_005_ch_001_pg_001", "name": "Habari za Saa Mbili", "category": "news" }
+        ] },
+        { "id": "mh_005_ch_002", "name": "TBC Taifa", "type": "radio", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_006",
+      "name": "Zanzibar Broadcasting Corporation (ZBC)",
+      "channels": [
+        { "id": "mh_006_ch_001", "name": "ZBC TV", "type": "television", "programs": [] },
+        { "id": "mh_006_ch_002", "name": "ZBC Radio", "type": "radio", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_007",
+      "name": "Mwananchi Communications Limited",
+      "channels": [
+        { "id": "mh_007_ch_001", "name": "Mwananchi", "type": "newspaper", "programs": [] },
+        { "id": "mh_007_ch_002", "name": "The Citizen", "type": "newspaper", "programs": [] },
+        { "id": "mh_007_ch_003", "name": "Mwananchi Digital", "type": "news_website", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_008",
+      "name": "Tanzania Standard Newspapers (TSN)",
+      "channels": [
+        { "id": "mh_008_ch_001", "name": "Daily News", "type": "newspaper", "programs": [] },
+        { "id": "mh_008_ch_002", "name": "HabariLEO", "type": "newspaper", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_009",
+      "name": "Guardian Limited",
+      "channels": [
+        { "id": "mh_009_ch_001", "name": "The Guardian", "type": "newspaper", "programs": [] },
+        { "id": "mh_009_ch_002", "name": "Nipashe", "type": "newspaper", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_010",
+      "name": "Independent Television / East Africa TV",
+      "channels": [
+        { "id": "mh_010_ch_001", "name": "EATV", "type": "television", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_011",
+      "name": "Star Media",
+      "channels": [
+        { "id": "mh_011_ch_001", "name": "Star TV", "type": "television", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_012",
+      "name": "UTV Media",
+      "channels": [
+        { "id": "mh_012_ch_001", "name": "UTV", "type": "television", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_013",
+      "name": "Kiss FM Tanzania",
+      "channels": [
+        { "id": "mh_013_ch_001", "name": "Kiss FM", "type": "radio", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_014",
+      "name": "Times Media",
+      "channels": [
+        { "id": "mh_014_ch_001", "name": "Times FM", "type": "radio", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_015",
+      "name": "Magic FM Tanzania",
+      "channels": [
+        { "id": "mh_015_ch_001", "name": "Magic FM", "type": "radio", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_016",
+      "name": "JamiiForums",
+      "channels": [
+        { "id": "mh_016_ch_001", "name": "JamiiForums", "type": "news_website", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_017",
+      "name": "Michuzi Media",
+      "channels": [
+        { "id": "mh_017_ch_001", "name": "Michuzi Blog", "type": "news_website", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_018",
+      "name": "Nukta Africa",
+      "channels": [
+        { "id": "mh_018_ch_001", "name": "Nukta Africa", "type": "news_website", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_019",
+      "name": "Millard Ayo Media",
+      "channels": [
+        { "id": "mh_019_ch_001", "name": "Ayo TV", "type": "online_tv", "programs": [] }
+      ]
+    },
+    {
+      "id": "mh_020",
+      "name": "Radio Free Africa",
+      "channels": [
+        { "id": "mh_020_ch_001", "name": "Radio Free Africa", "type": "radio", "programs": [] }
+      ]
+    }
+  ]
+}

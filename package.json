@@ -1,0 +1,34 @@
+{
+  "name": "event-intel-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone Event, Membership, Attendance & Digital Intelligence Platform",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter=./apps/* run dev",
+    "dev:api": "pnpm --filter @event-intel/api run dev",
+    "dev:web": "pnpm --filter @event-intel/web run dev",
+    "dev:worker": "pnpm --filter @event-intel/worker run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "test:e2e": "pnpm --filter @event-intel/api run test:e2e",
+    "db:generate": "pnpm --filter @event-intel/database run generate",
+    "db:migrate": "pnpm --filter @event-intel/database run migrate",
+    "db:seed": "pnpm --filter @event-intel/database run seed",
+    "db:studio": "pnpm --filter @event-intel/database run studio",
+    "infra:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infrastructure/docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.3.3"
+  }
+}

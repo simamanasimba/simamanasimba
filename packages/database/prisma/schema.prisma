@@ -1,0 +1,1851 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ORGANIZATIONS, USERS, RBAC
+// ─────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  website      String?
+  logoUrl      String?  @map("logo_url")
+  heroImageUrl String?  @map("hero_image_url") @db.Text
+  timezone     String   @default("UTC")
+  settings     Json     @default("{}")
+  mediaReachTarget Int? @map("media_reach_target")
+  memberTarget     Int? @map("member_target")
+  isDemo       Boolean  @default(false) @map("is_demo")
+  status       OrgStatus @default(ACTIVE)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  organizationMembers   OrganizationMember[]
+  members               Member[]
+  membershipSequences   MembershipNumberSequence[]
+  events                Event[]
+  posts                 Post[]
+  aliases               OrganizationAlias[]
+  socialAccounts        SocialAccount[]
+  monitoringRules       MonitoringRule[]
+  mentions              Mention[]
+  newsArticles          NewsArticle[]
+  webMentions           WebMention[]
+  alerts                Alert[]
+  metricSnapshots       MetricSnapshot[]
+  reports               Report[]
+  auditLogs             AuditLog[]
+  attendanceDevices     AttendanceDevice[]
+  syncJobs              SyncJob[]
+  webhookEvents         WebhookEvent[]
+  customFieldDefinitions CustomFieldDefinition[]
+  mediaHosts             MediaHost[]
+  influencers            Influencer[]
+  mediaCampaigns         MediaCampaign[]
+  payments               Payment[]
+  mediaEngagements       MediaEngagement[]
+  expenses               Expense[]
+  rolePermissions        OrgRolePermission[]
+  regionTargets          RegionTarget[]
+  mediaOutlets           MediaOutlet[]
+
+  @@map("organizations")
+}
+
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  passwordHash      String   @map("password_hash")
+  firstName         String   @map("first_name")
+  lastName          String   @map("last_name")
+  phone             String?
+  profilePhotoUrl   String?  @map("profile_photo_url")
+  isPlatformOwner   Boolean  @default(false) @map("is_platform_owner")
+  emailVerifiedAt   DateTime? @map("email_verified_at")
+  status            UserStatus @default(PENDING_VERIFICATION)
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+  lastLoginAt       DateTime? @map("last_login_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organizationMembers OrganizationMember[]
+  sessions            Session[]
+  emailVerifications  EmailVerificationToken[]
+  passwordResets      PasswordResetToken[]
+  createdEvents       Event[] @relation("EventCreatedBy")
+  createdPosts        Post[] @relation("PostCreatedBy")
+  auditLogs           AuditLog[]
+  reportsGenerated    Report[] @relation("ReportGeneratedBy")
+  ownedMediaCampaigns MediaCampaign[]
+  createdExpenses     Expense[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  DISABLED
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  tokenHash    String   @unique @map("token_hash")
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address")
+  expiresAt    DateTime @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+/// Trimmed to exactly the roles the club actually uses — PLATFORM_OWNER stays
+/// (a separate cross-org superuser flag, never an assignable org role, see
+/// permissions.constants.ts) but EVENT_MANAGER/ATTENDANCE_OFFICER/
+/// MEMBERSHIP_OFFICER/DIGITAL_INTELLIGENCE_ANALYST/REPORT_VIEWER were removed
+/// per explicit request. Confirmed zero production OrganizationMember rows
+/// and zero OrgRolePermission grants referenced any of them before removal.
+enum RoleKey {
+  PLATFORM_OWNER
+  ORG_SUPER_ADMIN
+  ORG_ADMIN
+  FINANCE_OFFICER
+  STANDARD_USER
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  role           RoleKey
+  status         OrgMemberStatus @default(ACTIVE)
+  invitedAt      DateTime? @map("invited_at")
+  joinedAt       DateTime  @default(now()) @map("joined_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+enum OrgMemberStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MEMBERSHIP
+// ─────────────────────────────────────────────────────────────────────────
+
+model MembershipNumberSequence {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  prefix         String
+  nextValue      Int      @default(1) @map("next_value")
+  padding        Int      @default(6)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, prefix])
+  @@map("membership_number_sequences")
+}
+
+enum MembershipType {
+  REGULAR
+  PREMIUM
+  HONORARY
+  STUDENT
+  CORPORATE
+  LIFETIME
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  EXPIRED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNSPECIFIED
+}
+
+// The single "campaign member" record — every person known to the system,
+// whether or not they hold a real club membership number. campaignId is
+// always assigned by this system on creation; membershipNumber is an
+// external identifier from the club's own register and is only ever set
+// when the person actually provided/holds one — never invented here.
+model Member {
+  id                 String   @id @default(uuid())
+  organizationId     String   @map("organization_id")
+  campaignId         String   @unique @map("campaign_id")
+  membershipNumber   String?  @map("membership_number")
+  firstName          String   @map("first_name")
+  middleName         String?  @map("middle_name")
+  lastName           String   @map("last_name")
+  gender             Gender   @default(UNSPECIFIED)
+  dateOfBirth        DateTime? @map("date_of_birth") @db.Date
+  phone              String?
+  email              String?
+  address            String?
+  region             String?
+  district           String?
+  ward               String?
+  branch             String?
+  isLeader           Boolean  @default(false) @map("is_leader")
+  membershipType     MembershipType @default(REGULAR) @map("membership_type")
+  membershipStatus   MembershipStatus @default(ACTIVE) @map("membership_status")
+  profilePhotoUrl    String?  @map("profile_photo_url")
+  customFields       Json     @default("{}") @map("custom_fields")
+  registrationDate   DateTime @default(now()) @map("registration_date")
+  registrationSource MemberSource @default(ADMIN) @map("registration_source")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membershipHistory  MembershipHistory[]
+  eventRegistrations EventRegistration[]
+  attendanceRecords  AttendanceRecord[]
+  postRegistrations  PostRegistration[]
+
+  @@unique([organizationId, membershipNumber])
+  @@index([organizationId, lastName, firstName])
+  @@index([organizationId, phone])
+  @@index([organizationId, email])
+  @@index([organizationId, region, district])
+  @@index([organizationId, membershipStatus])
+  @@index([organizationId, isLeader])
+  @@map("members")
+}
+
+enum MemberSource {
+  ADMIN
+  SELF_REGISTRATION
+  EVENT_WALK_IN
+  IMPORT
+}
+
+model MembershipHistory {
+  id         String   @id @default(uuid())
+  memberId   String   @map("member_id")
+  fromStatus MembershipStatus? @map("from_status")
+  toStatus   MembershipStatus  @map("to_status")
+  fromType   MembershipType?   @map("from_type")
+  toType     MembershipType?   @map("to_type")
+  reason     String?
+  changedByUserId String? @map("changed_by_user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@map("membership_history")
+}
+
+model CustomFieldDefinition {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  key            String
+  label          String
+  fieldType      CustomFieldType @map("field_type")
+  options        Json?
+  isRequired     Boolean  @default(false) @map("is_required")
+  appliesTo      CustomFieldTarget @default(MEMBER) @map("applies_to")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, appliesTo, key])
+  @@map("custom_field_definitions")
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+}
+
+enum CustomFieldTarget {
+  MEMBER
+  EVENT
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EVENTS
+// ─────────────────────────────────────────────────────────────────────────
+
+enum EventStatus {
+  DRAFT
+  UPCOMING
+  OPEN
+  ONGOING
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+model Event {
+  id                    String   @id @default(uuid())
+  organizationId        String   @map("organization_id")
+  name                  String
+  description           String?  @db.Text
+  eventType             String?  @map("event_type")
+  location              String?
+  startDatetime         DateTime @map("start_datetime")
+  endDatetime           DateTime @map("end_datetime")
+  capacity              Int?
+  status                EventStatus @default(DRAFT)
+  registrationEnabled   Boolean  @default(true) @map("registration_enabled")
+  attendanceEnabled     Boolean  @default(true) @map("attendance_enabled")
+  // Defaulted to false per explicit request — the client wants the plain QR-scan +
+  // membership-number flow (no prior registration needed, no per-attendee ticket QR
+  // generated) as the out-of-the-box behavior for new events. AttendanceService.checkIn()
+  // already auto-creates the EventRegistration on the fly for any existing member, so this
+  // default doesn't add a registration requirement — it only hides the separate walk-in/
+  // new-member path (which does generate its own ticket QR) unless explicitly turned on.
+  allowWalkIns          Boolean  @default(false) @map("allow_walk_ins")
+  allowNewMemberReg     Boolean  @default(false) @map("allow_new_member_registration")
+  requireApproval       Boolean  @default(false) @map("require_approval")
+  requirePhoneVerification Boolean @default(false) @map("require_phone_verification")
+  autoCheckInNewMembers Boolean  @default(true) @map("auto_check_in_new_members")
+  monitoringKeywords    Json     @default("[]") @map("monitoring_keywords")
+  customFields          Json     @default("{}") @map("custom_fields")
+  createdByUserId       String   @map("created_by_user_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy          User @relation("EventCreatedBy", fields: [createdByUserId], references: [id])
+  registrations      EventRegistration[]
+  attendanceRecords  AttendanceRecord[]
+  attendanceSessions AttendanceSession[]
+  attendanceTokens   AttendanceToken[]
+  attendanceDevices  AttendanceDevice[]
+  metricSnapshots    MetricSnapshot[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, startDatetime])
+  @@map("events")
+}
+
+// EVENT posts collect RSVPs (register button, tracked participants); UPDATE
+// posts are general news/campaign posts that only take a like + share, never
+// a registration.
+enum PostType {
+  EVENT
+  UPDATE
+}
+
+model Post {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  postType       PostType  @default(EVENT) @map("post_type")
+  title          String
+  description    String    @db.Text
+  audience       String?
+  location       String?
+  imageUrl       String?   @map("image_url") @db.Text
+  eventDate      DateTime? @map("event_date")
+  likeCount      Int       @default(0) @map("like_count")
+  published      Boolean   @default(true)
+  createdByUserId String   @map("created_by_user_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy     User @relation("PostCreatedBy", fields: [createdByUserId], references: [id])
+  registrations PostRegistration[]
+
+  @@index([organizationId, createdAt])
+  @@map("posts")
+}
+
+// A Member's expressed interest in one specific post ("Sajili Kushiriki").
+// No personal data lives here — that's all on Member now. The general
+// /register page doesn't create rows here at all; it just creates/finds a
+// Member directly, since "become a campaign member" isn't tied to any post.
+model PostRegistration {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  memberId  String   @map("member_id")
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, memberId])
+  @@index([memberId])
+  @@map("post_registrations")
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  WAITLISTED
+  CANCELLED
+  APPROVED
+  REJECTED
+}
+
+enum RegistrationSource {
+  ADMIN
+  SELF_SERVICE
+  WALK_IN
+  IMPORT
+  API
+}
+
+model EventRegistration {
+  id                 String   @id @default(uuid())
+  eventId            String   @map("event_id")
+  memberId           String   @map("member_id")
+  registrationStatus RegistrationStatus @default(REGISTERED) @map("registration_status")
+  source             RegistrationSource @default(ADMIN)
+  registeredAt       DateTime @default(now()) @map("registered_at")
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, memberId])
+  @@index([eventId, registrationStatus])
+  @@map("event_registrations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ATTENDANCE
+// ─────────────────────────────────────────────────────────────────────────
+
+enum AttendanceMethod {
+  QR
+  MEMBERSHIP_NUMBER
+  WALK_IN
+  ADMIN
+  IMPORT
+  OFFLINE_SYNC
+}
+
+enum AttendanceSyncStatus {
+  CONFIRMED
+  PENDING_SYNC
+  SYNC_ERROR
+}
+
+model AttendanceRecord {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  eventId        String   @map("event_id")
+  memberId       String   @map("member_id")
+  method         AttendanceMethod
+  syncStatus     AttendanceSyncStatus @default(CONFIRMED) @map("sync_status")
+  deviceId       String?  @map("device_id")
+  checkedInByUserId String? @map("checked_in_by_user_id")
+  clientRecordId String?  @map("client_record_id")
+  checkedInAt    DateTime @default(now()) @map("checked_in_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  event  Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  member Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  device AttendanceDevice? @relation(fields: [deviceId], references: [id])
+
+  @@unique([eventId, memberId])
+  @@unique([deviceId, clientRecordId])
+  @@index([organizationId, eventId])
+  @@index([eventId, checkedInAt])
+  @@map("attendance_records")
+}
+
+model AttendanceSession {
+  id         String   @id @default(uuid())
+  eventId    String   @map("event_id")
+  name       String
+  startsAt   DateTime @map("starts_at")
+  endsAt     DateTime? @map("ends_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("attendance_sessions")
+}
+
+enum DeviceType {
+  PHONE
+  TABLET
+  LAPTOP
+  KIOSK
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model AttendanceDevice {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  eventId        String?  @map("event_id")
+  name           String
+  deviceType     DeviceType @map("device_type")
+  status         DeviceStatus @default(ACTIVE)
+  lastSeenAt     DateTime? @map("last_seen_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event             Event? @relation(fields: [eventId], references: [id])
+  attendanceRecords AttendanceRecord[]
+
+  @@index([organizationId])
+  @@map("attendance_devices")
+}
+
+enum TokenStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model AttendanceToken {
+  id         String   @id @default(uuid())
+  eventId    String   @map("event_id")
+  tokenHash  String   @unique @map("token_hash")
+  status     TokenStatus @default(ACTIVE)
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status])
+  @@map("attendance_tokens")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// DIGITAL INTELLIGENCE
+// ─────────────────────────────────────────────────────────────────────────
+
+model OrganizationAlias {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  alias          String
+  aliasType      AliasType @map("alias_type")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, alias])
+  @@map("organization_aliases")
+}
+
+enum AliasType {
+  NAME
+  ACRONYM
+  HANDLE
+  HASHTAG
+  DOMAIN
+  KEYWORD
+}
+
+enum SocialPlatform {
+  YOUTUBE
+  INSTAGRAM
+  META
+  LINKEDIN
+  X
+  FACEBOOK
+  THREADS
+  TIKTOK
+}
+
+enum ConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  TOKEN_EXPIRED
+}
+
+model SocialAccount {
+  id                String   @id @default(uuid())
+  organizationId    String   @map("organization_id")
+  platform          SocialPlatform
+  handle            String?
+  externalAccountId String?  @map("external_account_id")
+  status            ConnectionStatus @default(DISCONNECTED)
+  accessTokenEnc    String?  @map("access_token_enc") @db.Text
+  refreshTokenEnc   String?  @map("refresh_token_enc") @db.Text
+  tokenExpiresAt    DateTime? @map("token_expires_at")
+  lastSyncedAt      DateTime? @map("last_synced_at")
+  lastError         String?  @map("last_error")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  metricSnapshots MetricSnapshot[]
+  content         Content[]
+
+  @@unique([organizationId, platform, externalAccountId])
+  @@map("social_accounts")
+}
+
+enum CapabilityStatus {
+  SUPPORTED
+  PARTIAL
+  UNSUPPORTED
+  REQUIRES_APPROVAL
+}
+
+model PlatformCapability {
+  id                  String   @id @default(uuid())
+  platform            SocialPlatform
+  capability          String
+  status              CapabilityStatus
+  apiVersion          String?  @map("api_version")
+  documentationUrl    String?  @map("documentation_url")
+  accessRequirements  String?  @map("access_requirements")
+  lastVerifiedAt      DateTime? @map("last_verified_at")
+  notes               String?
+
+  @@unique([platform, capability])
+  @@map("platform_capabilities")
+}
+
+enum MonitoringQueryType {
+  EXACT_PHRASE
+  KEYWORD
+  BOOLEAN
+  DOMAIN
+  HASHTAG
+}
+
+model MonitoringRule {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  eventId        String?  @map("event_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  languages      Json     @default("[]")
+  countries      Json     @default("[]")
+  platforms      Json     @default("[]")
+  dateRangeStart DateTime? @map("date_range_start")
+  dateRangeEnd   DateTime? @map("date_range_end")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  queries      MonitoringQuery[]
+
+  @@index([organizationId, isActive])
+  @@map("monitoring_rules")
+}
+
+model MonitoringQuery {
+  id        String   @id @default(uuid())
+  ruleId    String   @map("rule_id")
+  queryType MonitoringQueryType @map("query_type")
+  value     String
+  generated Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  rule MonitoringRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@map("monitoring_queries")
+}
+
+enum ContentType {
+  POST
+  VIDEO
+  STORY
+  REEL
+  ARTICLE
+}
+
+model Content {
+  id              String   @id @default(uuid())
+  socialAccountId String   @map("social_account_id")
+  externalId      String   @map("external_id")
+  contentType     ContentType @map("content_type")
+  caption         String?  @db.Text
+  url             String?  @db.Text
+  publishedAt     DateTime? @map("published_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  metrics       ContentMetric[]
+
+  @@unique([socialAccountId, externalId])
+  @@map("content")
+}
+
+model ContentMetric {
+  id          String   @id @default(uuid())
+  contentId   String   @map("content_id")
+  likes       Int?
+  comments    Int?
+  shares      Int?
+  saves       Int?
+  views       Int?
+  reach       Int?
+  impressions Int?
+  capturedAt  DateTime @default(now()) @map("captured_at")
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId, capturedAt])
+  @@map("content_metrics")
+}
+
+enum VerificationStatus {
+  PLATFORM_VERIFIED
+  SOURCE_VERIFIED
+  DISCOVERED
+  AI_DERIVED
+  UNVERIFIED
+}
+
+enum SentimentLabel {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  MIXED
+  UNKNOWN
+}
+
+enum MentionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Mention {
+  id               String   @id @default(uuid())
+  organizationId   String   @map("organization_id")
+  eventId          String?  @map("event_id")
+  canonicalId      String   @map("canonical_id")
+  dedupeKey        String   @map("dedupe_key")
+  sourceType       String   @map("source_type")
+  sourceProvider   String   @map("source_provider")
+  sourceId         String?  @map("source_id")
+  sourceUrl        String?  @map("source_url") @db.Text
+  sourceTimestamp  DateTime? @map("source_timestamp")
+  detectedAt       DateTime @default(now()) @map("detected_at")
+  verificationStatus VerificationStatus @default(DISCOVERED) @map("verification_status")
+  author           String?
+  content          String?  @db.Text
+  matchMethod      String?  @map("match_method")
+  matchConfidence  Float?   @map("match_confidence")
+  matchedAlias     String?  @map("matched_alias")
+  topic            String?
+  priority         MentionPriority @default(LOW)
+  rawDataRef       String?  @map("raw_data_reference")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sources      MentionSource[]
+  aiAnalyses   AiAnalysis[]
+
+  @@unique([organizationId, dedupeKey])
+  @@index([organizationId, detectedAt])
+  @@index([organizationId, priority])
+  @@map("mentions")
+}
+
+model MentionSource {
+  id             String   @id @default(uuid())
+  mentionId      String   @map("mention_id")
+  sourceProvider String   @map("source_provider")
+  sourceId       String?  @map("source_id")
+  sourceUrl      String?  @map("source_url")
+  discoveredAt   DateTime @default(now()) @map("discovered_at")
+
+  mention Mention @relation(fields: [mentionId], references: [id], onDelete: Cascade)
+
+  @@index([mentionId])
+  @@map("mention_sources")
+}
+
+model NewsArticle {
+  id               String   @id @default(uuid())
+  organizationId   String   @map("organization_id")
+  title            String
+  url              String   @db.Text
+  source           String?
+  publishedAt      DateTime? @map("published_at")
+  dedupeKey        String   @map("dedupe_key")
+  verificationStatus VerificationStatus @default(DISCOVERED) @map("verification_status")
+  detectedAt       DateTime @default(now()) @map("detected_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, dedupeKey])
+  @@index([organizationId, publishedAt])
+  @@map("news_articles")
+}
+
+model WebMention {
+  id               String   @id @default(uuid())
+  organizationId   String   @map("organization_id")
+  url              String   @db.Text
+  domain           String?
+  title            String?
+  dedupeKey        String   @map("dedupe_key")
+  verificationStatus VerificationStatus @default(DISCOVERED) @map("verification_status")
+  detectedAt       DateTime @default(now()) @map("detected_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, dedupeKey])
+  @@map("web_mentions")
+}
+
+model SearchResult {
+  id             String   @id @default(uuid())
+  provider       String
+  query          String
+  resultUrl      String   @map("result_url") @db.Text
+  snippet        String?  @db.Text
+  fetchedAt      DateTime @default(now()) @map("fetched_at")
+
+  @@index([provider, query])
+  @@map("search_results")
+}
+
+enum AlertType {
+  NEW_IMPORTANT_MENTION
+  MENTION_SPIKE
+  NEGATIVE_SPIKE
+  NEWS_ALERT
+  VIRAL_CONTENT
+  KEYWORD_ALERT
+  REPUTATION_RISK
+  ACCOUNT_DISCONNECTED
+  API_ERROR
+  RATE_LIMIT
+  EVENT_CAPACITY_WARNING
+  LOW_ATTENDANCE
+  ATTENDANCE_SPIKE
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model Alert {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  eventId        String?  @map("event_id")
+  type           AlertType
+  status         AlertStatus @default(OPEN)
+  title          String
+  message        String?  @db.Text
+  priority       MentionPriority @default(MEDIUM)
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  resolvedAt     DateTime? @map("resolved_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("alerts")
+}
+
+enum AnalysisType {
+  SENTIMENT
+  TOPIC
+  RELEVANCE
+  SUMMARY
+  PRIORITY
+  RISK
+  ENTITIES
+  LANGUAGE
+  CLASSIFICATION
+}
+
+model AiAnalysis {
+  id            String   @id @default(uuid())
+  mentionId     String?  @map("mention_id")
+  analysisType  AnalysisType @map("analysis_type")
+  result        Json
+  sentiment     SentimentLabel?
+  confidence    Float?
+  model         String
+  modelVersion  String?  @map("model_version")
+  processedAt   DateTime @default(now()) @map("processed_at")
+
+  mention Mention? @relation(fields: [mentionId], references: [id], onDelete: Cascade)
+
+  @@index([mentionId])
+  @@map("ai_analyses")
+}
+
+enum MetricEntityType {
+  SOCIAL_ACCOUNT
+  EVENT
+  ORGANIZATION
+}
+
+model MetricSnapshot {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  entityType     MetricEntityType @map("entity_type")
+  socialAccountId String? @map("social_account_id")
+  eventId        String?  @map("event_id")
+  metricKey      String   @map("metric_key")
+  metricValue    Float    @map("metric_value")
+  capturedAt     DateTime @default(now()) @map("captured_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount? @relation(fields: [socialAccountId], references: [id])
+  event         Event?         @relation(fields: [eventId], references: [id])
+
+  @@index([organizationId, metricKey, capturedAt])
+  @@map("metric_snapshots")
+}
+
+enum SyncJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  RETRYING
+}
+
+model SyncJob {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  jobType        String   @map("job_type")
+  status         SyncJobStatus @default(PENDING)
+  attempts       Int      @default(0)
+  maxAttempts    Int      @default(5) @map("max_attempts")
+  lastError      String?  @map("last_error")
+  isRetryable    Boolean? @map("is_retryable")
+  scheduledAt    DateTime @default(now()) @map("scheduled_at")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("sync_jobs")
+}
+
+model WebhookEvent {
+  id             String   @id @default(uuid())
+  organizationId String?  @map("organization_id")
+  provider       String
+  eventType      String   @map("event_type")
+  payload        Json
+  processedAt    DateTime? @map("processed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_events")
+}
+
+enum ReportType {
+  EVENT_ATTENDANCE
+  MEMBERSHIP_GROWTH
+  MONTHLY_MEMBERSHIP
+  ANNUAL_MEMBERSHIP
+  EVENT_PERFORMANCE
+  DIGITAL_INTELLIGENCE
+  SOCIAL_MEDIA
+  REPUTATION
+  CAMPAIGN
+  EVENT_IMPACT
+}
+
+enum ReportFormat {
+  PDF
+  CSV
+  EXCEL
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  READY
+  FAILED
+}
+
+model Report {
+  id                  String   @id @default(uuid())
+  organizationId      String   @map("organization_id")
+  type                ReportType
+  format              ReportFormat
+  status              ReportStatus @default(PENDING)
+  parameters          Json     @default("{}")
+  fileUrl             String?  @map("file_url")
+  generatedByUserId   String?  @map("generated_by_user_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  completedAt         DateTime? @map("completed_at")
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  generatedBy   User?        @relation("ReportGeneratedBy", fields: [generatedByUserId], references: [id])
+
+  @@index([organizationId, type])
+  @@map("reports")
+}
+
+/// Dev/self-hosted fallback index used by @event-intel/search's MySqlSearchProvider
+/// when OPENSEARCH_URL is not configured — plain LIKE-based matching, no
+/// full-text index (kept deliberately simple; swap in OpenSearch for real
+/// relevance/scale in production).
+model SearchDocument {
+  id             String
+  organizationId String   @map("organization_id")
+  entityType     String   @map("entity_type")
+  title          String
+  body           String?  @db.Text
+  metadata       Json     @default("{}")
+  createdAt      DateTime @map("created_at")
+
+  @@id([entityType, id])
+  @@index([organizationId])
+  @@map("search_documents")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String?  @map("organization_id")
+  userId         String?  @map("user_id")
+  action         String
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  metadata       Json     @default("{}")
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MEDIA CAMPAIGNS, INFLUENCERS, TRACKER ENGINE, FINANCE
+// A reusable session/metric/entry shape (TrackerMetric → TrackerSession →
+// TrackerEntry) so future trackers beyond media/influencer don't need new
+// tables — only new metric definitions and a subject type.
+// ─────────────────────────────────────────────────────────────────────────
+
+enum MediaHostType {
+  TV
+  RADIO
+  NEWSPAPER
+  WEBSITE
+  BLOG
+  SOCIAL_MEDIA
+  // Added for the Media House -> Channel -> Program hierarchy's seed catalog — never remove
+  // the values above, existing MediaHost rows may already use them.
+  ONLINE_TV
+  NEWS_WEBSITE
+  MAGAZINE
+  FORUM
+  PODCAST
+  DIGITAL_PUBLISHER
+  OTHER
+}
+
+model MediaHost {
+  id             String        @id @default(uuid())
+  organizationId String        @map("organization_id")
+  name           String
+  type           MediaHostType @default(OTHER)
+  // Which Media House (e.g. "Azam Media") this host belongs to — optional, since not every
+  // host needs to be tied to the reference catalog. Powers "list of hosts belonging to a
+  // certain media" on the Media Hosts page.
+  mediaOutletId  String?       @map("media_outlet_id")
+  // Channel (e.g. "Azam One") and Kipindi/session (e.g. "Mashamsham") this host is known for —
+  // plain text, picked via cascading dropdowns sourced from the reference catalog (Media ->
+  // Channel -> Kipindi) rather than a separate table, so there's nothing new to keep in sync.
+  channelName    String?       @map("channel_name")
+  programName    String?       @map("program_name")
+  contactName    String?       @map("contact_name")
+  contactPhone   String?       @map("contact_phone")
+  contactEmail   String?       @map("contact_email")
+  notes          String?       @db.Text
+
+  // Default payout details — prefilled into the payment form when this host is selected.
+  bankName           String? @map("bank_name")
+  bankAccountName    String? @map("bank_account_name")
+  bankAccountNumber  String? @map("bank_account_number")
+  mobileMoneyProvider String? @map("mobile_money_provider")
+  mobileMoneyNumber   String? @map("mobile_money_number")
+
+  // Whether this host is currently working with the club — toggled manually (no lifecycle
+  // rule derives it), shown to Finance so they know who's a current vs. past partner.
+  isActive Boolean @default(true) @map("is_active")
+
+  // Goal total reach (likes+comments across all engagements) for this host's "Total reach" gauge.
+  reachTarget Int? @map("reach_target")
+
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaignLinks  CampaignMediaHost[]
+  trackerEntries TrackerEntry[]
+  payments       Payment[]
+  engagements    MediaEngagement[]
+  mediaOutlet    MediaOutlet?        @relation(fields: [mediaOutletId], references: [id])
+
+  @@index([organizationId])
+  @@map("media_hosts")
+}
+
+// Media House reference catalog (e.g. "Azam Media") — Channel and Kipindi/session are plain
+// text fields directly on MediaHost (see above), sourced live from the JSON reference catalog
+// for the cascading dropdown, so there's no separate Channel/Program table to keep in sync.
+model MediaOutlet {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  // The catalog JSON's own stable id (e.g. "mh_003") for rows created by the seed importer —
+  // null for outlets an admin creates by hand. Matching on this (not `name`) is what lets an
+  // admin rename a seeded outlet without the next boot's reseed treating the rename as a
+  // different entity and recreating a duplicate under the original name.
+  externalId     String?  @map("external_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hosts        MediaHost[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, externalId])
+  @@map("media_outlets")
+}
+
+enum InfluencerType {
+  CELEBRITY
+  ATHLETE
+  MUSICIAN
+  CONTENT_CREATOR
+  BLOGGER
+  MEDIA_PERSONALITY
+  MICRO_INFLUENCER
+  OTHER
+}
+
+model Influencer {
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
+  name           String
+  type           InfluencerType @default(OTHER)
+  brandName      String?  @map("brand_name")
+  phone          String?
+  // Extra numbers this influencer wants to share, beyond the primary `phone` above — plain
+  // string array (e.g. ["+255...", "+255..."]), never used as a payment default, just contact info.
+  additionalPhones Json?  @map("additional_phones")
+  email          String?
+  socialHandle   String?  @map("social_handle")
+  notes          String?  @db.Text
+  contractStartDate DateTime? @map("contract_start_date") @db.Date
+  agreementUrl      String?   @map("agreement_url")
+
+  // Default payout details — prefilled into the payment form when this influencer is selected.
+  bankName           String? @map("bank_name")
+  bankAccountName    String? @map("bank_account_name")
+  bankAccountNumber  String? @map("bank_account_number")
+  mobileMoneyProvider String? @map("mobile_money_provider")
+  mobileMoneyNumber   String? @map("mobile_money_number")
+
+  // Whether this influencer is currently working with the club — toggled manually (no
+  // lifecycle rule derives it), shown to Finance so they know who's a current vs. past partner.
+  isActive Boolean @default(true) @map("is_active")
+
+  // Goal total reach (likes+comments across all engagements) for this influencer's "Total reach" gauge.
+  reachTarget Int? @map("reach_target")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaignLinks  CampaignInfluencer[]
+  trackerEntries TrackerEntry[]
+  payments       Payment[]
+  engagements    MediaEngagement[]
+
+  @@index([organizationId])
+  @@map("influencers")
+}
+
+enum MediaEngagementStatus {
+  NOT_PAID
+  PAID
+}
+
+/// One "campaign" booked for a specific media host or influencer — what the user
+/// calls "create campaign": a single engagement cycle with its own rate, narrative,
+/// and pay status. A host/influencer has many of these over time. Finance pays
+/// against one of these (its status flips NOT_PAID -> PAID once a Payment is recorded).
+model MediaEngagement {
+  id             String                 @id @default(uuid())
+  organizationId String                 @map("organization_id")
+  mediaHostId    String?                @map("media_host_id")
+  influencerId   String?                @map("influencer_id")
+  status         MediaEngagementStatus  @default(NOT_PAID)
+
+  // Filled in later, at payment time — not known when the campaign is first created.
+  rateTzs         Decimal? @map("rate_tzs") @db.Decimal(14, 2)
+  engagement      Decimal? @db.Decimal(14, 2)
+  totalTzs        Decimal? @map("total_tzs") @db.Decimal(14, 2)
+  engagementDates String?  @map("engagement_dates")
+
+  link              String?   @db.Text
+  reportingTimeline   String?   @map("reporting_timeline")
+  natureOfNarrative   String?   @map("nature_of_narrative")
+  topicPostAgenda     String?   @map("topic_post_agenda") @db.Text
+  narrativeKeyMessage String?   @map("narrative_key_message") @db.Text
+  reachAudience       String?   @map("reach_audience")
+  memberEngagement    String?   @map("member_engagement")
+  mediaImpactOutcome  String?   @map("media_impact_outcome") @db.Text
+  regionalFeedback    String?   @map("regional_feedback") @db.Text
+  meNotes             String?   @map("me_notes") @db.Text
+
+  // Recorded per campaign once it's live — likes+comments together are this campaign's "reach".
+  likes    Int?
+  comments Int?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mediaHost    MediaHost?    @relation(fields: [mediaHostId], references: [id], onDelete: Cascade)
+  influencer   Influencer?   @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  payment      Payment?
+  reachLogs    MediaEngagementReachLog[]
+
+  @@index([organizationId])
+  @@index([mediaHostId, status])
+  @@index([influencerId, status])
+  @@map("media_engagements")
+}
+
+// A timestamped snapshot of likes+comments every time they're updated, so we can answer "what was
+// this campaign's reach after 1 week / 1 month / 3 months / 1 year" without needing that info at
+// the exact moment — it's reconstructed from whichever snapshot was current at each milestone date.
+model MediaEngagementReachLog {
+  id                String   @id @default(uuid())
+  mediaEngagementId String   @map("media_engagement_id")
+  likes             Int      @default(0)
+  comments          Int      @default(0)
+  recordedAt        DateTime @default(now()) @map("recorded_at")
+
+  mediaEngagement MediaEngagement @relation(fields: [mediaEngagementId], references: [id], onDelete: Cascade)
+
+  @@index([mediaEngagementId, recordedAt])
+  @@map("media_engagement_reach_logs")
+}
+
+enum MediaCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+model MediaCampaign {
+  id             String              @id @default(uuid())
+  organizationId String              @map("organization_id")
+  name           String
+  description    String?             @db.Text
+  campaignType   String?             @map("campaign_type")
+  objective      String?             @db.Text
+  startDate      DateTime?           @map("start_date") @db.Date
+  endDate        DateTime?           @map("end_date") @db.Date
+  status         MediaCampaignStatus @default(DRAFT)
+  budget         Decimal?            @db.Decimal(14, 2)
+  ownerUserId    String?             @map("owner_user_id")
+  notes          String?             @db.Text
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?                @relation(fields: [ownerUserId], references: [id])
+  mediaHosts       CampaignMediaHost[]
+  influencers      CampaignInfluencer[]
+  metrics          TrackerMetric[]
+  sessions         TrackerSession[]
+  payments         Payment[]
+  mediaActivations MediaActivation[]
+  trackerReports   TrackerReport[]
+
+  @@index([organizationId, status])
+  @@map("media_campaigns")
+}
+
+/// A media plan line item — "register media for campaign" — one booked activation slot
+/// (who ran what, where, when, and for how much). Distinct from CampaignMediaHost/
+/// CampaignInfluencer, which just link a directory entry to a campaign.
+model MediaActivation {
+  id                String   @id @default(uuid())
+  campaignId        String   @map("campaign_id")
+  week              String?
+  platformProgram   String?  @map("platform_program")
+  activationChannel String?  @map("activation_channel")
+  personnelOutlet   String?  @map("personnel_outlet")
+  personnelRole     String?  @map("personnel_role")
+  rateTzs           Decimal? @map("rate_tzs") @db.Decimal(14, 2)
+  engagement        Decimal? @db.Decimal(14, 2)
+  totalTzs          Decimal? @map("total_tzs") @db.Decimal(14, 2)
+  engagementDates   String?  @map("engagement_dates")
+  link              String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  campaign MediaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("media_activations")
+}
+
+/// A narrative/PR reporting entry — "tracker" — the qualitative counterpart to
+/// TrackerMetric's numeric scoring system.
+model TrackerReport {
+  id                  String    @id @default(uuid())
+  campaignId          String    @map("campaign_id")
+  reportingTimeline   String?   @map("reporting_timeline")
+  paymentDate         DateTime? @map("payment_date") @db.Date
+  natureOfNarrative   String?   @map("nature_of_narrative")
+  topicPostAgenda     String?   @map("topic_post_agenda") @db.Text
+  narrativeKeyMessage String?   @map("narrative_key_message") @db.Text
+  reachAudience       String?   @map("reach_audience")
+  memberEngagement    String?   @map("member_engagement")
+  mediaImpactOutcome  String?   @map("media_impact_outcome") @db.Text
+  regionalFeedback    String?   @map("regional_feedback") @db.Text
+  meNotes             String?   @map("me_notes") @db.Text
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  campaign MediaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("tracker_reports")
+}
+
+model CampaignMediaHost {
+  id          String   @id @default(uuid())
+  campaignId  String   @map("campaign_id")
+  mediaHostId String   @map("media_host_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  campaign  MediaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  mediaHost MediaHost     @relation(fields: [mediaHostId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, mediaHostId])
+  @@map("campaign_media_hosts")
+}
+
+model CampaignInfluencer {
+  id           String   @id @default(uuid())
+  campaignId   String   @map("campaign_id")
+  influencerId String   @map("influencer_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  campaign   MediaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  influencer Influencer    @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, influencerId])
+  @@map("campaign_influencers")
+}
+
+enum MetricFieldType {
+  NUMBER
+  DECIMAL
+  PERCENTAGE
+  CURRENCY
+  TEXT
+  BOOLEAN
+  RATING
+  DATE
+}
+
+model TrackerMetric {
+  id                String          @id @default(uuid())
+  campaignId        String          @map("campaign_id")
+  name              String
+  description       String?         @db.Text
+  fieldType         MetricFieldType @default(NUMBER) @map("field_type")
+  unit              String?
+  required          Boolean         @default(false)
+  scoringEnabled    Boolean         @default(false) @map("scoring_enabled")
+  weight            Decimal?        @db.Decimal(5, 2)
+  minValue          Decimal?        @map("min_value") @db.Decimal(18, 2)
+  maxValue          Decimal?        @map("max_value") @db.Decimal(18, 2)
+  target            Decimal?        @db.Decimal(18, 2)
+  calculationMethod String?         @map("calculation_method") @db.Text
+  displayOrder      Int             @default(0) @map("display_order")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  campaign MediaCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  entries  TrackerEntry[]
+
+  @@index([campaignId])
+  @@map("tracker_metrics")
+}
+
+enum TrackerSessionStatus {
+  DRAFT
+  COMPLETED
+  LOCKED
+}
+
+model TrackerSession {
+  id              String               @id @default(uuid())
+  campaignId      String               @map("campaign_id")
+  sessionDate     DateTime             @map("session_date") @db.Date
+  status          TrackerSessionStatus @default(DRAFT)
+  createdByUserId String               @map("created_by_user_id")
+  updatedByUserId String?              @map("updated_by_user_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  campaign MediaCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  entries  TrackerEntry[]
+
+  @@unique([campaignId, sessionDate])
+  @@index([campaignId])
+  @@map("tracker_sessions")
+}
+
+enum TrackerSubjectType {
+  MEDIA_HOST
+  INFLUENCER
+}
+
+model TrackerEntry {
+  id           String             @id @default(uuid())
+  sessionId    String             @map("session_id")
+  metricId     String             @map("metric_id")
+  subjectType  TrackerSubjectType @map("subject_type")
+  // Denormalized copy of whichever of mediaHostId/influencerId applies, used
+  // only for the uniqueness key below — kept separate from the real nullable
+  // FK columns because MySQL treats every NULL as distinct in a unique
+  // index (so two NULLs never collide the way we need), while an empty-
+  // string sentinel directly on a FK column would violate the constraint
+  // instead. This plain string carries no FK, so neither problem applies.
+  subjectId    String             @map("subject_id")
+  mediaHostId  String?            @map("media_host_id")
+  influencerId String?            @map("influencer_id")
+  numericValue Decimal?           @map("numeric_value") @db.Decimal(18, 2)
+  textValue    String?            @map("text_value")
+  boolValue    Boolean?           @map("bool_value")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  session    TrackerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  metric     TrackerMetric  @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  mediaHost  MediaHost?     @relation(fields: [mediaHostId], references: [id], onDelete: Cascade)
+  influencer Influencer?    @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, metricId, subjectId])
+  @@index([sessionId])
+  @@index([metricId])
+  @@map("tracker_entries")
+}
+
+enum PaymentBeneficiaryType {
+  MEDIA_HOST
+  INFLUENCER
+}
+
+enum PaymentStatus {
+  /// Newly created, awaiting an admin's approval — shown as "Unpaid".
+  PENDING
+  /// Approved by an admin (authorized for Finance to pay) but not yet actually paid — shown as
+  /// "Pending Payment". Only PaymentsService.markPaid() (Finance's own step) moves a payment out
+  /// of this state, into PAID.
+  PROCESSING
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+model Payment {
+  id              String                 @id @default(uuid())
+  organizationId  String                 @map("organization_id")
+  campaignId      String?                @map("campaign_id")
+  beneficiaryType PaymentBeneficiaryType @map("beneficiary_type")
+  mediaHostId     String?                @map("media_host_id")
+  influencerId    String?                @map("influencer_id")
+  paymentDate     DateTime               @map("payment_date") @db.Date
+  amount          Decimal                @db.Decimal(14, 2)
+  currency        String                 @default("TZS")
+  method          String?
+  referenceNumber String?                @map("reference_number")
+  description     String?                @db.Text
+  // New payments always start PENDING and only become PAID once an admin (or a role an admin
+  // has granted the "payment-approval" area to) explicitly approves them — see
+  // PaymentsService.approve()/reject(). Never set directly from client input.
+  status          PaymentStatus          @default(PENDING)
+  documentUrl     String?                @map("document_url") @db.Text
+  notes           String?                @db.Text
+
+  // Conditional fields, populated depending on `method` (Bank transfer / Mobile money) —
+  // bank/mobile identity is usually prefilled from the beneficiary's saved profile, while the
+  // reference/transaction id is specific to this one payment.
+  bankName              String? @map("bank_name")
+  bankAccountName       String? @map("bank_account_name")
+  bankAccountNumber     String? @map("bank_account_number")
+  bankTransactionRef    String? @map("bank_transaction_ref")
+  mobileMoneyProvider   String? @map("mobile_money_provider")
+  mobileMoneyNumber     String? @map("mobile_money_number")
+  mobileMoneyTransactionId String? @map("mobile_money_transaction_id")
+
+  createdByUserId    String    @map("created_by_user_id")
+  approvedByUserId   String?   @map("approved_by_user_id")
+  approvedAt         DateTime? @map("approved_at")
+  rejectedByUserId   String?   @map("rejected_by_user_id")
+  rejectedAt         DateTime? @map("rejected_at")
+  /// What Finance actually sent, recorded at markPaid() — can differ from `amount` (what the
+  /// admin approved). When it differs, `amountVarianceNote` is required so there's always a
+  /// reason on record for the gap. Null until Finance marks the payment paid.
+  paidAmount         Decimal?  @db.Decimal(14, 2) @map("paid_amount")
+  amountVarianceNote String?   @db.Text @map("amount_variance_note")
+  mediaEngagementId  String? @unique @map("media_engagement_id")
+  /// Set instead of mediaEngagementId when paying against an Influencer 2
+  /// campaign (the influencer-side campaign system) rather than the original
+  /// MediaEngagement — a payment only ever targets one or the other.
+  influencer2CampaignId String? @unique @map("influencer2_campaign_id")
+
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign            MediaCampaign?       @relation(fields: [campaignId], references: [id])
+  mediaHost           MediaHost?           @relation(fields: [mediaHostId], references: [id])
+  influencer          Influencer?          @relation(fields: [influencerId], references: [id])
+  mediaEngagement     MediaEngagement?     @relation(fields: [mediaEngagementId], references: [id])
+  influencer2Campaign Influencer2Campaign? @relation(fields: [influencer2CampaignId], references: [id])
+
+  @@index([organizationId])
+  @@index([campaignId])
+  @@index([mediaHostId])
+  @@index([influencerId])
+  @@map("payments")
+}
+
+enum ExpenseCategory {
+  OPERATIONAL
+  ADMINISTRATIVE
+}
+
+// Non-payment club spending — operating costs (fuel, printing, venue hire...) and administrative
+// costs (office supplies, subscriptions...) tracked by Finance separately from the payments made
+// to media hosts/influencers. totalCost is stored (not just computed) so a later unit-cost edit
+// never silently rewrites a historical expense's recorded total.
+model Expense {
+  id              String          @id @default(uuid())
+  organizationId  String          @map("organization_id")
+  category        ExpenseCategory
+  item            String
+  purpose         String?         @db.Text
+  quantity        Decimal         @db.Decimal(10, 2)
+  unitCost        Decimal         @map("unit_cost") @db.Decimal(14, 2)
+  totalCost       Decimal         @map("total_cost") @db.Decimal(14, 2)
+  dateIssued      DateTime        @map("date_issued") @db.Date
+  concernedParty  String?         @map("concerned_party")
+  notes           String?         @db.Text
+  createdByUserId String          @map("created_by_user_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdByUserId], references: [id])
+
+  @@index([organizationId, category])
+  @@map("expenses")
+}
+
+/// Per-organization, per-role EXTRA grants for one nav area, layered on top of each area's
+/// built-in default role list (see apps/web/src/lib/permissions.ts NAV_ACCESS and
+/// apps/api/src/modules/permissions/permissions.service.ts). A row only ever ADDS access for a
+/// role that isn't already allowed by default — the default roles for an area can't be revoked
+/// through this table, so an admin can never accidentally lock themselves (or Finance) out.
+model OrgRolePermission {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  role           RoleKey
+  area           String
+  allowed        Boolean  @default(true)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, role, area])
+  @@index([organizationId])
+  @@map("org_role_permissions")
+}
+
+/// One row per (organization, region) — the numeric target an admin configures for the
+/// members-by-region and leaders-by-region dashboard charts to show hover progress against.
+/// Either target may be left unset (no goal configured yet for that metric in that region).
+model RegionTarget {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  region         String
+  memberTarget   Int?     @map("member_target")
+  leaderTarget   Int?     @map("leader_target")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, region])
+  @@index([organizationId])
+  @@map("region_targets")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// INFLUENCER 2 — isolated, experimental multi-platform content engagement
+// module. One "campaign" is one piece of content, distributed across several
+// social platforms, each with its own URL and its own public metrics. This
+// exists to be compared against the original Influencer/MediaEngagement
+// approach above and must stay fully independent of it: organizationId and
+// influencerId below are deliberately PLAIN string columns with no Prisma
+// @relation to Organization/Influencer, so neither of those models needs a
+// back-relation field added — tenant/reference checks happen in the service
+// layer instead of via a DB foreign key. Do not add a relation here without
+// also reconsidering that isolation goal.
+// ─────────────────────────────────────────────────────────────────────────
+
+enum Influencer2ContentType {
+  VIDEO
+  IMAGE
+  REEL
+  STORY
+  ARTICLE
+  PODCAST
+  AUDIO
+  OTHER
+}
+
+enum Influencer2CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+/// Which campaign-level summary bucket a metric rolls into. SENTIMENT is the
+/// estimated positive/negative/neutral comment breakdown — it never rolls
+/// into the plain COMMENTS total (that stays the raw count) and never counts
+/// toward Total Public Engagement (see Influencer2MetricDefinition.countsAsEngagement).
+enum Influencer2MetricCategory {
+  VIEWS
+  LIKES
+  COMMENTS
+  SHARES
+  SENTIMENT
+  OTHER
+}
+
+enum Influencer2MetricSource {
+  MANUAL_ENTRY
+  ESTIMATED
+  IMPORTED
+  API
+}
+
+model Influencer2Platform {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+
+  metricDefinitions Influencer2MetricDefinition[]
+  campaignPlatforms Influencer2CampaignPlatform[]
+
+  @@map("influencer2_platforms")
+}
+
+/// The "don't hard-code the form" layer — the create-campaign platform
+/// checklist and the metrics-entry form both render fields FROM these rows,
+/// not from per-platform React components, so adding a platform or a metric
+/// later is a data change (seed/insert a row), not a rebuild.
+model Influencer2MetricDefinition {
+  id                 String                     @id @default(uuid())
+  platformId         String                     @map("platform_id")
+  key                String
+  label              String
+  category           Influencer2MetricCategory
+  /// "percent" for the sentiment breakdown (must sum to 100 across the 3
+  /// sentiment metrics of one platform — enforced client-side), null for a
+  /// plain count. Lets the frontend render/validate without hardcoding keys.
+  unit               String?
+  /// Hidden on the form/table unless the campaign's contentType is
+  /// VIDEO/REEL/STORY — e.g. Instagram "Views/Plays" only applies to video-like content.
+  videoOnly          Boolean                    @default(false) @map("video_only")
+  /// Whether this metric's value counts toward "Total Public Engagement".
+  /// false for VIEWS (never an engagement) and SENTIMENT (a breakdown of an
+  /// already-counted COMMENTS metric, not additional engagement).
+  countsAsEngagement Boolean                    @default(true) @map("counts_as_engagement")
+  sortOrder          Int                        @default(0) @map("sort_order")
+  isActive           Boolean                    @default(true) @map("is_active")
+
+  platform Influencer2Platform      @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  values   Influencer2MetricValue[]
+
+  @@unique([platformId, key])
+  @@map("influencer2_metric_definitions")
+}
+
+/// Payment status is separate from the workflow `status` above — this is the
+/// financial state (has Finance paid for this campaign yet), mirroring
+/// MediaEngagementStatus's role for the original Influencer/MediaHost system.
+/// Only ever written by PaymentsService.create(), never by this module's own
+/// create/update DTOs — same payment-integrity separation used elsewhere.
+enum Influencer2PaymentStatus {
+  NOT_PAID
+  PAID
+}
+
+model Influencer2Campaign {
+  id             String                     @id @default(uuid())
+  organizationId String                     @map("organization_id")
+  name           String
+  code           String?
+  contentType    Influencer2ContentType     @map("content_type")
+  description    String?                    @db.Text
+  contentDate    DateTime?                  @map("content_date")
+  contentOwner   String?                    @map("content_owner")
+  /// References the existing Influencer.id — deliberately unrelated at the DB
+  /// level, see the module-level note above. A campaign belongs to EITHER an
+  /// influencer OR a media host (mirrors MediaEngagement's mediaHostId/
+  /// influencerId pair) — this model now serves both beneficiary types
+  /// despite its name, kept as-is to avoid a disruptive rename.
+  influencerId   String?                    @map("influencer_id")
+  mediaHostId    String?                    @map("media_host_id")
+  startDate      DateTime?                  @map("start_date")
+  endDate        DateTime?                  @map("end_date")
+  status         Influencer2CampaignStatus  @default(DRAFT)
+  thumbnailUrl   String?                    @map("thumbnail_url") @db.Text
+  notes          String?                    @db.Text
+  createdBy      String?                    @map("created_by")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+
+  // Filled in by PaymentsService.create() at pay time, mirroring how
+  // MediaEngagement.rateTzs/totalTzs are never set at creation either.
+  paymentStatus Influencer2PaymentStatus @default(NOT_PAID) @map("payment_status")
+  rateTzs       Decimal?                 @map("rate_tzs") @db.Decimal(14, 2)
+  totalTzs      Decimal?                 @map("total_tzs") @db.Decimal(14, 2)
+
+  platforms Influencer2CampaignPlatform[]
+  payment   Payment?
+
+  @@index([organizationId])
+  @@index([influencerId])
+  @@index([mediaHostId])
+  @@map("influencer2_campaigns")
+}
+
+/// One row per (campaign, platform) — the distribution record: where the
+/// content was published and its own URL, independent of every other platform.
+model Influencer2CampaignPlatform {
+  id          String    @id @default(uuid())
+  campaignId  String    @map("campaign_id")
+  platformId  String    @map("platform_id")
+  postUrl     String?   @map("post_url") @db.Text
+  postId      String?   @map("post_id")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  campaign Influencer2Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  platform Influencer2Platform     @relation(fields: [platformId], references: [id])
+  metrics  Influencer2MetricValue[]
+
+  @@unique([campaignId, platformId])
+  @@map("influencer2_campaign_platforms")
+}
+
+/// Append-only snapshots — never update a value in place; insert a new row
+/// and flip isLatest so "current" reads stay a plain isLatest:true filter
+/// while full history remains queryable for growth charts and milestones.
+model Influencer2MetricValue {
+  id                 String                  @id @default(uuid())
+  campaignPlatformId String                  @map("campaign_platform_id")
+  metricDefinitionId String                  @map("metric_definition_id")
+  value              Decimal                 @db.Decimal(18, 2)
+  source             Influencer2MetricSource @default(MANUAL_ENTRY)
+  collectedAt        DateTime                @default(now()) @map("collected_at")
+  collectedBy        String?                 @map("collected_by")
+  isLatest           Boolean                 @default(true) @map("is_latest")
+  createdAt          DateTime                @default(now()) @map("created_at")
+
+  campaignPlatform Influencer2CampaignPlatform @relation(fields: [campaignPlatformId], references: [id], onDelete: Cascade)
+  metricDefinition Influencer2MetricDefinition @relation(fields: [metricDefinitionId], references: [id])
+
+  @@index([campaignPlatformId, metricDefinitionId, collectedAt])
+  @@index([campaignPlatformId, isLatest])
+  @@map("influencer2_metric_values")
+}
