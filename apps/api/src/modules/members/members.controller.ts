@@ -7,6 +7,7 @@ import { UpdateMemberDto } from "./dto/update-member.dto";
 import { SearchMembersDto } from "./dto/search-members.dto";
 import { BulkMemberIdsDto } from "./dto/bulk-member-ids.dto";
 import { BulkEmailMembersDto } from "./dto/bulk-email-members.dto";
+import { MAX_UPLOAD_BYTES } from "../storage/storage.service";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -60,7 +61,7 @@ export class MembersController {
 
   @Post("import")
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async import(@Param("organizationId") organizationId: string, @UploadedFile() file: Express.Multer.File, @CurrentUser() user: RequestUser) {
     if (!file) throw new BadRequestException("No file uploaded — expected a CSV file under field name 'file'");
     const rows = parseCsv(file.buffer.toString("utf-8"));

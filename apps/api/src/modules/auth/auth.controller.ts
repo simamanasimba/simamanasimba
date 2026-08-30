@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, HttpCode, Patch, Post, Req, Res, UnauthorizedException, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { Throttle } from "@nestjs/throttler";
 import type { Response } from "express";
 import { AuthService } from "./auth.service";
 import { RegisterOrganizationDto } from "./dto/register-organization.dto";
@@ -10,7 +11,7 @@ import { Public } from "../../common/decorators/public.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SESSION_COOKIE_NAME } from "../../common/constants";
 import type { AuthenticatedRequest, RequestUser } from "../../common/types";
-import { StorageService } from "../storage/storage.service";
+import { StorageService, MAX_UPLOAD_BYTES, sanitizeExtension } from "../storage/storage.service";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -36,6 +37,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post("register-organization")
   async registerOrganization(@Body() dto: RegisterOrganizationDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.registerOrganization(dto);
@@ -44,6 +46,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post("login")
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: AuthenticatedRequest, @Res({ passthrough: true }) res: Response) {
@@ -70,6 +73,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post("forgot-password")
   @HttpCode(200)
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -78,6 +82,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post("reset-password")
   @HttpCode(200)
   async resetPassword(@Body() dto: ResetPasswordDto) {
@@ -106,13 +111,13 @@ export class AuthController {
   }
 
   @Post("me/avatar")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async uploadAvatar(@CurrentUser() user: RequestUser | undefined, @UploadedFile() file: Express.Multer.File) {
     if (!user) throw new UnauthorizedException();
     if (!file) throw new BadRequestException("No file uploaded — expected an image file under field name 'file'");
     if (!file.mimetype.startsWith("image/")) throw new BadRequestException("Profile photo must be an image file");
 
-    const ext = file.originalname.split(".").pop() ?? "png";
+    const ext = sanitizeExtension(file.originalname, "png");
     const url = await this.storage.upload(`avatars/${user.id}/photo.${ext}`, file.buffer, file.mimetype);
     return this.auth.updateAvatar(user.id, `${url}?v=${Date.now()}`);
   }

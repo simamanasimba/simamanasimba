@@ -13,7 +13,7 @@ import { Roles } from "../../common/decorators/roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
-import { StorageService } from "../storage/storage.service";
+import { StorageService, MAX_UPLOAD_BYTES, sanitizeExtension } from "../storage/storage.service";
 
 const WRITE_ROLES = ["ORG_SUPER_ADMIN", "ORG_ADMIN"] as const;
 
@@ -88,14 +88,14 @@ export class Influencer2CampaignsController {
 
   @Post(":campaignId/thumbnail")
   @Roles(...WRITE_ROLES)
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async uploadThumbnail(
     @Param("organizationId") organizationId: string,
     @Param("campaignId") campaignId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException("No file uploaded — expected a file under field name 'file'");
-    const ext = file.originalname.split(".").pop() ?? "bin";
+    const ext = sanitizeExtension(file.originalname, "bin");
     const url = await this.storage.upload(`influencer2/${organizationId}/${campaignId}.${ext}`, file.buffer, file.mimetype);
     return this.campaigns.setThumbnail(organizationId, campaignId, `${url}?v=${Date.now()}`);
   }

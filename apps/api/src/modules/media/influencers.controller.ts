@@ -9,7 +9,7 @@ import { Roles } from "../../common/decorators/roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
-import { StorageService } from "../storage/storage.service";
+import { StorageService, MAX_UPLOAD_BYTES, sanitizeExtension } from "../storage/storage.service";
 
 @Controller("api/v1/organizations/:organizationId/influencers")
 @UseGuards(OrgMembershipGuard, RolesGuard)
@@ -40,7 +40,7 @@ export class InfluencersController {
 
   @Post(":influencerId/agreement")
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async uploadAgreement(
     @Param("organizationId") organizationId: string,
     @Param("influencerId") influencerId: string,
@@ -48,7 +48,7 @@ export class InfluencersController {
     @CurrentUser() user: RequestUser,
   ) {
     if (!file) throw new BadRequestException("No file uploaded — expected a file under field name 'file'");
-    const ext = file.originalname.split(".").pop() ?? "bin";
+    const ext = sanitizeExtension(file.originalname, "bin");
     const url = await this.storage.upload(`influencers/${organizationId}/${influencerId}-agreement.${ext}`, file.buffer, file.mimetype);
     const influencer = await this.influencers.setAgreement(organizationId, influencerId, `${url}?v=${Date.now()}`);
     await this.audit.record({ organizationId, userId: user.id, action: "influencer.agreement_uploaded", entityType: "influencer", entityId: influencerId });

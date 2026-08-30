@@ -5,6 +5,20 @@ import { join } from "path";
 
 const LOCAL_STORAGE_DIR = join(process.cwd(), "storage");
 
+/** Multer's file size cap for every upload endpoint in the app — pass as FileInterceptor's `limits.fileSize`. */
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Derives a safe extension from a user-supplied filename — strips everything
+ * but letters/digits so a crafted `originalname` (slashes, dots, null bytes)
+ * can't influence the storage key beyond a short cosmetic suffix.
+ */
+export function sanitizeExtension(originalname: string, fallback: string): string {
+  const raw = originalname.split(".").pop() ?? fallback;
+  const clean = raw.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10);
+  return clean || fallback;
+}
+
 /**
  * S3-compatible object storage (works with AWS S3, Cloudflare R2, or MinIO —
  * spec section 7). Without S3_ENDPOINT/S3_BUCKET configured, falls back to

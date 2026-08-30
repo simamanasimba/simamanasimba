@@ -11,7 +11,7 @@ import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
-import { StorageService } from "../storage/storage.service";
+import { StorageService, MAX_UPLOAD_BYTES, sanitizeExtension } from "../storage/storage.service";
 
 @Controller("api/v1/organizations/:organizationId")
 @UseGuards(OrgMembershipGuard, RolesGuard)
@@ -30,12 +30,12 @@ export class OrganizationsController {
   @Post("branding/logo")
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
   @RequiresArea("settings")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async uploadLogo(@Param("organizationId") organizationId: string, @UploadedFile() file: Express.Multer.File, @CurrentUser() user: RequestUser) {
     if (!file) throw new BadRequestException("No file uploaded — expected an image file under field name 'file'");
     if (!file.mimetype.startsWith("image/")) throw new BadRequestException("Logo must be an image file");
 
-    const ext = file.originalname.split(".").pop() ?? "png";
+    const ext = sanitizeExtension(file.originalname, "png");
     const logoUrl = await this.storage.upload(`branding/${organizationId}/logo.${ext}`, file.buffer, file.mimetype);
     const org = await this.organizations.update(organizationId, { logoUrl: `${logoUrl}?v=${Date.now()}` });
     await this.audit.record({ organizationId, userId: user.id, action: "organization.logo_updated", entityType: "organization", entityId: organizationId });
@@ -45,12 +45,12 @@ export class OrganizationsController {
   @Post("branding/hero")
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
   @RequiresArea("settings")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async uploadHeroImage(@Param("organizationId") organizationId: string, @UploadedFile() file: Express.Multer.File, @CurrentUser() user: RequestUser) {
     if (!file) throw new BadRequestException("No file uploaded — expected an image file under field name 'file'");
     if (!file.mimetype.startsWith("image/")) throw new BadRequestException("Hero image must be an image file");
 
-    const ext = file.originalname.split(".").pop() ?? "jpg";
+    const ext = sanitizeExtension(file.originalname, "jpg");
     const heroImageUrl = await this.storage.upload(`branding/${organizationId}/hero.${ext}`, file.buffer, file.mimetype);
     const org = await this.organizations.update(organizationId, { heroImageUrl: `${heroImageUrl}?v=${Date.now()}` });
     await this.audit.record({ organizationId, userId: user.id, action: "organization.hero_image_updated", entityType: "organization", entityId: organizationId });
@@ -60,12 +60,12 @@ export class OrganizationsController {
   @Post("branding/hero-slides")
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
   @RequiresArea("settings")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async uploadHeroSlide(@Param("organizationId") organizationId: string, @UploadedFile() file: Express.Multer.File, @CurrentUser() user: RequestUser) {
     if (!file) throw new BadRequestException("No file uploaded — expected an image file under field name 'file'");
     if (!file.mimetype.startsWith("image/")) throw new BadRequestException("Slide image must be an image file");
 
-    const ext = file.originalname.split(".").pop() ?? "jpg";
+    const ext = sanitizeExtension(file.originalname, "jpg");
     const imageUrl = await this.storage.upload(`branding/${organizationId}/hero-slide-${Date.now()}.${ext}`, file.buffer, file.mimetype);
     const org = await this.organizations.addHeroSlide(organizationId, imageUrl);
     await this.audit.record({ organizationId, userId: user.id, action: "organization.hero_slide_added", entityType: "organization", entityId: organizationId });
