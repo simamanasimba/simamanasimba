@@ -7,10 +7,11 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { Download, Image as ImageIcon, FileText, RefreshCw, Search, CheckCircle2, Copy, Check } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { EventWithStats, LiveStats } from "@/lib/types";
+import type { EventRecord, EventWithStats, LiveStats } from "@/lib/types";
 import { StatCard } from "@/components/StatCard";
 import { BrandMark } from "@/components/BrandMark";
 import { LoadingWord } from "@/components/LoadingWord";
+import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 
@@ -20,6 +21,90 @@ interface QrResult {
   token: string;
   checkInUrl: string;
   qrDataUrl: string;
+}
+
+/** Converts an ISO instant to the value a `datetime-local` input expects, in the
+ * viewer's own local time (not UTC) — otherwise a pre-filled edit form would show
+ * a different clock time than what was actually entered. */
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function EditEventModal({
+  organizationId,
+  event,
+  onClose,
+  onSaved,
+}: {
+  organizationId: string;
+  event: EventRecord;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useLang();
+  const [form, setForm] = useState({
+    name: event.name,
+    eventType: event.eventType ?? "",
+    location: event.location ?? "",
+    startDatetime: toDatetimeLocalValue(event.startDatetime),
+    endDatetime: toDatetimeLocalValue(event.endDatetime),
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.patch(`/api/v1/organizations/${organizationId}/events/${event.id}`, {
+        ...form,
+        startDatetime: new Date(form.startDatetime).toISOString(),
+        endDatetime: new Date(form.endDatetime).toISOString(),
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("failedUpdateEvent"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={t("editEvent")} onClose={onClose}>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div>
+          <label className="label">{t("eventNameLabel")}</label>
+          <input required className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">{t("eventTypeLabel")}</label>
+          <input className="input" value={form.eventType} onChange={(e) => setForm((f) => ({ ...f, eventType: e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">{t("locationLabel")}</label>
+          <input className="input" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">{t("startsLabel")}</label>
+            <input type="datetime-local" required className="input" value={form.startDatetime} onChange={(e) => setForm((f) => ({ ...f, startDatetime: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">{t("endsLabel")}</label>
+            <input type="datetime-local" required className="input" value={form.endDatetime} onChange={(e) => setForm((f) => ({ ...f, endDatetime: e.target.value }))} />
+          </div>
+        </div>
+        {error && <p className="text-sm text-brand">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>
+          <button type="submit" disabled={submitting} className="btn-primary">{submitting ? t("saving") : t("save")}</button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 interface AttendanceRow {
@@ -50,6 +135,7 @@ export default function EventDetailPage() {
   const [checkInSearch, setCheckInSearch] = useState("");
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
 
   const { data: org } = useQuery({
@@ -195,9 +281,23 @@ export default function EventDetailPage() {
             <FileText size={15} /> {reportBusy ? t("preparing") : t("attendancePdf")}
           </button>
           <span className="badge bg-surface text-muted">{event.status}</span>
+          <button onClick={() => setEditing(true)} className="btn-secondary">{t("editEvent")}</button>
           {event.status === "DRAFT" && <button onClick={publish} className="btn-secondary">{t("publish")}</button>}
         </div>
       </div>
+
+      {editing && (
+        <EditEventModal
+          organizationId={organizationId}
+          event={event}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            queryClient.invalidateQueries({ queryKey: ["event", organizationId, eventId] });
+            showToast("success", t("eventUpdated"));
+          }}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard label={t("statRegistered")} value={live?.registered ?? stats.registered} />

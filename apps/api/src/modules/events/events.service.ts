@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import * as QRCode from "qrcode";
 import { generateOpaqueToken } from "@event-intel/security";
 import type { Event, EventStatus, Prisma } from "@event-intel/database";
@@ -33,6 +33,9 @@ export class EventsService {
   }
 
   async create(organizationId: string, dto: CreateEventDto, createdByUserId: string) {
+    if (new Date(dto.endDatetime) <= new Date(dto.startDatetime)) {
+      throw new BadRequestException("End time must be after the start time");
+    }
     const attendanceEnabled = dto.attendanceEnabled ?? true;
     const event = await this.prisma.event.create({
       data: {
@@ -117,7 +120,12 @@ export class EventsService {
   }
 
   async update(organizationId: string, eventId: string, dto: UpdateEventDto) {
-    await this.ensureEvent(organizationId, eventId);
+    const existing = await this.ensureEvent(organizationId, eventId);
+    const effectiveStart = dto.startDatetime ? new Date(dto.startDatetime) : existing.startDatetime;
+    const effectiveEnd = dto.endDatetime ? new Date(dto.endDatetime) : existing.endDatetime;
+    if (effectiveEnd <= effectiveStart) {
+      throw new BadRequestException("End time must be after the start time");
+    }
     return this.prisma.event.update({
       where: { id: eventId },
       data: {
