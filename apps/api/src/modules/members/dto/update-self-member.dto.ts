@@ -6,6 +6,11 @@ export class UpdateSelfMemberDto {
   @MinLength(1)
   identifier!: string;
 
+  /** See LookupIdentifierDto — proof of ownership, checked against the phone/email already on file. */
+  @IsString()
+  @MinLength(1, { message: "Enter the phone number or email on file for this member" })
+  contact!: string;
+
   @IsOptional()
   @IsString()
   fullName?: string;

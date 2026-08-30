@@ -8,6 +8,16 @@ import { EditReachTargetModal } from "@/components/EditReachTargetModal";
 import { TargetKeyLegend } from "@/components/TargetKeyLegend";
 import { targetTierColor } from "@/lib/targetColor";
 
+// The arc's own bounding box — must match what RadialBarChart renders so cy
+// stays a valid coordinate inside it.
+const GAUGE_WIDTH = 260;
+const GAUGE_HEIGHT = 150;
+const GAUGE_CX = GAUGE_WIDTH / 2;
+const GAUGE_CY = 140;
+// Room below GAUGE_CY for the overlaid number + "X of Y" line, so the block
+// centered on GAUGE_CY (the circle's actual center point) doesn't clip.
+const GAUGE_TEXT_CLEARANCE = 40;
+
 export function ReachGauge({
   organizationId,
   entityType,
@@ -39,28 +49,33 @@ export function ReachGauge({
         </button>
       </div>
 
-      {/* Semi-circle meter — a top-half arc (startAngle 180 to 0), center point sunk to the
-       * bottom of the container so the arc bows upward, matching the reference gauge design. */}
-      <div className="relative mx-auto" style={{ width: 260, height: 150 }}>
+      {/* Semi-circle meter — a top-half arc (startAngle 180 to 0). GAUGE_CX/GAUGE_CY is the
+       * circle's actual center point (equidistant from the arc on every side); the container
+       * is taller than the arc itself purely to give the overlaid number room below that
+       * center point without clipping or overlapping the legend that follows. */}
+      <div className="relative mx-auto" style={{ width: GAUGE_WIDTH, height: GAUGE_HEIGHT + GAUGE_TEXT_CLEARANCE }}>
         <RadialBarChart
-          width={260}
-          height={150}
-          cx={130}
-          cy={140}
+          width={GAUGE_WIDTH}
+          height={GAUGE_HEIGHT}
+          cx={GAUGE_CX}
+          cy={GAUGE_CY}
           innerRadius={88}
           outerRadius={120}
           data={data}
           startAngle={180}
           endAngle={0}
+          className="absolute inset-x-0 top-0"
         >
           <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
           <RadialBar dataKey="value" cornerRadius={16} background={{ fill: "#EFE7E5" }} fill={color} isAnimationActive={false} />
         </RadialBarChart>
-        {/* Centered in the arc's hollow (from its inner edge at cy-innerRadius=52 down to
-            cy=140), not glued to the container's bottom edge — that hollow, not the full
-            260x150 box, is this half-circle's true visual center. */}
-        <div className="pointer-events-none absolute inset-x-0 flex flex-col items-center justify-center" style={{ top: 52, bottom: 0 }}>
-          <p className="nums text-2xl font-extrabold" style={{ color }}>{hasTarget ? `${pct}%` : "—"}</p>
+        {/* Vertically centered exactly on GAUGE_CY — the circle's own center point — via
+            translateY(-50%), not on some guessed midpoint of the container. */}
+        <div
+          className="pointer-events-none absolute inset-x-0 flex flex-col items-center"
+          style={{ top: GAUGE_CY, transform: "translateY(-50%)" }}
+        >
+          <p className="nums text-xl font-extrabold" style={{ color }}>{hasTarget ? `${pct}%` : "—"}</p>
           <p className="mt-0.5 text-xs text-muted">
             {hasTarget ? `${value.toLocaleString()} ${t("ofLabel")} ${target!.toLocaleString()}` : t("tooltipNoTarget")}
           </p>

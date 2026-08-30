@@ -10,12 +10,11 @@ import { Public } from "../../common/decorators/public.decorator";
  * Unauthenticated fan sign-up — "join as a supporter", not a system account.
  * No password, no organization.
  *
- * SECURITY NOTE: lookup/update are keyed only by membership number or
- * campaign ID, with no proof of ownership beyond knowing that identifier.
- * Membership numbers are sequential (see MembershipNumberSequence), so they
- * are enumerable — the @Throttle below only slows brute-force scraping/
- * tampering, it does not close the gap. See conversation for remediation
- * options (e.g. requiring the phone/email on file as a second factor).
+ * Membership numbers/campaign IDs are sequential and human-shareable, so
+ * lookup/update also require the phone or email already on file (see
+ * matchesContact in members.service.ts) — knowing the identifier alone is
+ * not enough. @Throttle is still a defense-in-depth layer against scripted
+ * abuse of that second factor.
  */
 @Public()
 @Controller("api/v1/public/members")
@@ -27,17 +26,17 @@ export class PublicMembersController {
     return this.members.registerCampaignMemberPublic(dto);
   }
 
-  /** "Already registered?" check — looks up by membership number or campaign ID so the form can autofill instead of collecting a duplicate. */
+  /** "Already registered?" check — looks up by membership number or campaign ID (plus the phone/email on file) so the form can autofill instead of collecting a duplicate. */
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post("lookup")
   lookup(@Body() dto: LookupIdentifierDto) {
-    return this.members.lookupByIdentifierPublic(dto.identifier);
+    return this.members.lookupByIdentifierPublic(dto.identifier, dto.contact);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post("update")
   update(@Body() dto: UpdateSelfMemberDto) {
-    const { identifier, ...rest } = dto;
-    return this.members.updateByIdentifierPublic(identifier, rest);
+    const { identifier, contact, ...rest } = dto;
+    return this.members.updateByIdentifierPublic(identifier, contact, rest);
   }
 }

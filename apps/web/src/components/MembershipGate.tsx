@@ -30,12 +30,13 @@ export function MembershipGate({
   onFound,
   onStartFresh,
 }: {
-  onFound: (identifier: string, member: FoundMember) => void;
+  onFound: (identifier: string, contact: string, member: FoundMember) => void;
   onStartFresh: () => void;
 }) {
   const { t } = useLang();
   const [screen, setScreen] = useState<"choose" | "lookup" | "not-found">("choose");
   const [identifier, setIdentifier] = useState("");
+  const [contact, setContact] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,9 +45,9 @@ export function MembershipGate({
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<LookupResult>("/api/v1/public/members/lookup", { identifier });
+      const result = await api.post<LookupResult>("/api/v1/public/members/lookup", { identifier, contact });
       if (result.found && result.member) {
-        onFound(identifier, result.member);
+        onFound(identifier, contact, result.member);
       } else {
         setScreen("not-found");
       }
@@ -83,6 +84,16 @@ export function MembershipGate({
             placeholder={t("membershipOrCampaignIdPlaceholder")}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label">{t("contactOnFileLabel")}</label>
+          <input
+            required
+            className="input"
+            placeholder={t("contactOnFilePlaceholder")}
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
           />
         </div>
         {error && <p className="text-sm text-brand">{error}</p>}

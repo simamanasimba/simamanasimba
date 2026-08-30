@@ -25,6 +25,7 @@ import { InternalModule } from "./modules/internal/internal.module";
 import { CampaignsModule } from "./modules/campaigns/campaigns.module";
 import { MediaModule } from "./modules/media/media.module";
 import { Influencer2Module } from "./modules/influencer2/influencer2.module";
+import { BackupsModule } from "./modules/backups/backups.module";
 import { SessionAuthGuard } from "./common/guards/session-auth.guard";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
@@ -57,6 +58,7 @@ const appLogger = createLogger("api");
     CampaignsModule,
     MediaModule,
     Influencer2Module,
+    BackupsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

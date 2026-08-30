@@ -12,6 +12,8 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Collapsible } from "@/components/Collapsible";
 import { useLang } from "@/lib/i18n";
 import { RequireAccess } from "@/components/RequireAccess";
+import { BackupsCard } from "@/components/BackupsCard";
+import { useAuth } from "@/hooks/useAuth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -177,6 +179,7 @@ function BrandingCard({ organizationId }: { organizationId: string }) {
 export default function SettingsPage() {
   const { organizationId } = useParams<{ organizationId: string }>();
   const { t } = useLang();
+  const { data: me } = useAuth();
 
   return (
     <RequireAccess area="settings">
@@ -192,6 +195,8 @@ export default function SettingsPage() {
       </div>
 
       <BrandingCard organizationId={organizationId} />
+
+      {me?.user.isPlatformOwner && <BackupsCard />}
 
       <Link
         href={`/org/${organizationId}/access-control`}

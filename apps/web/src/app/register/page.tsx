@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const { t } = useLang();
   const [mode, setMode] = useState<"gate" | "form">("gate");
   const [identifier, setIdentifier] = useState<string | null>(null);
+  const [contact, setContact] = useState<string | null>(null);
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -33,8 +34,9 @@ export default function RegisterPage() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function onFound(foundIdentifier: string, member: FoundMember) {
+  function onFound(foundIdentifier: string, foundContact: string, member: FoundMember) {
     setIdentifier(foundIdentifier);
+    setContact(foundContact);
     setForm({
       firstName: member.firstName,
       lastName: member.lastName,
@@ -56,6 +58,7 @@ export default function RegisterPage() {
       if (identifier) {
         const result = await api.post<{ campaignId: string }>("/api/v1/public/members/update", {
           identifier,
+          contact,
           fullName: `${form.firstName} ${form.lastName}`.trim(),
           gender: form.gender || undefined,
           phone: form.phone || undefined,

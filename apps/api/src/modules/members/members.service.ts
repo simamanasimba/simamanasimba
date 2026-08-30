@@ -13,6 +13,26 @@ function generateCampaignId(): string {
   return `CMP-${randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
+function normalizePhone(value: string): string {
+  return value.replace(/\D+/g, "");
+}
+
+/**
+ * Membership numbers/campaign IDs are human-shareable (printed on cards,
+ * read aloud at events) — never proof of ownership on their own. The public
+ * self-service lookup/update endpoints require the caller to also know the
+ * phone or email already on the member's record before returning or
+ * changing anything.
+ */
+function matchesContact(member: { phone: string | null; email: string | null }, contact: string): boolean {
+  const trimmed = contact.trim();
+  if (!trimmed) return false;
+  if (member.email && trimmed.toLowerCase() === member.email.toLowerCase()) return true;
+  const normalizedInput = normalizePhone(trimmed);
+  if (member.phone && normalizedInput && normalizedInput === normalizePhone(member.phone)) return true;
+  return false;
+}
+
 @Injectable()
 export class MembersService {
   private readonly logger = new Logger(MembersService.name);
@@ -313,29 +333,33 @@ export class MembersService {
     };
   }
 
-  /** Public "already registered?" lookup for self-service forms — resolves the single deployed org, accepts membership number or campaign ID. */
-  async lookupByIdentifierPublic(identifier: string) {
+  /** Public "already registered?" lookup for self-service forms — resolves the single deployed org, accepts membership number or campaign ID plus the phone/email on file as proof of ownership. */
+  async lookupByIdentifierPublic(identifier: string, contact: string) {
     const orgId = await resolvePrimaryOrganizationId(this.prisma);
     if (!orgId) return { found: false as const };
     const member = await this.findByIdentifier(orgId, identifier);
-    if (!member) return { found: false as const };
+    if (!member || !matchesContact(member, contact)) return { found: false as const };
     return { found: true as const, member: this.toPublicLookup(member) };
   }
 
   /**
    * Updates an existing member's own self-service fields by membership number
-   * or campaign ID — used when someone picks "I'm already registered" instead
-   * of filling the whole form again. Never touches membershipNumber/campaignId
-   * themselves (club-controlled), only the contact/location details.
+   * or campaign ID (plus the phone/email on file as proof of ownership) —
+   * used when someone picks "I'm already registered" instead of filling the
+   * whole form again. Never touches membershipNumber/campaignId themselves
+   * (club-controlled), only the contact/location details.
    */
   async updateByIdentifierPublic(
     identifier: string,
+    contact: string,
     input: { fullName?: string; gender?: Gender; phone?: string; email?: string; region?: string; district?: string; ward?: string; branch?: string },
   ) {
     const orgId = await resolvePrimaryOrganizationId(this.prisma);
     if (!orgId) throw new NotFoundException("No organization configured");
     const member = await this.findByIdentifier(orgId, identifier);
-    if (!member) throw new NotFoundException("No member found for that membership number or campaign ID");
+    if (!member || !matchesContact(member, contact)) {
+      throw new NotFoundException("No member found for that membership number or campaign ID");
+    }
 
     const [firstName, ...rest] = input.fullName?.trim().split(/\s+/) ?? [];
     const updated = await this.prisma.member.update({
