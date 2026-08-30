@@ -1,4 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { constantTimeEqual } from "@event-intel/security";
 import type { Request } from "express";
 
 /**
@@ -12,7 +13,7 @@ export class InternalKeyGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request>();
     const provided = req.headers["x-internal-key"];
     const expected = process.env.INTERNAL_API_KEY;
-    if (!expected || provided !== expected) {
+    if (!expected || typeof provided !== "string" || !constantTimeEqual(provided, expected)) {
       throw new UnauthorizedException("Invalid internal API key");
     }
     return true;
