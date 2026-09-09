@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { StatTile } from "@/components/StatTile";
 import { CampaignReportModal } from "@/components/CampaignReportModal";
 import { useLang } from "@/lib/i18n";
-import type { MediaEngagementOverview as OverviewData, Influencer2CampaignSummary } from "@/lib/types";
+import type { MediaEngagementOverview as OverviewData, Influencer2CampaignSummary, Influencer2CampaignReportDetails } from "@/lib/types";
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
   TV: Tv,
@@ -61,6 +61,13 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
     queryKey: ["influencer2-summary", "collective", "ALL_MEDIA_HOSTS", organizationId, range.from, range.to],
     queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=ALL_MEDIA_HOSTS&from=${range.from}&to=${range.to}`),
   });
+  // Same query the drill-down modal uses (identical key) — its byMediaType (campaign counts per
+  // type, already range-scoped server-side) drives the "Media by type" table below, and having it
+  // cached here means opening the modal afterward doesn't refetch.
+  const { data: report } = useQuery({
+    queryKey: ["influencer2-report-details", "ALL_MEDIA_HOSTS", organizationId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignReportDetails>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/report-details?scope=ALL_MEDIA_HOSTS&from=${range.from}&to=${range.to}`),
+  });
 
   if (!data) return null;
 
@@ -70,10 +77,7 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
   const topHosts = [...data.topHosts].sort((a, b) => total(b) - total(a));
   const topMedia = [...data.topMedia].sort((a, b) => total(b) - total(a));
 
-  const typeRows = data.hostsByType.map(({ type, count }) => {
-    const eng = data.engagementByType.find((e) => e.type === type);
-    return { type, hosts: count, engagement: eng ? total(eng) : 0 };
-  });
+  const typeRows = report?.byMediaType ?? [];
 
   return (
     <div className="space-y-4">
@@ -177,20 +181,18 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide text-muted">
                       <th className="pb-1.5 font-semibold">{t("typeLabel")}</th>
-                      <th className="pb-1.5 text-right font-semibold">{t("hostsColLabel")}</th>
-                      <th className="pb-1.5 text-right font-semibold">{t("influencer2TotalEngagementLabel")}</th>
+                      <th className="pb-1.5 text-right font-semibold">{t("totalCampaignsLabel")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line/60">
-                    {typeRows.map(({ type, hosts, engagement }) => {
+                    {typeRows.map(({ type, count }) => {
                       const Icon = TYPE_ICONS[type] ?? Globe;
                       return (
                         <tr key={type} className="cursor-pointer hover:bg-brand-50/40" onClick={() => setShowReport(true)}>
                           <td className="flex items-center gap-1.5 py-1.5 font-medium text-ink">
                             <Icon size={13} className="shrink-0 text-muted" /> {sentenceCase(type)}
                           </td>
-                          <td className="nums py-1.5 text-right text-muted">{hosts}</td>
-                          <td className="nums py-1.5 text-right font-semibold text-ink">{engagement.toLocaleString()}</td>
+                          <td className="nums py-1.5 text-right font-semibold text-ink">{count}</td>
                         </tr>
                       );
                     })}

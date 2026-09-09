@@ -4,23 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Modal } from "@/components/Modal";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
-
-interface CampaignReportRow {
-  id: string;
-  name: string;
-  contentType: string;
-  status: string;
-  createdAt: string;
-  beneficiaryName: string;
-  mediaType: string | null;
-  platforms: string[];
-}
-
-interface CampaignReportDetails {
-  campaigns: CampaignReportRow[];
-  byPlatform: Array<{ platform: string; count: number }>;
-  byMediaType: Array<{ type: string; count: number }>;
-}
+import type { Influencer2CampaignReportDetails } from "@/lib/types";
 
 function sentenceCase(value: string): string {
   const lower = value.toLowerCase().replace(/_/g, " ");
@@ -47,7 +31,7 @@ export function CampaignReportModal({
   const { t } = useLang();
   const { data, isLoading } = useQuery({
     queryKey: ["influencer2-report-details", scope, organizationId, range.from, range.to],
-    queryFn: () => api.get<CampaignReportDetails>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/report-details?scope=${scope}&from=${range.from}&to=${range.to}`),
+    queryFn: () => api.get<Influencer2CampaignReportDetails>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/report-details?scope=${scope}&from=${range.from}&to=${range.to}`),
   });
 
   const title = scope === "ALL_MEDIA_HOSTS" ? t("mediaCampaignsReportTitle") : t("influencerCampaignsReportTitle");

@@ -565,6 +565,24 @@ export interface Influencer2CampaignSummary {
   engagementPerPost: number | null;
 }
 
+export interface Influencer2CampaignReportRow {
+  id: string;
+  name: string;
+  contentType: string;
+  status: string;
+  createdAt: string;
+  beneficiaryName: string;
+  mediaType: string | null;
+  platforms: string[];
+}
+
+/** GET .../influencer2/campaigns/report-details — the drill-down behind a scope+range's summary numbers. */
+export interface Influencer2CampaignReportDetails {
+  campaigns: Influencer2CampaignReportRow[];
+  byPlatform: Array<{ platform: string; count: number }>;
+  byMediaType: Array<{ type: string; count: number }>;
+}
+
 export interface Influencer2PlatformMetric {
   metricDefinitionId: string;
   key: string;
