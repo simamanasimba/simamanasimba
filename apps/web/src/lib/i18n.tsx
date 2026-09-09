@@ -70,6 +70,13 @@ const DICT = {
     dateRangeToLabel: "to",
     mediaByTypeTitle: "Media by type",
     hostsColLabel: "Hosts",
+    mediaCampaignsReportTitle: "Campaigns in this period",
+    influencerCampaignsReportTitle: "Campaigns in this period",
+    byPlatformLabel: "By platform",
+    byMediaTypeLabel: "By media type",
+    influencerLabel: "Influencer",
+    platformsLabel: "Platforms",
+    createdLabel: "Created",
 
     // Page titles & primary actions
     membersTitle: "Members",
@@ -1110,6 +1117,13 @@ const DICT = {
     dateRangeToLabel: "hadi",
     mediaByTypeTitle: "Vyombo kwa aina",
     hostsColLabel: "Wasambazaji",
+    mediaCampaignsReportTitle: "Kampeni katika kipindi hiki",
+    influencerCampaignsReportTitle: "Kampeni katika kipindi hiki",
+    byPlatformLabel: "Kwa jukwaa",
+    byMediaTypeLabel: "Kwa aina ya chombo",
+    influencerLabel: "Mshawishi",
+    platformsLabel: "Majukwaa",
+    createdLabel: "Iliundwa",
 
     membersTitle: "Wanachama",
     totalMembers: "jumla ya wanachama",

@@ -57,6 +57,18 @@ export class Influencer2CampaignsController {
     return this.campaigns.summary(organizationId, { influencerId, mediaHostId, scope, from: from ? new Date(from) : undefined, to: to ? new Date(to) : undefined });
   }
 
+  /** The drill-down behind the collective dashboards' stat tiles — every campaign for this scope/range, plus platform and media-type breakdowns. */
+  @Get("report-details")
+  reportDetails(
+    @Param("organizationId") organizationId: string,
+    @Query("scope") scope: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS",
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ) {
+    if (!scope) throw new BadRequestException("scope query param is required");
+    return this.campaigns.reportDetails(organizationId, { scope, from: from ? new Date(from) : undefined, to: to ? new Date(to) : undefined });
+  }
+
   @Post()
   @Roles(...WRITE_ROLES)
   async create(@Param("organizationId") organizationId: string, @Body() dto: CreateInfluencer2CampaignDto, @CurrentUser() user: RequestUser) {

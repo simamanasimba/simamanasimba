@@ -388,6 +388,67 @@ export class Influencer2CampaignsService {
     };
   }
 
+  /**
+   * The "what's actually behind that number" drill-down for the collective dashboards — every
+   * campaign that fed into summary()'s counts for this scope/range, plus the same set broken down
+   * by platform (the "3 Instagram, 4 TikTok" view) and, for media hosts, by media type. influencerId/
+   * mediaHostId aren't real foreign keys (see the field comment on Influencer2Campaign), so
+   * beneficiary names are resolved with a separate batch lookup rather than a Prisma include.
+   */
+  async reportDetails(organizationId: string, filter: { scope: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS"; from?: Date; to?: Date }) {
+    const beneficiary = filter.scope === "ALL_MEDIA_HOSTS" ? { mediaHostId: { not: null } } : { influencerId: { not: null } };
+    const rangeFilter = filter.from && filter.to ? { createdAt: { gte: filter.from, lte: filter.to } } : {};
+
+    const campaigns = await this.prisma.influencer2Campaign.findMany({
+      where: { organizationId, ...beneficiary, ...rangeFilter },
+      select: {
+        id: true,
+        name: true,
+        contentType: true,
+        status: true,
+        createdAt: true,
+        influencerId: true,
+        mediaHostId: true,
+        platforms: { select: { platform: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const influencerIds = Array.from(new Set(campaigns.map((c) => c.influencerId).filter((id): id is string => Boolean(id))));
+    const mediaHostIds = Array.from(new Set(campaigns.map((c) => c.mediaHostId).filter((id): id is string => Boolean(id))));
+    const [influencers, mediaHosts]: [Array<{ id: string; name: string }>, Array<{ id: string; name: string; type: string }>] = await Promise.all([
+      influencerIds.length ? this.prisma.influencer.findMany({ where: { id: { in: influencerIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+      mediaHostIds.length ? this.prisma.mediaHost.findMany({ where: { id: { in: mediaHostIds } }, select: { id: true, name: true, type: true } }) : Promise.resolve([]),
+    ]);
+    const influencerById = new Map(influencers.map((i) => [i.id, i.name]));
+    const hostById = new Map(mediaHosts.map((h) => [h.id, h]));
+
+    const byPlatform = new Map<string, number>();
+    const byMediaType = new Map<string, number>();
+    const rows = campaigns.map((c) => {
+      const platforms = c.platforms.map((p) => p.platform.name);
+      for (const p of platforms) byPlatform.set(p, (byPlatform.get(p) ?? 0) + 1);
+      const host = c.mediaHostId ? hostById.get(c.mediaHostId) : undefined;
+      if (host) byMediaType.set(host.type, (byMediaType.get(host.type) ?? 0) + 1);
+      return {
+        id: c.id,
+        name: c.name,
+        contentType: c.contentType,
+        status: c.status,
+        createdAt: c.createdAt,
+        beneficiaryName: c.influencerId ? (influencerById.get(c.influencerId) ?? "—") : (host?.name ?? "—"),
+        mediaType: host?.type ?? null,
+        platforms,
+      };
+    });
+
+    return {
+      campaigns: rows,
+      byPlatform: Array.from(byPlatform.entries()).map(([platform, count]) => ({ platform, count })).sort((a, b) => b.count - a.count),
+      byMediaType: Array.from(byMediaType.entries()).map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count),
+    };
+  }
+
   async addPlatform(organizationId: string, campaignId: string, dto: AddCampaignPlatformDto) {
     await this.ensure(organizationId, campaignId);
     const platform = await this.prisma.influencer2Platform.findUnique({ where: { id: dto.platformId } });
