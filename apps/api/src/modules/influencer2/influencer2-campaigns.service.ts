@@ -429,7 +429,12 @@ export class Influencer2CampaignsService {
       const platforms = c.platforms.map((p) => p.platform.name);
       for (const p of platforms) byPlatform.set(p, (byPlatform.get(p) ?? 0) + 1);
       const host = c.mediaHostId ? hostById.get(c.mediaHostId) : undefined;
+      // mediaHostId/influencerId aren't real foreign keys, so a campaign can outlive the host it
+      // pointed to (deleting a host doesn't touch its campaigns). Bucket those under UNKNOWN
+      // instead of silently dropping them — otherwise byMediaType's total quietly falls short of
+      // summary()'s totalCampaigns for the same scope/range, which reads as a bug, not a deleted host.
       if (host) byMediaType.set(host.type, (byMediaType.get(host.type) ?? 0) + 1);
+      else if (c.mediaHostId) byMediaType.set("UNKNOWN", (byMediaType.get("UNKNOWN") ?? 0) + 1);
       return {
         id: c.id,
         name: c.name,
