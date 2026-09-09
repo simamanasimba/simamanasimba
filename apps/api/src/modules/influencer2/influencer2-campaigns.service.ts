@@ -6,6 +6,7 @@ import { UpdateInfluencer2CampaignDto } from "./dto/update-influencer2-campaign.
 import { AddCampaignPlatformDto } from "./dto/add-campaign-platform.dto";
 import { UpdateCampaignPlatformDto } from "./dto/update-campaign-platform.dto";
 import { SubmitMetricsDto } from "./dto/submit-metrics.dto";
+import { latestPerCampaignPlatformMetric } from "../../common/metric-window.util";
 
 interface PlatformMetricSummary {
   metricDefinitionId: string;
@@ -322,7 +323,7 @@ export class Influencer2CampaignsService {
    * aggregation queries rather than loading every campaign into memory, so
    * it stays cheap regardless of history size. Pass exactly one of
    * influencerId/mediaHostId/scope. */
-  async summary(organizationId: string, filter: { influencerId?: string; mediaHostId?: string; scope?: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS" }) {
+  async summary(organizationId: string, filter: { influencerId?: string; mediaHostId?: string; scope?: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS"; from?: Date; to?: Date }) {
     const beneficiary = filter.influencerId
       ? { influencerId: filter.influencerId }
       : filter.mediaHostId
@@ -333,13 +334,26 @@ export class Influencer2CampaignsService {
             ? { influencerId: { not: null } }
             : {};
 
-    const [campaignCount, postCount, values, beneficiaryRows] = await Promise.all([
-      this.prisma.influencer2Campaign.count({ where: { organizationId, ...beneficiary } }),
-      this.prisma.influencer2CampaignPlatform.count({ where: { campaign: { organizationId, ...beneficiary } } }),
-      this.prisma.influencer2MetricValue.findMany({
-        where: { isLatest: true, campaignPlatform: { campaign: { organizationId, ...beneficiary } } },
-        include: { metricDefinition: true },
-      }),
+    // A metric value is an append-only snapshot, not a per-period delta — there's nothing to sum
+    // "for this week" beyond the figures that were actually recorded during it. With a range, skip
+    // the all-time isLatest flag and instead take the latest snapshot collected inside the window
+    // per (campaignPlatform, metricDefinition) — see metric-window.util.ts.
+    const hasRange = Boolean(filter.from && filter.to);
+    const rangeFilter = hasRange ? { gte: filter.from, lte: filter.to } : undefined;
+
+    const [campaignCount, postCount, rawValues, beneficiaryRows] = await Promise.all([
+      this.prisma.influencer2Campaign.count({ where: { organizationId, ...beneficiary, ...(rangeFilter ? { createdAt: rangeFilter } : {}) } }),
+      this.prisma.influencer2CampaignPlatform.count({ where: { campaign: { organizationId, ...beneficiary }, ...(rangeFilter ? { createdAt: rangeFilter } : {}) } }),
+      hasRange
+        ? this.prisma.influencer2MetricValue.findMany({
+            where: { collectedAt: rangeFilter, campaignPlatform: { campaign: { organizationId, ...beneficiary } } },
+            include: { metricDefinition: true },
+            orderBy: { collectedAt: "desc" },
+          })
+        : this.prisma.influencer2MetricValue.findMany({
+            where: { isLatest: true, campaignPlatform: { campaign: { organizationId, ...beneficiary } } },
+            include: { metricDefinition: true },
+          }),
       filter.scope
         ? this.prisma.influencer2Campaign.findMany({
             where: { organizationId, ...beneficiary },
@@ -348,6 +362,7 @@ export class Influencer2CampaignsService {
           })
         : Promise.resolve(null),
     ]);
+    const values = hasRange ? latestPerCampaignPlatformMetric(rawValues) : rawValues;
 
     let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
     let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;

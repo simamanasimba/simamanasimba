@@ -29,8 +29,9 @@ export class MediaHostsController {
 
   // Registered before ":hostId" so the literal path isn't swallowed by the param route.
   @Get("engagement-overview")
-  overview(@Param("organizationId") organizationId: string) {
-    return this.engagementOverview.overview(organizationId);
+  overview(@Param("organizationId") organizationId: string, @Query("from") from?: string, @Query("to") to?: string) {
+    const range = from && to ? { from: new Date(from), to: new Date(to) } : undefined;
+    return this.engagementOverview.overview(organizationId, range);
   }
 
   @Post()

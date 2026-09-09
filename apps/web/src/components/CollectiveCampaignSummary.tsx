@@ -9,11 +9,19 @@ import type { Influencer2CampaignSummary } from "@/lib/types";
  * Influencer 2 campaigns — the "Media Engagement"/"Influencers" dashboard
  * views. Reuses the same summary endpoint the individual profile pages use,
  * just scoped to "all" instead of one person. */
-export function CollectiveCampaignSummary({ organizationId, scope }: { organizationId: string; scope: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS" }) {
+export function CollectiveCampaignSummary({
+  organizationId,
+  scope,
+  range,
+}: {
+  organizationId: string;
+  scope: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS";
+  range: { from: string; to: string };
+}) {
   const { t } = useLang();
   const { data: summary } = useQuery({
-    queryKey: ["influencer2-summary", "collective", scope, organizationId],
-    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=${scope}`),
+    queryKey: ["influencer2-summary", "collective", scope, organizationId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=${scope}&from=${range.from}&to=${range.to}`),
   });
 
   // Deliberately its own label, distinct from "Active media" on the Media Engagement Overview

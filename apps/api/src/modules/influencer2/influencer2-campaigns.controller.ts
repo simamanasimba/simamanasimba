@@ -50,9 +50,11 @@ export class Influencer2CampaignsController {
     @Query("influencerId") influencerId?: string,
     @Query("mediaHostId") mediaHostId?: string,
     @Query("scope") scope?: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS",
+    @Query("from") from?: string,
+    @Query("to") to?: string,
   ) {
     if (!influencerId && !mediaHostId && !scope) throw new BadRequestException("influencerId, mediaHostId, or scope query param is required");
-    return this.campaigns.summary(organizationId, { influencerId, mediaHostId, scope });
+    return this.campaigns.summary(organizationId, { influencerId, mediaHostId, scope, from: from ? new Date(from) : undefined, to: to ? new Date(to) : undefined });
   }
 
   @Post()

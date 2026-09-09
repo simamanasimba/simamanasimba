@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { latestPerCampaignPlatformMetric } from "../../common/metric-window.util";
 
 type MetricTotals = { likes: number; comments: number; views: number; shares: number };
 
@@ -20,7 +21,7 @@ function addTotals(a: MetricTotals, b: MetricTotals): MetricTotals {
 export class MediaEngagementOverviewService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async overview(organizationId: string) {
+  async overview(organizationId: string, range?: { from: Date; to: Date }) {
     const hosts = await this.prisma.mediaHost.findMany({
       where: { organizationId },
       select: { id: true, name: true, type: true, mediaOutletId: true, mediaOutlet: { select: { id: true, name: true } } },
@@ -33,24 +34,38 @@ export class MediaEngagementOverviewService {
       perHost.set(hostId, current);
     }
 
-    const [legacyHostEngagements, legacyInfluencerEngagements, i2HostValues, i2InfluencerValues] = await Promise.all([
+    // MediaEngagement's likes/comments are a single cumulative snapshot per row (no history), so
+    // a date range reads as "engagement last recorded/updated during this window" via updatedAt.
+    // Influencer2MetricValue does keep history — see metric-window.util.ts for how a range reduces
+    // it to the latest collected-in-window figure per (campaignPlatform, metricDefinition).
+    const updatedInRange = range ? { updatedAt: { gte: range.from, lte: range.to } } : {};
+    const i2ValueWhere = (beneficiary: "mediaHostId" | "influencerId") =>
+      range
+        ? { collectedAt: { gte: range.from, lte: range.to }, campaignPlatform: { campaign: { organizationId, [beneficiary]: { not: null } } } }
+        : { isLatest: true, campaignPlatform: { campaign: { organizationId, [beneficiary]: { not: null } } } };
+
+    const [legacyHostEngagements, legacyInfluencerEngagements, i2HostValuesRaw, i2InfluencerValuesRaw] = await Promise.all([
       this.prisma.mediaEngagement.findMany({
-        where: { organizationId, mediaHostId: { not: null } },
+        where: { organizationId, mediaHostId: { not: null }, ...updatedInRange },
         select: { mediaHostId: true, likes: true, comments: true },
       }),
       this.prisma.mediaEngagement.aggregate({
-        where: { organizationId, influencerId: { not: null } },
+        where: { organizationId, influencerId: { not: null }, ...updatedInRange },
         _sum: { likes: true, comments: true },
       }),
       this.prisma.influencer2MetricValue.findMany({
-        where: { isLatest: true, campaignPlatform: { campaign: { organizationId, mediaHostId: { not: null } } } },
-        select: { value: true, metricDefinition: { select: { category: true } }, campaignPlatform: { select: { campaign: { select: { mediaHostId: true } } } } },
+        where: i2ValueWhere("mediaHostId"),
+        select: { campaignPlatformId: true, metricDefinitionId: true, value: true, metricDefinition: { select: { category: true } }, campaignPlatform: { select: { campaign: { select: { mediaHostId: true } } } } },
+        orderBy: { collectedAt: "desc" },
       }),
       this.prisma.influencer2MetricValue.findMany({
-        where: { isLatest: true, campaignPlatform: { campaign: { organizationId, influencerId: { not: null } } } },
-        select: { value: true, metricDefinition: { select: { category: true } } },
+        where: i2ValueWhere("influencerId"),
+        select: { campaignPlatformId: true, metricDefinitionId: true, value: true, metricDefinition: { select: { category: true } } },
+        orderBy: { collectedAt: "desc" },
       }),
     ]);
+    const i2HostValues = range ? latestPerCampaignPlatformMetric(i2HostValuesRaw) : i2HostValuesRaw;
+    const i2InfluencerValues = range ? latestPerCampaignPlatformMetric(i2InfluencerValuesRaw) : i2InfluencerValuesRaw;
 
     for (const e of legacyHostEngagements) {
       bump(e.mediaHostId, "likes", e.likes ?? 0);

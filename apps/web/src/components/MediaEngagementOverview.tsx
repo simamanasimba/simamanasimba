@@ -44,16 +44,16 @@ function total(row: { likes: number; comments: number; views: number; shares: nu
  * Influencer 2 metric values, wherever either is linked to a media host). "Shares" is this app's
  * closest real equivalent to "saves" — there's no distinct saves metric tracked anywhere in the
  * data. Only media types with at least some real engagement are shown in the chart. */
-export function MediaEngagementOverview({ organizationId }: { organizationId: string }) {
+export function MediaEngagementOverview({ organizationId, range }: { organizationId: string; range: { from: string; to: string } }) {
   const { t } = useLang();
 
   const { data } = useQuery({
-    queryKey: ["media-engagement-overview", organizationId],
-    queryFn: () => api.get<OverviewData>(`/api/v1/organizations/${organizationId}/media-hosts/engagement-overview`),
+    queryKey: ["media-engagement-overview", organizationId, range.from, range.to],
+    queryFn: () => api.get<OverviewData>(`/api/v1/organizations/${organizationId}/media-hosts/engagement-overview?from=${range.from}&to=${range.to}`),
   });
   const { data: summary } = useQuery({
-    queryKey: ["influencer2-summary", "collective", "ALL_MEDIA_HOSTS", organizationId],
-    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=ALL_MEDIA_HOSTS`),
+    queryKey: ["influencer2-summary", "collective", "ALL_MEDIA_HOSTS", organizationId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=ALL_MEDIA_HOSTS&from=${range.from}&to=${range.to}`),
   });
 
   if (!data) return null;
@@ -75,13 +75,13 @@ export function MediaEngagementOverview({ organizationId }: { organizationId: st
           <StatTile label={t("influencer2TotalEngagementLabel")} value={summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—"} icon={Trophy} />
         </div>
         {data.hostsByType.length > 0 && (
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap justify-center gap-2.5">
             {data.hostsByType.map(({ type, count }) => {
               const Icon = TYPE_ICONS[type] ?? Globe;
               return (
-                <div key={type} className="flex items-center gap-1.5 rounded-full border border-line/60 bg-card py-1 pl-1.5 pr-3 text-xs shadow-card">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-                    <Icon size={11} />
+                <div key={type} className="flex items-center gap-2 rounded-full border border-line/60 bg-card py-1.5 pl-2 pr-4 text-sm shadow-card">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                    <Icon size={14} />
                   </span>
                   <span className="text-muted">{sentenceCase(type)}</span>
                   <span className="nums font-bold text-ink">{count}</span>

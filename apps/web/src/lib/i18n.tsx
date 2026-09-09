@@ -64,6 +64,10 @@ const DICT = {
     uploadPhoto: "Upload photo",
     loadingLabel: "Loading…",
     download: "Download",
+    dateRangeWeekly: "Weekly",
+    dateRangeMonthly: "Monthly",
+    dateRangeCustom: "Custom",
+    dateRangeToLabel: "to",
 
     // Page titles & primary actions
     membersTitle: "Members",
@@ -1098,6 +1102,10 @@ const DICT = {
     uploadPhoto: "Pakia picha",
     loadingLabel: "Inapakia…",
     download: "Pakua",
+    dateRangeWeekly: "Wiki",
+    dateRangeMonthly: "Mwezi",
+    dateRangeCustom: "Chagua tarehe",
+    dateRangeToLabel: "hadi",
 
     membersTitle: "Wanachama",
     totalMembers: "jumla ya wanachama",

@@ -15,6 +15,7 @@ import { TargetKeyLegend } from "@/components/TargetKeyLegend";
 import { OverallReachGauge } from "@/components/OverallReachGauge";
 import { CollectiveCampaignSummary } from "@/components/CollectiveCampaignSummary";
 import { MediaEngagementOverview } from "@/components/MediaEngagementOverview";
+import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { isOrgAdmin } from "@/lib/permissions";
 import type { EventRecord, FinanceDashboard, RegionTarget } from "@/lib/types";
@@ -92,6 +93,7 @@ export default function DashboardPage() {
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const [showEditTargets, setShowEditTargets] = useState(false);
   const [view, setView] = useState<DashboardView>("members");
+  const dateRangeFilter = useDateRangeFilter("weekly");
 
   // The Finance role's "dashboard" IS the Payments page now — there's no separate stripped-down
   // dashboard view for them anymore, per explicit request. Redirect rather than branch-render, so
@@ -169,18 +171,21 @@ export default function DashboardPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-extrabold text-ink">{t("navDashboard")}</h1>
-        <div>
-          <label className="label">{t("dashboardViewLabel")}</label>
-          <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>
-            <option value="members">{t("navWanachamaEngagement")}</option>
-            <option value="media">{t("navMediaEngagementView")}</option>
-            <option value="influencers">{t("navInfluencersView")}</option>
-          </select>
+        <div className="flex flex-wrap items-end gap-3">
+          {(view === "media" || view === "influencers") && <DateRangeFilterControl {...dateRangeFilter} />}
+          <div>
+            <label className="label">{t("dashboardViewLabel")}</label>
+            <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>
+              <option value="members">{t("navWanachamaEngagement")}</option>
+              <option value="media">{t("navMediaEngagementView")}</option>
+              <option value="influencers">{t("navInfluencersView")}</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {view === "media" && <MediaEngagementOverview organizationId={organizationId} />}
-      {view === "influencers" && <CollectiveCampaignSummary organizationId={organizationId} scope="ALL_INFLUENCERS" />}
+      {view === "media" && <MediaEngagementOverview organizationId={organizationId} range={dateRangeFilter.range} />}
+      {view === "influencers" && <CollectiveCampaignSummary organizationId={organizationId} scope="ALL_INFLUENCERS" range={dateRangeFilter.range} />}
 
       {view === "members" && (
         <>
