@@ -44,7 +44,13 @@ export class MediaEngagementOverviewService {
         ? { collectedAt: { gte: range.from, lte: range.to }, campaignPlatform: { campaign: { organizationId, [beneficiary]: { not: null } } } }
         : { isLatest: true, campaignPlatform: { campaign: { organizationId, [beneficiary]: { not: null } } } };
 
-    const [legacyHostEngagements, legacyInfluencerEngagements, i2HostValuesRaw, i2InfluencerValuesRaw] = await Promise.all([
+    // "Posted in range" — a host counts as active for the period if it either got a new
+    // Influencer 2 campaign platform (a post) or a legacy MediaEngagement row created during the
+    // window, regardless of whether a metric value has been recorded for it yet. Only queried
+    // when a range is given; all-time behavior (every registered host counts) is unchanged.
+    const createdInRange = range ? { createdAt: { gte: range.from, lte: range.to } } : {};
+
+    const [legacyHostEngagements, legacyInfluencerEngagements, i2HostValuesRaw, i2InfluencerValuesRaw, postedPlatformsInRange, legacyCreatedInRange] = await Promise.all([
       this.prisma.mediaEngagement.findMany({
         where: { organizationId, mediaHostId: { not: null }, ...updatedInRange },
         select: { mediaHostId: true, likes: true, comments: true },
@@ -63,9 +69,27 @@ export class MediaEngagementOverviewService {
         select: { campaignPlatformId: true, metricDefinitionId: true, value: true, metricDefinition: { select: { category: true } } },
         orderBy: { collectedAt: "desc" },
       }),
+      range
+        ? this.prisma.influencer2CampaignPlatform.findMany({
+            where: { campaign: { organizationId, mediaHostId: { not: null } }, ...createdInRange },
+            select: { campaign: { select: { mediaHostId: true } } },
+          })
+        : Promise.resolve([]),
+      range
+        ? this.prisma.mediaEngagement.findMany({
+            where: { organizationId, mediaHostId: { not: null }, ...createdInRange },
+            select: { mediaHostId: true },
+          })
+        : Promise.resolve([]),
     ]);
     const i2HostValues = range ? latestPerCampaignPlatformMetric(i2HostValuesRaw) : i2HostValuesRaw;
     const i2InfluencerValues = range ? latestPerCampaignPlatformMetric(i2InfluencerValuesRaw) : i2InfluencerValuesRaw;
+
+    // A host counts as "posted in range" via either source, independent of whether a metric
+    // value has been recorded for it yet.
+    const postedHostIds = new Set<string>();
+    for (const p of postedPlatformsInRange) if (p.campaign.mediaHostId) postedHostIds.add(p.campaign.mediaHostId);
+    for (const e of legacyCreatedInRange) if (e.mediaHostId) postedHostIds.add(e.mediaHostId);
 
     for (const e of legacyHostEngagements) {
       bump(e.mediaHostId, "likes", e.likes ?? 0);
@@ -90,14 +114,17 @@ export class MediaEngagementOverviewService {
     // Every stat below counts only hosts actually registered through the Media/Channel/Session
     // flow (mediaOutletId set) — a host created the old way, before that flow existed, has
     // nothing meaningful to report here and must not inflate these numbers or its type's count.
+    // With a range given, further narrow to hosts that actually posted during it — "active media"/
+    // "active hosts" for a weekly report means who showed up this week, not the whole roster.
     const registeredHosts = hosts.filter((h) => h.mediaOutletId);
+    const reportHosts = range ? registeredHosts.filter((h) => postedHostIds.has(h.id)) : registeredHosts;
 
-    const activeHostCount = registeredHosts.length;
-    const activeMediaCount = new Set(registeredHosts.map((h) => h.mediaOutletId)).size;
+    const activeHostCount = reportHosts.length;
+    const activeMediaCount = new Set(reportHosts.map((h) => h.mediaOutletId)).size;
 
     const hostsByType = new Map<string, number>();
     const engagementByType = new Map<string, MetricTotals>();
-    for (const h of registeredHosts) {
+    for (const h of reportHosts) {
       hostsByType.set(h.type, (hostsByType.get(h.type) ?? 0) + 1);
       engagementByType.set(h.type, addTotals(engagementByType.get(h.type) ?? zeroTotals(), perHost.get(h.id) ?? zeroTotals()));
     }

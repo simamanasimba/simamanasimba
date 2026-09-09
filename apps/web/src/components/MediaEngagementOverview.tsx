@@ -37,13 +37,16 @@ function total(row: { likes: number; comments: number; views: number; shares: nu
 }
 
 /** Real, registered-data stats for the "Media Engagement" dashboard view, laid out to fit one
- * screen without a page scroll: compact stat tiles, then Top Performers side-by-side with the
- * chart (each performer list internally scrolls past 5 rows rather than growing the page).
- * Active/hosts counts come from actual MediaHost rows (never the reference catalog); the by-type
- * chart and top-performer lists come from real recorded engagement (legacy MediaEngagement +
- * Influencer 2 metric values, wherever either is linked to a media host). "Shares" is this app's
- * closest real equivalent to "saves" — there's no distinct saves metric tracked anywhere in the
- * data. Only media types with at least some real engagement are shown in the chart. */
+ * screen without a page scroll: compact stat tiles, then the by-type chart alongside a right-hand
+ * column of Top Performing Hosts / Top Performing Media / Media by Type (each list internally
+ * scrolls past 5 rows rather than growing the page). All of it is scoped to `range` — "active
+ * media"/"active hosts" means hosts that actually posted during the window, not the whole
+ * roster — via the API, not client-side filtering. Active/hosts counts come from actual MediaHost
+ * rows (never the reference catalog); the by-type chart and top-performer lists come from real
+ * recorded engagement (legacy MediaEngagement + Influencer 2 metric values, wherever either is
+ * linked to a media host). "Shares" is this app's closest real equivalent to "saves" — there's no
+ * distinct saves metric tracked anywhere in the data. Only media types with at least some real
+ * engagement are shown in the chart. */
 export function MediaEngagementOverview({ organizationId, range }: { organizationId: string; range: { from: string; to: string } }) {
   const { t } = useLang();
 
@@ -64,32 +67,19 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
   const topHosts = [...data.topHosts].sort((a, b) => total(b) - total(a));
   const topMedia = [...data.topMedia].sort((a, b) => total(b) - total(a));
 
+  const typeRows = data.hostsByType.map(({ type, count }) => {
+    const eng = data.engagementByType.find((e) => e.type === type);
+    return { type, hosts: count, engagement: eng ? total(eng) : 0 };
+  });
+
   return (
     <div className="space-y-4">
-      <div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <StatTile label={t("activeMediaLabel")} value={data.activeMediaCount} icon={Building2} href={`/org/${organizationId}/media-hosts`} />
-          <StatTile label={t("activeMediaHostsLabel")} value={data.activeHostCount} icon={Users} />
-          <StatTile label={t("totalCampaignsLabel")} value={summary?.totalCampaigns ?? "—"} icon={Megaphone} />
-          <StatTile label={t("engagementPerPostLabel")} value={summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"} icon={Target} />
-          <StatTile label={t("influencer2TotalEngagementLabel")} value={summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—"} icon={Trophy} />
-        </div>
-        {data.hostsByType.length > 0 && (
-          <div className="mt-3 flex flex-wrap justify-center gap-2.5">
-            {data.hostsByType.map(({ type, count }) => {
-              const Icon = TYPE_ICONS[type] ?? Globe;
-              return (
-                <div key={type} className="flex items-center gap-2 rounded-full border border-line/60 bg-card py-1.5 pl-2 pr-4 text-sm shadow-card">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-                    <Icon size={14} />
-                  </span>
-                  <span className="text-muted">{sentenceCase(type)}</span>
-                  <span className="nums font-bold text-ink">{count}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile label={t("activeMediaLabel")} value={data.activeMediaCount} icon={Building2} href={`/org/${organizationId}/media-hosts`} />
+        <StatTile label={t("activeMediaHostsLabel")} value={data.activeHostCount} icon={Users} />
+        <StatTile label={t("totalCampaignsLabel")} value={summary?.totalCampaigns ?? "—"} icon={Megaphone} />
+        <StatTile label={t("engagementPerPostLabel")} value={summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"} icon={Target} />
+        <StatTile label={t("influencer2TotalEngagementLabel")} value={summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—"} icon={Trophy} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
@@ -168,6 +158,41 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
                     <span className="nums shrink-0 text-sm font-bold text-ink">{total(m).toLocaleString()}</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+          <div className="card">
+            <div className="mb-2 flex items-center gap-1.5">
+              <Globe size={14} className="text-muted" />
+              <h2 className="font-display text-sm font-bold text-ink">{t("mediaByTypeTitle")}</h2>
+            </div>
+            {typeRows.length === 0 ? (
+              <p className="text-sm text-muted">{t("noEngagementYet")}</p>
+            ) : (
+              <div className="max-h-[168px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-muted">
+                      <th className="pb-1.5 font-semibold">{t("typeLabel")}</th>
+                      <th className="pb-1.5 text-right font-semibold">{t("hostsColLabel")}</th>
+                      <th className="pb-1.5 text-right font-semibold">{t("influencer2TotalEngagementLabel")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line/60">
+                    {typeRows.map(({ type, hosts, engagement }) => {
+                      const Icon = TYPE_ICONS[type] ?? Globe;
+                      return (
+                        <tr key={type}>
+                          <td className="flex items-center gap-1.5 py-1.5 font-medium text-ink">
+                            <Icon size={13} className="shrink-0 text-muted" /> {sentenceCase(type)}
+                          </td>
+                          <td className="nums py-1.5 text-right text-muted">{hosts}</td>
+                          <td className="nums py-1.5 text-right font-semibold text-ink">{engagement.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

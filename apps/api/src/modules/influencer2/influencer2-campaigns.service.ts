@@ -356,7 +356,7 @@ export class Influencer2CampaignsService {
           }),
       filter.scope
         ? this.prisma.influencer2Campaign.findMany({
-            where: { organizationId, ...beneficiary },
+            where: { organizationId, ...beneficiary, ...(rangeFilter ? { createdAt: rangeFilter } : {}) },
             select: { influencerId: true, mediaHostId: true },
             distinct: filter.scope === "ALL_MEDIA_HOSTS" ? ["mediaHostId"] : ["influencerId"],
           })

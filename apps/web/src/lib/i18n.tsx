@@ -68,6 +68,8 @@ const DICT = {
     dateRangeMonthly: "Monthly",
     dateRangeCustom: "Custom",
     dateRangeToLabel: "to",
+    mediaByTypeTitle: "Media by type",
+    hostsColLabel: "Hosts",
 
     // Page titles & primary actions
     membersTitle: "Members",
@@ -1106,6 +1108,8 @@ const DICT = {
     dateRangeMonthly: "Mwezi",
     dateRangeCustom: "Chagua tarehe",
     dateRangeToLabel: "hadi",
+    mediaByTypeTitle: "Vyombo kwa aina",
+    hostsColLabel: "Wasambazaji",
 
     membersTitle: "Wanachama",
     totalMembers: "jumla ya wanachama",
