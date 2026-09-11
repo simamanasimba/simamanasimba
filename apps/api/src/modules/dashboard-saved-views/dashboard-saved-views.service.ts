@@ -31,6 +31,26 @@ export class DashboardSavedViewsService {
     }
   }
 
+  async update(organizationId: string, id: string, input: { name?: string; from?: string; to?: string }) {
+    const view = await this.prisma.dashboardSavedView.findFirst({ where: { id, organizationId } });
+    if (!view) throw new NotFoundException("Saved view not found");
+    try {
+      return await this.prisma.dashboardSavedView.update({
+        where: { id },
+        data: {
+          ...(input.name != null ? { name: input.name.trim() } : {}),
+          ...(input.from != null ? { fromDate: new Date(input.from) } : {}),
+          ...(input.to != null ? { toDate: new Date(input.to) } : {}),
+        },
+      });
+    } catch (err) {
+      if ((err as { code?: string }).code === "P2002") {
+        throw new ConflictException("A saved view with this name already exists");
+      }
+      throw err;
+    }
+  }
+
   async remove(organizationId: string, id: string) {
     const view = await this.prisma.dashboardSavedView.findFirst({ where: { id, organizationId } });
     if (!view) throw new NotFoundException("Saved view not found");

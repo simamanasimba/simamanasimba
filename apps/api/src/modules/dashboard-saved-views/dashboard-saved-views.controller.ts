@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { DashboardSavedViewsService } from "./dashboard-saved-views.service";
 import { CreateSavedViewDto } from "./dto/create-saved-view.dto";
+import { UpdateSavedViewDto } from "./dto/update-saved-view.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
@@ -21,6 +22,11 @@ export class DashboardSavedViewsController {
   @Post()
   create(@Param("organizationId") organizationId: string, @Body() dto: CreateSavedViewDto, @CurrentUser() user: RequestUser) {
     return this.views.create(organizationId, user.id, dto);
+  }
+
+  @Patch(":id")
+  update(@Param("organizationId") organizationId: string, @Param("id") id: string, @Body() dto: UpdateSavedViewDto) {
+    return this.views.update(organizationId, id, dto);
   }
 
   @Delete(":id")
