@@ -93,7 +93,8 @@ export default function MediaHostsPage() {
                   <th className="whitespace-nowrap px-4 py-3">{t("mediaOutletLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3">{t("mediaChannelLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3">{t("mediaSessionLabel")}</th>
-                  <th className="whitespace-nowrap px-4 py-3">{t("campaignLinksLabel")}</th>
+                  <th className="whitespace-nowrap px-4 py-3">{t("campaignsColLabel")}</th>
+                  <th className="whitespace-nowrap px-4 py-3">{t("addedLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3" />
                 </tr>
               )}
@@ -129,7 +130,8 @@ export default function MediaHostsPage() {
                     <td className="px-4 py-3 text-muted">{h.mediaOutlet?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-muted">{h.channelName ?? "—"}</td>
                     <td className="px-4 py-3 text-muted">{h.programName ?? "—"}</td>
-                    <td className="nums px-4 py-3 text-muted">{h._count?.campaignLinks ?? 0}</td>
+                    <td className="nums px-4 py-3 text-muted">{h.campaignCount ?? 0}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{h.createdAt ? new Date(h.createdAt).toLocaleDateString() : "—"}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setEditing(h)} className="text-sm font-semibold text-brand hover:underline">{t("edit")}</button>
                       <button title={t("deleteCta")} onClick={() => onDelete(h)} className="ml-3 text-muted hover:text-red-600"><Trash2 size={14} /></button>
@@ -139,7 +141,7 @@ export default function MediaHostsPage() {
               })}
               {data?.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-muted">{t("noMediaHostsFound")}</td>
+                  <td colSpan={isFinance ? 6 : 7} className="px-4 py-6 text-center text-muted">{t("noMediaHostsFound")}</td>
                 </tr>
               )}
             </tbody>
@@ -173,7 +175,8 @@ export default function MediaHostsPage() {
                 <p className="font-medium text-ink hover:text-brand">{h.name}</p>
                 <p className="text-xs text-muted">{[h.mediaOutlet?.name, h.channelName, h.programName].filter(Boolean).join(" · ") || h.type}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                  <span className="nums">{h._count?.campaignLinks ?? 0} {t("campaignLinksLabel")}</span>
+                  <span className="nums">{h.campaignCount ?? 0} {t("campaignsColLabel")}</span>
+                  {h.createdAt && <span>{t("addedLabel")}: {new Date(h.createdAt).toLocaleDateString()}</span>}
                 </div>
               </Link>
               <div className="flex shrink-0 items-center gap-3">

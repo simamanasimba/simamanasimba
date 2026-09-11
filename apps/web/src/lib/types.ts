@@ -199,6 +199,8 @@ export interface MediaHost {
   createdAt?: string;
   updatedAt?: string;
   _count?: { campaignLinks: number };
+  /** Real Influencer 2 campaign count — _count.campaignLinks above is the old, now-unused join. */
+  campaignCount?: number;
 }
 
 export const INFLUENCER_TYPES = ["CELEBRITY", "ATHLETE", "MUSICIAN", "CONTENT_CREATOR", "BLOGGER", "MEDIA_PERSONALITY", "MICRO_INFLUENCER", "OTHER"];
@@ -215,7 +217,10 @@ export interface Influencer extends MediaProfileFields {
   notes?: string | null;
   contractStartDate?: string | null;
   agreementUrl?: string | null;
+  createdAt?: string;
   _count?: { campaignLinks: number };
+  /** Real Influencer 2 campaign count — _count.campaignLinks above is the old, now-unused join. */
+  campaignCount?: number;
 }
 
 export interface MediaHostProfile {

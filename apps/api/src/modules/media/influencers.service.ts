@@ -7,12 +7,22 @@ import { UpdateInfluencerDto } from "./dto/update-influencer.dto";
 export class InfluencersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(organizationId: string) {
-    return this.prisma.influencer.findMany({
+  async list(organizationId: string) {
+    const influencers = await this.prisma.influencer.findMany({
       where: { organizationId },
       orderBy: { name: "asc" },
+      // campaignLinks is the old (now-unused) CampaignInfluencer-style join — real activity
+      // lives in Influencer2Campaign, counted separately below since influencerId there isn't a
+      // real relation Prisma can _count through.
       include: { _count: { select: { campaignLinks: true } } },
     });
+    const counts = await this.prisma.influencer2Campaign.groupBy({
+      by: ["influencerId"],
+      where: { organizationId, influencerId: { in: influencers.map((i) => i.id) } },
+      _count: true,
+    });
+    const countByInfluencer = new Map(counts.map((c) => [c.influencerId, c._count]));
+    return influencers.map((i) => ({ ...i, campaignCount: countByInfluencer.get(i.id) ?? 0 }));
   }
 
   create(organizationId: string, dto: CreateInfluencerDto) {

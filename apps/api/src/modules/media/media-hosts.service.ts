@@ -7,12 +7,22 @@ import { UpdateMediaHostDto } from "./dto/update-media-host.dto";
 export class MediaHostsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(organizationId: string, mediaOutletId?: string) {
-    return this.prisma.mediaHost.findMany({
+  async list(organizationId: string, mediaOutletId?: string) {
+    const hosts = await this.prisma.mediaHost.findMany({
       where: { organizationId, ...(mediaOutletId ? { mediaOutletId } : {}) },
       orderBy: { name: "asc" },
+      // campaignLinks is the old (now-unused) CampaignInfluencer-style join — real activity
+      // lives in Influencer2Campaign, counted separately below since mediaHostId there isn't a
+      // real relation Prisma can _count through.
       include: { _count: { select: { campaignLinks: true } }, mediaOutlet: { select: { id: true, name: true } } },
     });
+    const counts = await this.prisma.influencer2Campaign.groupBy({
+      by: ["mediaHostId"],
+      where: { organizationId, mediaHostId: { in: hosts.map((h) => h.id) } },
+      _count: true,
+    });
+    const countByHost = new Map(counts.map((c) => [c.mediaHostId, c._count]));
+    return hosts.map((h) => ({ ...h, campaignCount: countByHost.get(h.id) ?? 0 }));
   }
 
   create(organizationId: string, dto: CreateMediaHostDto) {

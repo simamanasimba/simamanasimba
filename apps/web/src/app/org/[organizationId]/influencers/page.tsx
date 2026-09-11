@@ -87,7 +87,8 @@ export default function InfluencersPage() {
                   <th className="whitespace-nowrap px-4 py-3">{t("socialHandleLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3">{t("phone")}</th>
                   <th className="whitespace-nowrap px-4 py-3">{t("email")}</th>
-                  <th className="whitespace-nowrap px-4 py-3">{t("campaignLinksLabel")}</th>
+                  <th className="whitespace-nowrap px-4 py-3">{t("campaignsColLabel")}</th>
+                  <th className="whitespace-nowrap px-4 py-3">{t("addedLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3" />
                 </tr>
               )}
@@ -124,7 +125,8 @@ export default function InfluencersPage() {
                     <td className="px-4 py-3 text-muted">{i.socialHandle ?? "—"}</td>
                     <td className="px-4 py-3 text-muted">{i.phone ?? "—"}</td>
                     <td className="px-4 py-3 text-muted">{i.email ?? "—"}</td>
-                    <td className="nums px-4 py-3 text-muted">{i._count?.campaignLinks ?? 0}</td>
+                    <td className="nums px-4 py-3 text-muted">{i.campaignCount ?? 0}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{i.createdAt ? new Date(i.createdAt).toLocaleDateString() : "—"}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setEditing(i)} className="text-sm font-semibold text-brand hover:underline">{t("edit")}</button>
                       <button title={t("deleteCta")} onClick={() => onDelete(i)} className="ml-3 text-muted hover:text-red-600"><Trash2 size={14} /></button>
@@ -134,7 +136,7 @@ export default function InfluencersPage() {
               })}
               {data?.length === 0 && (
                 <tr>
-                  <td colSpan={isFinance ? 6 : 7} className="px-4 py-6 text-center text-muted">{t("noInfluencersFound")}</td>
+                  <td colSpan={isFinance ? 6 : 8} className="px-4 py-6 text-center text-muted">{t("noInfluencersFound")}</td>
                 </tr>
               )}
             </tbody>
@@ -170,7 +172,8 @@ export default function InfluencersPage() {
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                   <span>{i.phone ?? "—"}</span>
                   <span>{i.email ?? "—"}</span>
-                  <span className="nums">{i._count?.campaignLinks ?? 0} {t("campaignLinksLabel")}</span>
+                  <span className="nums">{i.campaignCount ?? 0} {t("campaignsColLabel")}</span>
+                  {i.createdAt && <span>{t("addedLabel")}: {new Date(i.createdAt).toLocaleDateString()}</span>}
                 </div>
               </Link>
               <div className="flex shrink-0 items-center gap-3">

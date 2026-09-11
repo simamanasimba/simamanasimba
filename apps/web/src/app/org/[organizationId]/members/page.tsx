@@ -107,6 +107,7 @@ export default function MembersPage() {
     { key: "region", label: t("region") },
     { key: "membershipType", label: t("fieldType") },
     { key: "membershipStatus", label: t("filterMembershipStatus") },
+    { key: "registrationDate", label: t("addedLabel") },
   ];
   const initialStatus = useSearchParams().get("membershipStatus") ?? "";
 
@@ -375,11 +376,12 @@ export default function MembersPage() {
                     {MEMBERSHIP_STATUS_KEYS[m.membershipStatus] ? t(MEMBERSHIP_STATUS_KEYS[m.membershipStatus]) : m.membershipStatus}
                   </span>
                 </td>
+                <td className="whitespace-nowrap px-4 py-3 text-muted">{new Date(m.registrationDate).toLocaleDateString()}</td>
               </tr>
             ))}
             {data?.items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-muted">{t("noMembersFound")}</td>
+                <td colSpan={7} className="px-4 py-6 text-center text-muted">{t("noMembersFound")}</td>
               </tr>
             )}
           </tbody>
@@ -402,6 +404,7 @@ export default function MembersPage() {
                 <span className={`badge ${m.membershipStatus === "ACTIVE" ? "bg-green-50 text-success" : "bg-brand-50 text-brand-700"}`}>
                   {MEMBERSHIP_STATUS_KEYS[m.membershipStatus] ? t(MEMBERSHIP_STATUS_KEYS[m.membershipStatus]) : m.membershipStatus}
                 </span>
+                <span>{t("addedLabel")}: {new Date(m.registrationDate).toLocaleDateString()}</span>
               </div>
             </Link>
           </div>
