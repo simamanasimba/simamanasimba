@@ -55,6 +55,7 @@ model Organization {
   rolePermissions        OrgRolePermission[]
   regionTargets          RegionTarget[]
   mediaOutlets           MediaOutlet[]
+  dashboardSavedViews    DashboardSavedView[]
 
   @@map("organizations")
 }
@@ -91,6 +92,7 @@ model User {
   reportsGenerated    Report[] @relation("ReportGeneratedBy")
   ownedMediaCampaigns MediaCampaign[]
   createdExpenses     Expense[]
+  savedDashboardViews DashboardSavedView[]
 
   @@map("users")
 }
@@ -1669,6 +1671,26 @@ model RegionTarget {
   @@unique([organizationId, region])
   @@index([organizationId])
   @@map("region_targets")
+}
+
+/// A named, saved date range for the Media/Influencer dashboards' filter — "Week 1", "Week 2", etc.
+/// — so a fixed reporting period can be revisited without retyping the same two dates every time.
+/// Shared across the org (not per-user), since the point is a team-wide reference period.
+model DashboardSavedView {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  name            String
+  fromDate        DateTime @map("from_date")
+  toDate          DateTime @map("to_date")
+  createdByUserId String   @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdByUserId], references: [id])
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("dashboard_saved_views")
 }
 
 // ─────────────────────────────────────────────────────────────────────────

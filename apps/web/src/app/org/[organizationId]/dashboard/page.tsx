@@ -172,7 +172,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-extrabold text-ink">{t("navDashboard")}</h1>
         <div className="flex flex-wrap items-end gap-3">
-          {(view === "media" || view === "influencers") && <DateRangeFilterControl {...dateRangeFilter} />}
+          {(view === "media" || view === "influencers") && <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />}
           <div>
             <label className="label">{t("dashboardViewLabel")}</label>
             <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>

@@ -576,6 +576,16 @@ export interface Influencer2CampaignReportRow {
   platforms: string[];
 }
 
+/** A named, saved date range for the Media/Influencer dashboards' filter (e.g. "Week 1"). */
+export interface DashboardSavedView {
+  id: string;
+  name: string;
+  fromDate: string;
+  toDate: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
 /** GET .../influencer2/campaigns/report-details — the drill-down behind a scope+range's summary numbers. */
 export interface Influencer2CampaignReportDetails {
   campaigns: Influencer2CampaignReportRow[];

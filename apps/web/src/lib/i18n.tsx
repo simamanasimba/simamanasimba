@@ -77,6 +77,12 @@ const DICT = {
     influencerLabel: "Influencer",
     platformsLabel: "Platforms",
     createdLabel: "Created",
+    saveViewCta: "Save view",
+    saveViewNamePrompt: "Name this view (e.g. Week 1)",
+    viewSaved: "View saved",
+    viewSaveFailed: "Failed to save view",
+    viewDeleteFailed: "Failed to delete view",
+    savedViewsLabel: "Saved views…",
 
     // Page titles & primary actions
     membersTitle: "Members",
@@ -1124,6 +1130,12 @@ const DICT = {
     influencerLabel: "Mshawishi",
     platformsLabel: "Majukwaa",
     createdLabel: "Iliundwa",
+    saveViewCta: "Hifadhi mwonekano",
+    saveViewNamePrompt: "Peana jina la mwonekano huu (mfano: Wiki 1)",
+    viewSaved: "Mwonekano umehifadhiwa",
+    viewSaveFailed: "Imeshindwa kuhifadhi mwonekano",
+    viewDeleteFailed: "Imeshindwa kufuta mwonekano",
+    savedViewsLabel: "Miwonekano iliyohifadhiwa…",
 
     membersTitle: "Wanachama",
     totalMembers: "jumla ya wanachama",
