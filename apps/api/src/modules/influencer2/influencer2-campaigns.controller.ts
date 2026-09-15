@@ -40,8 +40,15 @@ export class Influencer2CampaignsController {
     @Query("paymentStatus") paymentStatus?: Influencer2PaymentStatus,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
   ) {
-    return this.campaigns.list(organizationId, { influencerId, mediaHostId, platformKey, contentType, status, paymentStatus }, Number(page) || 1, Number(pageSize) || 25);
+    return this.campaigns.list(
+      organizationId,
+      { influencerId, mediaHostId, platformKey, contentType, status, paymentStatus, from: from ? new Date(from) : undefined, to: to ? new Date(to) : undefined },
+      Number(page) || 1,
+      Number(pageSize) || 25,
+    );
   }
 
   @Get("summary")

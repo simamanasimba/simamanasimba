@@ -179,6 +179,8 @@ export class Influencer2CampaignsService {
       contentType?: Influencer2ContentType;
       status?: Influencer2CampaignStatus;
       paymentStatus?: "NOT_PAID" | "PAID";
+      from?: Date;
+      to?: Date;
     },
     page: number,
     pageSize: number,
@@ -190,6 +192,7 @@ export class Influencer2CampaignsService {
     if (filters.status) where.status = filters.status;
     if (filters.paymentStatus) where.paymentStatus = filters.paymentStatus;
     if (filters.platformKey) where.platforms = { some: { platform: { key: filters.platformKey } } };
+    if (filters.from && filters.to) where.createdAt = { gte: filters.from, lte: filters.to };
 
     const [rows, total] = await Promise.all([
       this.prisma.influencer2Campaign.findMany({

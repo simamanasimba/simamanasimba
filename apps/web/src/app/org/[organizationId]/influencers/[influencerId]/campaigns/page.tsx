@@ -10,6 +10,7 @@ import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
+import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2 } from "@/lib/permissions";
 import { PAYMENT_PROGRESS_LABEL_KEYS, PAYMENT_PROGRESS_BADGE } from "@/lib/paymentProgress";
@@ -33,6 +34,8 @@ export default function InfluencerCampaignsPage() {
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
+  const dateRangeFilter = useDateRangeFilter("weekly");
+  const { range } = dateRangeFilter;
 
   const { data: profile } = useQuery({
     queryKey: ["influencer-profile", influencerId],
@@ -40,16 +43,16 @@ export default function InfluencerCampaignsPage() {
   });
 
   const { data: summary } = useQuery({
-    queryKey: ["influencer2-summary", influencerId],
-    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}`),
+    queryKey: ["influencer2-summary", influencerId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}&from=${range.from}&to=${range.to}`),
   });
 
-  const params = new URLSearchParams({ influencerId, page: String(page), pageSize: String(PAGE_SIZE) });
+  const params = new URLSearchParams({ influencerId, page: String(page), pageSize: String(PAGE_SIZE), from: range.from, to: range.to });
   if (contentType) params.set("contentType", contentType);
   if (status) params.set("status", status);
 
   const { data } = useQuery({
-    queryKey: ["influencer2-campaigns", organizationId, influencerId, contentType, status, page],
+    queryKey: ["influencer2-campaigns", organizationId, influencerId, contentType, status, page, range.from, range.to],
     queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?${params.toString()}`),
   });
 
@@ -73,11 +76,13 @@ export default function InfluencerCampaignsPage() {
           )}
         </div>
 
+        <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
+
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="card"><p className="text-xs text-muted">{t("totalCampaignsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{summary?.totalCampaigns ?? "—"}</p></div>
+          <div className="card"><p className="text-xs text-muted">{t("totalPostsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{summary?.totalPosts ?? "—"}</p></div>
           <div className="card"><p className="text-xs text-muted">{t("influencer2TotalViewsLabel")}</p><p className="nums text-lg font-bold text-ink">{summary?.totalViews != null ? summary.totalViews.toLocaleString() : "—"}</p></div>
           <div className="card"><p className="text-xs text-muted">{t("influencer2TotalLikesLabel")}</p><p className="nums text-lg font-bold text-ink">{summary?.totalLikes != null ? summary.totalLikes.toLocaleString() : "—"}</p></div>
-          <div className="card"><p className="text-xs text-muted">{t("engagementPerPostLabel")}</p><p className="nums text-lg font-bold text-ink">{summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"}</p></div>
+          <div className="card"><p className="text-xs text-muted">{t("avgEngagementPerPostLabel")}</p><p className="nums text-lg font-bold text-ink">{summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"}</p></div>
         </div>
 
         <h2 className="font-display text-base font-bold text-ink">{t("influencer2IndividualCampaignsTitle")}</h2>

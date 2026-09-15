@@ -84,8 +84,8 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label={t("activeMediaLabel")} value={data.activeMediaCount} icon={Building2} onClick={() => setShowReport(true)} />
         <StatTile label={t("activeMediaHostsLabel")} value={data.activeHostCount} icon={Users} onClick={() => setShowReport(true)} />
-        <StatTile label={t("totalCampaignsLabel")} value={summary?.totalCampaigns ?? "—"} icon={Megaphone} onClick={() => setShowReport(true)} />
-        <StatTile label={t("engagementPerPostLabel")} value={summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"} icon={Target} onClick={() => setShowReport(true)} />
+        <StatTile label={t("totalPostsLabel")} value={summary?.totalPosts ?? "—"} icon={Megaphone} onClick={() => setShowReport(true)} />
+        <StatTile label={t("avgEngagementPerPostLabel")} value={summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"} icon={Target} onClick={() => setShowReport(true)} />
         <StatTile label={t("influencer2TotalEngagementLabel")} value={summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—"} icon={Trophy} onClick={() => setShowReport(true)} />
       </div>
 

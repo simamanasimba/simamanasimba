@@ -47,11 +47,11 @@ export function CollectiveCampaignSummary({
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
       {tile(beneficiaryLabel, summary?.totalBeneficiaries ?? "—", true)}
-      {tile(t("totalCampaignsLabel"), summary?.totalCampaigns ?? "—")}
+      {tile(t("totalPostsLabel"), summary?.totalPosts ?? "—")}
       {tile(t("influencer2TotalViewsLabel"), summary?.totalViews != null ? summary.totalViews.toLocaleString() : "—")}
       {tile(t("influencer2TotalLikesLabel"), summary?.totalLikes != null ? summary.totalLikes.toLocaleString() : "—")}
       {tile(t("influencer2TotalEngagementLabel"), summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—", true)}
-      {tile(t("engagementPerPostLabel"), summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—")}
+      {tile(t("avgEngagementPerPostLabel"), summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—")}
 
       {showReport && (
         <CampaignReportModal organizationId={organizationId} scope={scope} range={range} onClose={() => setShowReport(false)} />

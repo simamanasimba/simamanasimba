@@ -12,6 +12,7 @@ import { LoadingWord } from "@/components/LoadingWord";
 import { Collapsible } from "@/components/Collapsible";
 import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
+import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2 } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
@@ -29,6 +30,8 @@ export default function InfluencerDetailPage() {
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const canManage = canManageInfluencer2(myRole);
+  const dateRangeFilter = useDateRangeFilter("weekly");
+  const { range } = dateRangeFilter;
 
   const { data, refetch } = useQuery({
     queryKey: ["influencer-profile", influencerId],
@@ -36,13 +39,13 @@ export default function InfluencerDetailPage() {
   });
 
   const { data: summary, refetch: refetchSummary } = useQuery({
-    queryKey: ["influencer2-summary", influencerId],
-    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}`),
+    queryKey: ["influencer2-summary", influencerId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}&from=${range.from}&to=${range.to}`),
   });
 
   const { data: recentCampaigns, refetch: refetchCampaigns } = useQuery({
-    queryKey: ["influencer2-campaigns", organizationId, influencerId, "recent"],
-    queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?influencerId=${influencerId}&pageSize=8`),
+    queryKey: ["influencer2-campaigns", organizationId, influencerId, "recent", range.from, range.to],
+    queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?influencerId=${influencerId}&pageSize=8&from=${range.from}&to=${range.to}`),
   });
 
   function refreshAll() {
@@ -87,10 +90,12 @@ export default function InfluencerDetailPage() {
         </div>
       </div>
 
+      <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Link href={`/org/${organizationId}/influencers/${influencerId}/campaigns`} className="card block h-full transition hover:-translate-y-0.5 hover:shadow-lg">
-          <p className="text-xs text-muted">{t("totalCampaignsLabel")}</p>
-          <p className="nums text-lg font-bold text-brand-700">{summary?.totalCampaigns ?? "—"}</p>
+          <p className="text-xs text-muted">{t("totalPostsLabel")}</p>
+          <p className="nums text-lg font-bold text-brand-700">{summary?.totalPosts ?? "—"}</p>
         </Link>
         <div className="card">
           <p className="text-xs text-muted">{t("influencer2TotalViewsLabel")}</p>
@@ -101,7 +106,7 @@ export default function InfluencerDetailPage() {
           <p className="nums text-lg font-bold text-ink">{summary?.totalLikes != null ? summary.totalLikes.toLocaleString() : "—"}</p>
         </div>
         <div className="card">
-          <p className="text-xs text-muted">{t("engagementPerPostLabel")}</p>
+          <p className="text-xs text-muted">{t("avgEngagementPerPostLabel")}</p>
           <p className="nums text-lg font-bold text-ink">{summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"}</p>
         </div>
         <Link href={`/org/${organizationId}/influencers/${influencerId}/payments`} className="card block h-full transition hover:-translate-y-0.5 hover:shadow-lg">
