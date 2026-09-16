@@ -7,6 +7,13 @@ export class SearchMembersDto {
   @IsString()
   q?: string;
 
+  /** A GET query param, so this arrives as the literal string "true"/"false" — parsed in
+   * members.service.ts rather than coerced here, since `@Type(() => Boolean)` would turn the
+   * string "false" into `true` (any non-empty string is truthy). */
+  @IsOptional()
+  @IsEnum(["true", "false"])
+  isLeader?: "true" | "false";
+
   @IsOptional()
   @IsString()
   region?: string;

@@ -139,6 +139,7 @@ export class MembersService {
       district: query.district,
       membershipType: query.membershipType,
       membershipStatus: query.membershipStatus,
+      isLeader: query.isLeader != null ? query.isLeader === "true" : undefined,
     };
 
     if (query.registeredFrom || query.registeredTo) {
@@ -187,6 +188,7 @@ export class MembersService {
       district: query.district,
       membershipType: query.membershipType,
       membershipStatus: query.membershipStatus,
+      isLeader: query.isLeader != null ? query.isLeader === "true" : undefined,
     };
     if (query.registeredFrom || query.registeredTo) {
       where.registrationDate = {
@@ -392,7 +394,7 @@ export class MembersService {
     const member = await this.prisma.member.findFirst({ where: { id: memberId, organizationId } });
     if (!member) throw new NotFoundException("Member not found");
 
-    const [attendanceRecords, registrations, history] = await Promise.all([
+    const [attendanceRecords, registrations, history, payments] = await Promise.all([
       this.prisma.attendanceRecord.findMany({
         where: { memberId },
         orderBy: { checkedInAt: "desc" },
@@ -403,7 +405,14 @@ export class MembersService {
         include: { event: { select: { id: true, name: true, startDatetime: true, status: true } } },
       }),
       this.prisma.membershipHistory.findMany({ where: { memberId }, orderBy: { createdAt: "desc" } }),
+      // Almost always empty for a non-leader — payments to members exist to record what a leader
+      // was paid (e.g. for attending/organizing a meeting), same shape as the media host/influencer
+      // payment history sections.
+      this.prisma.payment.findMany({ where: { memberId }, orderBy: { paymentDate: "desc" } }),
     ]);
+
+    const totalPaid = payments.filter((p) => p.status === "PAID").reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
+    const numericPayments = payments.map((p) => ({ ...p, amount: Number(p.amount), paidAmount: p.paidAmount != null ? Number(p.paidAmount) : null }));
 
     return {
       member,
@@ -415,6 +424,8 @@ export class MembersService {
       attendanceRecords,
       registrations,
       membershipHistory: history,
+      payments: numericPayments,
+      totalPaid,
     };
   }
 

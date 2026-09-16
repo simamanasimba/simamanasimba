@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Wallet } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Payment, MediaCampaign, MediaHost, Influencer, Expense, ExpenseCategory } from "@/lib/types";
+import type { Payment, MediaCampaign, MediaHost, Influencer, Member, PaginatedMembers, Expense, ExpenseCategory } from "@/lib/types";
 import { Modal } from "@/components/Modal";
 import { RecordPaymentModal } from "@/components/RecordPaymentModal";
 import { PendingApprovalPanel } from "@/components/PendingApprovalPanel";
@@ -26,10 +26,14 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
   const { data: campaigns } = useQuery({ queryKey: ["media-campaigns", organizationId], queryFn: () => api.get<MediaCampaign[]>(`/api/v1/organizations/${organizationId}/media-campaigns`) });
   const { data: hosts } = useQuery({ queryKey: ["media-hosts", organizationId], queryFn: () => api.get<MediaHost[]>(`/api/v1/organizations/${organizationId}/media-hosts`) });
   const { data: influencers } = useQuery({ queryKey: ["influencers", organizationId], queryFn: () => api.get<Influencer[]>(`/api/v1/organizations/${organizationId}/influencers`) });
+  const { data: leaders } = useQuery({
+    queryKey: ["members-leaders", organizationId],
+    queryFn: () => api.get<PaginatedMembers>(`/api/v1/organizations/${organizationId}/members?isLeader=true&pageSize=500`),
+  });
 
   const [form, setForm] = useState({
     campaignId: "",
-    beneficiaryType: "INFLUENCER" as "MEDIA_HOST" | "INFLUENCER",
+    beneficiaryType: "INFLUENCER" as "MEDIA_HOST" | "INFLUENCER" | "MEMBER",
     paymentDate: new Date().toISOString().slice(0, 10),
     currency: "TZS",
     method: "",
@@ -39,13 +43,15 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const beneficiaries = form.beneficiaryType === "MEDIA_HOST" ? hosts ?? [] : influencers ?? [];
+  const memberBeneficiaries: Array<{ id: string; name: string }> = (leaders?.items ?? []).map((m: Member) => ({ id: m.id, name: `${m.firstName} ${m.lastName}` }));
+  const beneficiaries: Array<{ id: string; name: string }> =
+    form.beneficiaryType === "MEDIA_HOST" ? (hosts ?? []) : form.beneficiaryType === "MEMBER" ? memberBeneficiaries : (influencers ?? []);
   const entries = Object.entries(amounts)
     .map(([beneficiaryId, raw]) => ({ beneficiaryId, amount: Number(raw) }))
     .filter((e) => e.amount > 0);
   const total = entries.reduce((sum, e) => sum + e.amount, 0);
 
-  function setBeneficiaryType(beneficiaryType: "MEDIA_HOST" | "INFLUENCER") {
+  function setBeneficiaryType(beneficiaryType: "MEDIA_HOST" | "INFLUENCER" | "MEMBER") {
     setForm((f) => ({ ...f, beneficiaryType }));
     setAmounts({});
   }
@@ -94,7 +100,7 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
         </div>
         <div>
           <label className="label">{t("beneficiaryTypeLabel")}</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setBeneficiaryType("INFLUENCER")}
@@ -108,6 +114,13 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
               className={form.beneficiaryType === "MEDIA_HOST" ? "btn-primary text-sm" : "btn-secondary text-sm"}
             >
               {t("tabMediaHosts")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBeneficiaryType("MEMBER")}
+              className={form.beneficiaryType === "MEMBER" ? "btn-primary text-sm" : "btn-secondary text-sm"}
+            >
+              {t("tabLeaders")}
             </button>
           </div>
           <p className="mt-1 text-xs text-muted">{t("bulkPaymentGroupHelp")}</p>
@@ -147,7 +160,7 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
               {beneficiaries.length === 0 && (
                 <tr>
                   <td colSpan={2} className="px-4 py-6 text-center text-muted">
-                    {form.beneficiaryType === "MEDIA_HOST" ? t("noMediaHostsFound") : t("noInfluencersFound")}
+                    {form.beneficiaryType === "MEDIA_HOST" ? t("noMediaHostsFound") : form.beneficiaryType === "MEMBER" ? t("noLeadersFound") : t("noInfluencersFound")}
                   </td>
                 </tr>
               )}

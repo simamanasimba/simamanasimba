@@ -265,6 +265,7 @@ model Member {
   eventRegistrations EventRegistration[]
   attendanceRecords  AttendanceRecord[]
   postRegistrations  PostRegistration[]
+  payments           Payment[]
 
   @@unique([organizationId, membershipNumber])
   @@index([organizationId, lastName, firstName])
@@ -1527,6 +1528,9 @@ model TrackerEntry {
 enum PaymentBeneficiaryType {
   MEDIA_HOST
   INFLUENCER
+  /// A member (typically a leader) paid directly — e.g. for attending/organizing a meeting —
+  /// never tied to a campaign/engagement the way MEDIA_HOST/INFLUENCER payments usually are.
+  MEMBER
 }
 
 enum PaymentStatus {
@@ -1548,6 +1552,7 @@ model Payment {
   beneficiaryType PaymentBeneficiaryType @map("beneficiary_type")
   mediaHostId     String?                @map("media_host_id")
   influencerId    String?                @map("influencer_id")
+  memberId        String?                @map("member_id")
   paymentDate     DateTime               @map("payment_date") @db.Date
   amount          Decimal                @db.Decimal(14, 2)
   currency        String                 @default("TZS")
@@ -1595,6 +1600,7 @@ model Payment {
   campaign            MediaCampaign?       @relation(fields: [campaignId], references: [id])
   mediaHost           MediaHost?           @relation(fields: [mediaHostId], references: [id])
   influencer          Influencer?          @relation(fields: [influencerId], references: [id])
+  member              Member?              @relation(fields: [memberId], references: [id])
   mediaEngagement     MediaEngagement?     @relation(fields: [mediaEngagementId], references: [id])
   influencer2Campaign Influencer2Campaign? @relation(fields: [influencer2CampaignId], references: [id])
   postingAgreementEvaluation PostingAgreementEvaluation?
@@ -1603,6 +1609,7 @@ model Payment {
   @@index([campaignId])
   @@index([mediaHostId])
   @@index([influencerId])
+  @@index([memberId])
   @@map("payments")
 }
 

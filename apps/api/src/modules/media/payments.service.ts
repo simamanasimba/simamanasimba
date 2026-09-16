@@ -9,6 +9,7 @@ export interface PaymentFilters {
   beneficiaryType?: PaymentBeneficiaryType;
   mediaHostId?: string;
   influencerId?: string;
+  memberId?: string;
   status?: PaymentStatus;
   method?: string;
   dateFrom?: string;
@@ -26,6 +27,7 @@ export class PaymentsService {
       beneficiaryType: filters.beneficiaryType,
       mediaHostId: filters.mediaHostId,
       influencerId: filters.influencerId,
+      memberId: filters.memberId,
       status: filters.status,
       method: filters.method,
     };
@@ -41,7 +43,7 @@ export class PaymentsService {
   async list(organizationId: string, filters: PaymentFilters) {
     const payments = await this.prisma.payment.findMany({
       where: this.buildWhere(organizationId, filters),
-      include: { campaign: { select: { id: true, name: true } }, mediaHost: true, influencer: true, mediaEngagement: true },
+      include: { campaign: { select: { id: true, name: true } }, mediaHost: true, influencer: true, member: true, mediaEngagement: true },
       orderBy: { paymentDate: "desc" },
     });
 
@@ -74,6 +76,7 @@ export class PaymentsService {
   async create(organizationId: string, dto: CreatePaymentDto, userId: string) {
     if (dto.beneficiaryType === "MEDIA_HOST" && !dto.mediaHostId) throw new BadRequestException("mediaHostId is required for a media host payment");
     if (dto.beneficiaryType === "INFLUENCER" && !dto.influencerId) throw new BadRequestException("influencerId is required for an influencer payment");
+    if (dto.beneficiaryType === "MEMBER" && !dto.memberId) throw new BadRequestException("memberId is required for a member payment");
 
     if (dto.mediaEngagementId) {
       const engagement = await this.prisma.mediaEngagement.findFirst({ where: { id: dto.mediaEngagementId, organizationId } });
@@ -99,6 +102,7 @@ export class PaymentsService {
         beneficiaryType: dto.beneficiaryType,
         mediaHostId: dto.beneficiaryType === "MEDIA_HOST" ? dto.mediaHostId : undefined,
         influencerId: dto.beneficiaryType === "INFLUENCER" ? dto.influencerId : undefined,
+        memberId: dto.beneficiaryType === "MEMBER" ? dto.memberId : undefined,
         paymentDate: new Date(dto.paymentDate),
         amount: dto.amount,
         currency: dto.currency,
@@ -199,6 +203,7 @@ export class PaymentsService {
       beneficiaryType: dto.beneficiaryType,
       mediaHostId: dto.beneficiaryType === "MEDIA_HOST" ? entry.beneficiaryId : undefined,
       influencerId: dto.beneficiaryType === "INFLUENCER" ? entry.beneficiaryId : undefined,
+      memberId: dto.beneficiaryType === "MEMBER" ? entry.beneficiaryId : undefined,
       paymentDate: new Date(dto.paymentDate),
       amount: entry.amount,
       currency: dto.currency,
@@ -217,7 +222,7 @@ export class PaymentsService {
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [today, week, month, total, pendingCount, paymentCount, byCampaign, byMediaHost, byInfluencer] = await Promise.all([
+    const [today, week, month, total, pendingCount, paymentCount, byCampaign, byMediaHost, byInfluencer, byMember] = await Promise.all([
       this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfToday } }, _sum: { amount: true } }),
       this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfWeek } }, _sum: { amount: true } }),
       this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfMonth } }, _sum: { amount: true } }),
@@ -227,16 +232,19 @@ export class PaymentsService {
       this.prisma.payment.groupBy({ by: ["campaignId"], where: { organizationId, status: "PAID", campaignId: { not: null } }, _sum: { amount: true } }),
       this.prisma.payment.groupBy({ by: ["mediaHostId"], where: { organizationId, status: "PAID", mediaHostId: { not: null } }, _sum: { amount: true } }),
       this.prisma.payment.groupBy({ by: ["influencerId"], where: { organizationId, status: "PAID", influencerId: { not: null } }, _sum: { amount: true } }),
+      this.prisma.payment.groupBy({ by: ["memberId"], where: { organizationId, status: "PAID", memberId: { not: null } }, _sum: { amount: true } }),
     ]);
 
-    const [campaigns, mediaHosts, influencers] = await Promise.all([
+    const [campaigns, mediaHosts, influencers, members] = await Promise.all([
       this.prisma.mediaCampaign.findMany({ where: { organizationId }, select: { id: true, name: true } }),
       this.prisma.mediaHost.findMany({ where: { organizationId }, select: { id: true, name: true } }),
       this.prisma.influencer.findMany({ where: { organizationId }, select: { id: true, name: true } }),
+      this.prisma.member.findMany({ where: { organizationId }, select: { id: true, firstName: true, lastName: true } }),
     ]);
     const campaignName = new Map(campaigns.map((c) => [c.id, c.name]));
     const hostName = new Map(mediaHosts.map((h) => [h.id, h.name]));
     const influencerName = new Map(influencers.map((i) => [i.id, i.name]));
+    const memberName = new Map(members.map((m) => [m.id, `${m.firstName} ${m.lastName}`]));
 
     return {
       todaySpend: Number(today._sum.amount ?? 0),
@@ -248,6 +256,7 @@ export class PaymentsService {
       spendByCampaign: byCampaign.map((r) => ({ campaignId: r.campaignId, name: campaignName.get(r.campaignId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
       spendByMediaHost: byMediaHost.map((r) => ({ mediaHostId: r.mediaHostId, name: hostName.get(r.mediaHostId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
       spendByInfluencer: byInfluencer.map((r) => ({ influencerId: r.influencerId, name: influencerName.get(r.influencerId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
+      spendByMember: byMember.map((r) => ({ memberId: r.memberId, name: memberName.get(r.memberId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
     };
   }
 }

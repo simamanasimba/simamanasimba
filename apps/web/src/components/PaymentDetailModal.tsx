@@ -61,7 +61,7 @@ export function PaymentDetailModal({
   const amountDiffers = Number(paidAmount) !== payment.amount;
 
   function refreshProfiles() {
-    queryClient.invalidateQueries({ predicate: (q) => ["influencer-profile", "media-host-profile"].includes(q.queryKey[0] as string) });
+    queryClient.invalidateQueries({ predicate: (q) => ["influencer-profile", "media-host-profile", "member"].includes(q.queryKey[0] as string) });
   }
 
   async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {

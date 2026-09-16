@@ -433,11 +433,13 @@ export interface Payment {
   id: string;
   campaignId?: string | null;
   campaign?: { id: string; name: string } | null;
-  beneficiaryType: "MEDIA_HOST" | "INFLUENCER";
+  beneficiaryType: "MEDIA_HOST" | "INFLUENCER" | "MEMBER";
   mediaHostId?: string | null;
   mediaHost?: MediaHost | null;
   influencerId?: string | null;
   influencer?: Influencer | null;
+  memberId?: string | null;
+  member?: Member | null;
   paymentDate: string;
   amount: number;
   currency: string;
@@ -482,6 +484,7 @@ export interface FinanceDashboard {
   spendByCampaign: Array<{ campaignId: string | null; name: string; amount: number }>;
   spendByMediaHost: Array<{ mediaHostId: string | null; name: string; amount: number }>;
   spendByInfluencer: Array<{ influencerId: string | null; name: string; amount: number }>;
+  spendByMember: Array<{ memberId: string | null; name: string; amount: number }>;
 }
 
 export type ExpenseCategory = "OPERATIONAL" | "ADMINISTRATIVE";

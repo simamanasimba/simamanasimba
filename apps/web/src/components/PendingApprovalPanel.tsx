@@ -9,6 +9,7 @@ import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import type { Payment } from "@/lib/types";
+import { paymentBeneficiaryName } from "@/lib/paymentProgress";
 
 interface OrgUserRow {
   userId: string;
@@ -49,7 +50,13 @@ function ApproversLine({ organizationId }: { organizationId: string }) {
  * and admins couldn't reach it otherwise. */
 export function PendingApprovalPanel({ organizationId }: { organizationId: string }) {
   const showPageHref = (p: Payment) =>
-    p.influencerId ? `/org/${organizationId}/influencers/${p.influencerId}` : p.mediaHostId ? `/org/${organizationId}/media-hosts/${p.mediaHostId}` : null;
+    p.influencerId
+      ? `/org/${organizationId}/influencers/${p.influencerId}`
+      : p.mediaHostId
+        ? `/org/${organizationId}/media-hosts/${p.mediaHostId}`
+        : p.memberId
+          ? `/org/${organizationId}/members/${p.memberId}`
+          : null;
   const { t } = useLang();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -120,9 +127,9 @@ export function PendingApprovalPanel({ organizationId }: { organizationId: strin
                 <tr key={p.id}>
                   <td className="px-4 py-2.5 font-medium text-ink">
                     {href ? (
-                      <Link href={href} className="hover:underline">{p.mediaHost?.name ?? p.influencer?.name ?? "—"}</Link>
+                      <Link href={href} className="hover:underline">{paymentBeneficiaryName(p)}</Link>
                     ) : (
-                      p.mediaHost?.name ?? p.influencer?.name ?? "—"
+                      paymentBeneficiaryName(p)
                     )}
                   </td>
                   <td className="nums px-4 py-2.5">{p.currency} {p.amount.toLocaleString()}</td>

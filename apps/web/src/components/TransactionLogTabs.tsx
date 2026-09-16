@@ -3,18 +3,19 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Star, Radio, Download } from "lucide-react";
+import { Star, Radio, Crown, Download } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Payment, MediaHost, Influencer } from "@/lib/types";
+import type { Payment, MediaHost, Influencer, PaginatedMembers } from "@/lib/types";
 import { escapeCsv, downloadCsv } from "@/lib/csv";
 import { useLang } from "@/lib/i18n";
 import { PAYMENT_STATUS_LABEL_KEYS as STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE as STATUS_BADGE } from "@/lib/paymentStatusDisplay";
+import { paymentBeneficiaryName } from "@/lib/paymentProgress";
 
 function paymentsToCsv(rows: Payment[]): string {
   const header = ["Date", "Beneficiary Type", "Name", "Amount", "Currency", "Method", "Reference", "Status", "Approved By", "Approved On"];
   const lines = [header.map(escapeCsv).join(",")];
   for (const p of rows) {
-    const name = p.mediaHost?.name ?? p.influencer?.name ?? "—";
+    const name = paymentBeneficiaryName(p);
     lines.push(
       [
         new Date(p.paymentDate).toLocaleDateString(),
@@ -40,7 +41,7 @@ function paymentsToCsv(rows: Payment[]): string {
  * two modules never get mixed together the way a single combined table used to. */
 export function TransactionLogTabs({ organizationId }: { organizationId: string }) {
   const { t } = useLang();
-  const [tab, setTab] = useState<"INFLUENCER" | "MEDIA_HOST">("INFLUENCER");
+  const [tab, setTab] = useState<"INFLUENCER" | "MEDIA_HOST" | "MEMBER">("INFLUENCER");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterPersonId, setFilterPersonId] = useState("");
@@ -52,10 +53,15 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
   });
   const { data: hosts } = useQuery({ queryKey: ["media-hosts", organizationId], queryFn: () => api.get<MediaHost[]>(`/api/v1/organizations/${organizationId}/media-hosts`) });
   const { data: influencers } = useQuery({ queryKey: ["influencers", organizationId], queryFn: () => api.get<Influencer[]>(`/api/v1/organizations/${organizationId}/influencers`) });
+  const { data: leaders } = useQuery({
+    queryKey: ["members-leaders", organizationId],
+    queryFn: () => api.get<PaginatedMembers>(`/api/v1/organizations/${organizationId}/members?isLeader=true&pageSize=500`),
+  });
 
-  const peopleForTab = tab === "INFLUENCER" ? influencers ?? [] : hosts ?? [];
+  const peopleForTab: Array<{ id: string; name: string }> =
+    tab === "INFLUENCER" ? influencers ?? [] : tab === "MEDIA_HOST" ? hosts ?? [] : (leaders?.items ?? []).map((m) => ({ id: m.id, name: `${m.firstName} ${m.lastName}` }));
 
-  function switchTab(next: "INFLUENCER" | "MEDIA_HOST") {
+  function switchTab(next: "INFLUENCER" | "MEDIA_HOST" | "MEMBER") {
     setTab(next);
     setFilterPersonId("");
     setSelected(new Set());
@@ -70,6 +76,7 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
       if (filterPersonId) {
         if (tab === "INFLUENCER" && p.influencerId !== filterPersonId) return false;
         if (tab === "MEDIA_HOST" && p.mediaHostId !== filterPersonId) return false;
+        if (tab === "MEMBER" && p.memberId !== filterPersonId) return false;
       }
       return true;
     });
@@ -111,6 +118,12 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
           className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${tab === "MEDIA_HOST" ? "bg-white text-brand-700 shadow-sm" : "text-muted"}`}
         >
           <Radio size={14} /> {t("navMediaHosts")}
+        </button>
+        <button
+          onClick={() => switchTab("MEMBER")}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${tab === "MEMBER" ? "bg-white text-brand-700 shadow-sm" : "text-muted"}`}
+        >
+          <Crown size={14} /> {t("tabLeaders")}
         </button>
       </div>
 
@@ -189,8 +202,10 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
                           ? `/org/${organizationId}/influencers/${p.influencerId}`
                           : p.mediaHostId
                             ? `/org/${organizationId}/media-hosts/${p.mediaHostId}`
-                            : null;
-                        const name = p.mediaHost?.name ?? p.influencer?.name ?? "—";
+                            : p.memberId
+                              ? `/org/${organizationId}/members/${p.memberId}`
+                              : null;
+                        const name = paymentBeneficiaryName(p);
                         return href ? <Link href={href} className="font-medium hover:underline">{name}</Link> : name;
                       })()}
                     </td>

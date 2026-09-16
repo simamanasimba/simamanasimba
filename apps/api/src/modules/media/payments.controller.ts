@@ -32,12 +32,13 @@ export class PaymentsController {
     @Query("beneficiaryType") beneficiaryType?: PaymentBeneficiaryType,
     @Query("mediaHostId") mediaHostId?: string,
     @Query("influencerId") influencerId?: string,
+    @Query("memberId") memberId?: string,
     @Query("status") status?: PaymentStatus,
     @Query("method") method?: string,
     @Query("dateFrom") dateFrom?: string,
     @Query("dateTo") dateTo?: string,
   ) {
-    return this.payments.list(organizationId, { campaignId, beneficiaryType, mediaHostId, influencerId, status, method, dateFrom, dateTo });
+    return this.payments.list(organizationId, { campaignId, beneficiaryType, mediaHostId, influencerId, memberId, status, method, dateFrom, dateTo });
   }
 
   @Get("finance-dashboard")

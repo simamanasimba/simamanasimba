@@ -5,10 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import type { Member } from "@/lib/types";
+import type { Member, Payment } from "@/lib/types";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
 import { EditMemberModal } from "@/components/EditMemberModal";
+import { PaymentHistoryTable } from "@/components/PaymentHistoryTable";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 
@@ -17,6 +18,8 @@ interface MemberProfile {
   stats: { eventsAttended: number; eventsRegistered: number; lastAttendance: string | null };
   attendanceRecords: Array<{ id: string; checkedInAt: string; method: string; event: { id: string; name: string } }>;
   registrations: Array<{ id: string; registrationStatus: string; event: { id: string; name: string; startDatetime: string; status: string } }>;
+  payments: Payment[];
+  totalPaid: number;
 }
 
 export default function MemberProfilePage() {
@@ -109,6 +112,13 @@ export default function MemberProfilePage() {
           </ul>
         )}
       </div>
+
+      {(member.isLeader || data.payments.length > 0) && (
+        <>
+          <p className="text-sm text-muted">{t("totalPaidLabel")}: <span className="nums font-semibold text-ink">{data.totalPaid.toLocaleString()}</span></p>
+          <PaymentHistoryTable organizationId={organizationId} payments={data.payments} />
+        </>
+      )}
 
       {editing && (
         <EditMemberModal

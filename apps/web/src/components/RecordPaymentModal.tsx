@@ -7,7 +7,7 @@ import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/lib/i18n";
-import { PAYMENT_METHODS, type PaymentMethod, type MediaHost, type Influencer, type Influencer2Campaign, type PaginatedInfluencer2Campaigns } from "@/lib/types";
+import { PAYMENT_METHODS, type PaymentMethod, type MediaHost, type Influencer, type Member, type PaginatedMembers, type Influencer2Campaign, type PaginatedInfluencer2Campaigns } from "@/lib/types";
 
 const METHOD_LABEL_KEYS: Record<PaymentMethod, "paymentMethodCash" | "paymentMethodBankTransfer" | "paymentMethodCheque" | "paymentMethodMobileMoney" | "paymentMethodCard" | "paymentMethodOnlinePayment"> = {
   CASH: "paymentMethodCash",
@@ -18,18 +18,23 @@ const METHOD_LABEL_KEYS: Record<PaymentMethod, "paymentMethodCash" | "paymentMet
   ONLINE_PAYMENT: "paymentMethodOnlinePayment",
 };
 
-type Beneficiary = (MediaHost & { kind: "MEDIA_HOST" }) | (Influencer & { kind: "INFLUENCER" });
+type Beneficiary = (MediaHost & { kind: "MEDIA_HOST" }) | (Influencer & { kind: "INFLUENCER" }) | (Member & { kind: "MEMBER"; name: string });
 
-/** Both media hosts and influencers now use the same Influencer 2 campaign
- * system, so there's just one "pick an unpaid campaign to pay" flow here —
- * filtered by mediaHostId or influencerId depending on who's selected. */
+/** Media hosts and influencers both use the Influencer 2 campaign system, so picking one of them
+ * leads into "pick an unpaid campaign to pay". Members (leaders, paid for things like attending
+ * or organizing a meeting) have no campaign to link — selecting one skips straight to the amount/
+ * method fields below. */
 export function RecordPaymentModal({ organizationId, onClose, onDone }: { organizationId: string; onClose: () => void; onDone: () => void }) {
   const { t } = useLang();
   const { data: auth } = useAuth();
   const { data: hosts } = useQuery({ queryKey: ["media-hosts", organizationId], queryFn: () => api.get<MediaHost[]>(`/api/v1/organizations/${organizationId}/media-hosts`) });
   const { data: influencers } = useQuery({ queryKey: ["influencers", organizationId], queryFn: () => api.get<Influencer[]>(`/api/v1/organizations/${organizationId}/influencers`) });
+  const { data: leaders } = useQuery({
+    queryKey: ["members-leaders", organizationId],
+    queryFn: () => api.get<PaginatedMembers>(`/api/v1/organizations/${organizationId}/members?isLeader=true&pageSize=500`),
+  });
 
-  const [beneficiaryType, setBeneficiaryType] = useState<"MEDIA_HOST" | "INFLUENCER">("INFLUENCER");
+  const [beneficiaryType, setBeneficiaryType] = useState<"MEDIA_HOST" | "INFLUENCER" | "MEMBER">("INFLUENCER");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Beneficiary | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Influencer2Campaign | null>(null);
@@ -37,7 +42,8 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const unpaidCampaignsUrl = selected
+  const isMember = beneficiaryType === "MEMBER";
+  const unpaidCampaignsUrl = selected && !isMember
     ? selected.kind === "MEDIA_HOST"
       ? `/api/v1/organizations/${organizationId}/influencer2/campaigns?mediaHostId=${selected.id}&paymentStatus=NOT_PAID&pageSize=100`
       : `/api/v1/organizations/${organizationId}/influencer2/campaigns?influencerId=${selected.id}&paymentStatus=NOT_PAID&pageSize=100`
@@ -47,6 +53,7 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
     queryFn: () => api.get<PaginatedInfluencer2Campaigns>(unpaidCampaignsUrl!),
     enabled: Boolean(unpaidCampaignsUrl),
   });
+  const readyToPay = Boolean(selected && (isMember || selectedCampaign));
 
   const [form, setForm] = useState({
     paymentDate: new Date().toISOString().slice(0, 10),
@@ -69,8 +76,9 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
 
   const pool: Beneficiary[] = useMemo(() => {
     if (beneficiaryType === "MEDIA_HOST") return (hosts ?? []).map((h) => ({ ...h, kind: "MEDIA_HOST" as const }));
+    if (beneficiaryType === "MEMBER") return (leaders?.items ?? []).map((m) => ({ ...m, kind: "MEMBER" as const, name: `${m.firstName} ${m.lastName}` }));
     return (influencers ?? []).map((i) => ({ ...i, kind: "INFLUENCER" as const }));
-  }, [beneficiaryType, hosts, influencers]);
+  }, [beneficiaryType, hosts, influencers, leaders]);
 
   const suggestions = search.trim().length === 0 ? [] : pool.filter((b) => b.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 6);
 
@@ -79,13 +87,18 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
   // the profile has nothing saved yet, the fields stay editable as a fallback. The mobile money
   // number is different: it defaults from registration (falling back to the general phone
   // number if no dedicated payout number was set) but always stays editable, since the club
-  // may pay to a different number for a specific payment.
-  const hasBankDetails = Boolean(selected?.bankName || selected?.bankAccountName || selected?.bankAccountNumber);
+  // may pay to a different number for a specific payment. Members have no saved payout profile
+  // at all (no bank/mobile columns on Member), so their fields always start blank and editable.
+  const hasBankDetails = Boolean(selected && selected.kind !== "MEMBER" && (selected.bankName || selected.bankAccountName || selected.bankAccountNumber));
 
   function pickBeneficiary(b: Beneficiary) {
     setSelected(b);
     setSearch("");
     setSelectedCampaign(null);
+    if (b.kind === "MEMBER") {
+      setForm((f) => ({ ...f, bankName: "", bankAccountName: "", bankAccountNumber: "", mobileMoneyNumber: b.phone ?? f.mobileMoneyNumber }));
+      return;
+    }
     setForm((f) => ({
       ...f,
       bankName: b.bankName ?? f.bankName,
@@ -95,7 +108,7 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
     }));
   }
 
-  function changeBeneficiaryType(type: "MEDIA_HOST" | "INFLUENCER") {
+  function changeBeneficiaryType(type: "MEDIA_HOST" | "INFLUENCER" | "MEMBER") {
     setBeneficiaryType(type);
     setSelected(null);
     setSelectedCampaign(null);
@@ -104,7 +117,7 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected || !selectedCampaign) return;
+    if (!selected || !(isMember || selectedCampaign)) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -112,7 +125,8 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
         beneficiaryType,
         mediaHostId: beneficiaryType === "MEDIA_HOST" ? selected.id : undefined,
         influencerId: beneficiaryType === "INFLUENCER" ? selected.id : undefined,
-        influencer2CampaignId: selectedCampaign.id,
+        memberId: beneficiaryType === "MEMBER" ? selected.id : undefined,
+        influencer2CampaignId: selectedCampaign?.id,
         paymentDate: form.paymentDate,
         amount: Number(form.amount),
         currency: form.currency,
@@ -153,19 +167,22 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
       footer={
         <div className="flex justify-end gap-2 border-t border-line pt-4">
           <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>
-          <button type="submit" form="record-payment-form" disabled={submitting || !selectedCampaign} className="btn-primary">{submitting ? t("creatingLabel") : t("save")}</button>
+          <button type="submit" form="record-payment-form" disabled={submitting || !readyToPay} className="btn-primary">{submitting ? t("creatingLabel") : t("save")}</button>
         </div>
       }
     >
       <form id="record-payment-form" onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="label">{t("payWhoLabel")}</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button type="button" onClick={() => changeBeneficiaryType("INFLUENCER")} className={beneficiaryType === "INFLUENCER" ? "btn-primary text-sm" : "btn-secondary text-sm"}>
               {t("tabInfluencers")}
             </button>
             <button type="button" onClick={() => changeBeneficiaryType("MEDIA_HOST")} className={beneficiaryType === "MEDIA_HOST" ? "btn-primary text-sm" : "btn-secondary text-sm"}>
               {t("tabMediaHosts")}
+            </button>
+            <button type="button" onClick={() => changeBeneficiaryType("MEMBER")} className={beneficiaryType === "MEMBER" ? "btn-primary text-sm" : "btn-secondary text-sm"}>
+              {t("tabLeaders")}
             </button>
           </div>
 
@@ -207,13 +224,13 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
           )}
         </div>
 
-        {selected && loadingCampaigns && <p className="text-sm text-muted">{t("loadingCampaignsLabel")}</p>}
+        {selected && !isMember && loadingCampaigns && <p className="text-sm text-muted">{t("loadingCampaignsLabel")}</p>}
 
-        {selected && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) === 0 && (
+        {selected && !isMember && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) === 0 && (
           <p className="rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-muted">{t("noPendingUnpaidCampaign")}</p>
         )}
 
-        {selected && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) > 0 && !selectedCampaign && (
+        {selected && !isMember && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) > 0 && !selectedCampaign && (
           <div>
             <label className="label">{t("selectCampaignLabel")}</label>
             <div className="space-y-2">
@@ -232,15 +249,17 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
           </div>
         )}
 
-        {selected && selectedCampaign && (
+        {selected && readyToPay && (
           <>
-            <div className="flex items-center justify-between rounded-xl border border-line bg-brand-50/50 px-3.5 py-2.5">
-              <div>
-                <p className="text-xs text-muted">{t("selectCampaignLabel")}</p>
-                <p className="text-sm font-semibold text-ink">{selectedCampaign.name}</p>
+            {selectedCampaign && (
+              <div className="flex items-center justify-between rounded-xl border border-line bg-brand-50/50 px-3.5 py-2.5">
+                <div>
+                  <p className="text-xs text-muted">{t("selectCampaignLabel")}</p>
+                  <p className="text-sm font-semibold text-ink">{selectedCampaign.name}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedCampaign(null)} className="text-sm font-semibold text-brand hover:underline">{t("changeSelectionCta")}</button>
               </div>
-              <button type="button" onClick={() => setSelectedCampaign(null)} className="text-sm font-semibold text-brand hover:underline">{t("changeSelectionCta")}</button>
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div>

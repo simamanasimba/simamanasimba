@@ -17,6 +17,10 @@ export class CreatePaymentDto {
   @IsString()
   influencerId?: string;
 
+  @IsOptional()
+  @IsString()
+  memberId?: string;
+
   @IsDateString()
   paymentDate!: string;
 

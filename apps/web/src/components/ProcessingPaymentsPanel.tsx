@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { MarkPaidModal } from "@/components/MarkPaidModal";
 import type { Payment } from "@/lib/types";
+import { paymentBeneficiaryName } from "@/lib/paymentProgress";
 
 /** Finance's own queue: payments an admin has already approved ("Pending Payment" — authorized,
  * money not yet sent) show here so Finance can record how it was actually paid and confirm.
@@ -15,7 +16,13 @@ import type { Payment } from "@/lib/types";
  * PaymentsService.markPaid). */
 export function ProcessingPaymentsPanel({ organizationId }: { organizationId: string }) {
   const showPageHref = (p: Payment) =>
-    p.influencerId ? `/org/${organizationId}/influencers/${p.influencerId}` : p.mediaHostId ? `/org/${organizationId}/media-hosts/${p.mediaHostId}` : null;
+    p.influencerId
+      ? `/org/${organizationId}/influencers/${p.influencerId}`
+      : p.mediaHostId
+        ? `/org/${organizationId}/media-hosts/${p.mediaHostId}`
+        : p.memberId
+          ? `/org/${organizationId}/members/${p.memberId}`
+          : null;
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [marking, setMarking] = useState<Payment | null>(null);
@@ -57,10 +64,10 @@ export function ProcessingPaymentsPanel({ organizationId }: { organizationId: st
                     <td className="px-4 py-2.5 font-medium text-ink">
                       {href ? (
                         <Link href={href} onClick={(e) => e.stopPropagation()} className="hover:underline">
-                          {p.mediaHost?.name ?? p.influencer?.name ?? "—"}
+                          {paymentBeneficiaryName(p)}
                         </Link>
                       ) : (
-                        p.mediaHost?.name ?? p.influencer?.name ?? "—"
+                        paymentBeneficiaryName(p)
                       )}
                     </td>
                     <td className="nums px-4 py-2.5">{p.currency} {p.amount.toLocaleString()}</td>
