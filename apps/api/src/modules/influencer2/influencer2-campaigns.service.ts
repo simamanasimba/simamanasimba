@@ -55,6 +55,45 @@ export class Influencer2CampaignsService {
     return hasApprovedPayment ? "PENDING_PAYMENT" : "UNPAID";
   }
 
+  /** We pay by week, not by post — several posts can share one agreement week, and that week gets
+   * paid (or not) as a whole through its evaluation's ticket, never post by post. So for any post
+   * tagged with agreementWeekNumber, paid/unpaid is a property of its WEEK, looked up here, not the
+   * per-campaign paymentStatus/approved-payment check paymentProgress() above still does for posts
+   * with no agreement (or that predate week-tagging), which keeps working exactly as before. */
+  private async resolveWeeklyProgress(
+    organizationId: string,
+    rows: Array<{ id: string; mediaHostId: string | null; influencerId: string | null; agreementWeekNumber: number | null }>,
+  ): Promise<Map<string, "UNPAID" | "PENDING_PAYMENT" | "PAID">> {
+    const tagged = rows.filter((r) => r.agreementWeekNumber != null);
+    const result = new Map<string, "UNPAID" | "PENDING_PAYMENT" | "PAID">();
+    if (tagged.length === 0) return result;
+
+    const hostIds = [...new Set(tagged.map((r) => r.mediaHostId).filter((v): v is string => Boolean(v)))];
+    const influencerIds = [...new Set(tagged.map((r) => r.influencerId).filter((v): v is string => Boolean(v)))];
+    if (hostIds.length === 0 && influencerIds.length === 0) return result;
+
+    const agreements = await this.prisma.postingAgreement.findMany({
+      where: { organizationId, OR: [{ mediaHostId: { in: hostIds } }, { influencerId: { in: influencerIds } }] },
+    });
+    if (agreements.length === 0) return result;
+    const agreementByHost = new Map(agreements.filter((a) => a.mediaHostId).map((a) => [a.mediaHostId as string, a]));
+    const agreementByInfluencer = new Map(agreements.filter((a) => a.influencerId).map((a) => [a.influencerId as string, a]));
+
+    const evaluations = await this.prisma.postingAgreementEvaluation.findMany({
+      where: { agreementId: { in: agreements.map((a) => a.id) } },
+      include: { payment: { select: { status: true } } },
+    });
+    const evalByKey = new Map(evaluations.map((e) => [`${e.agreementId}:${e.weekNumber}`, e]));
+
+    for (const r of tagged) {
+      const agreement = r.mediaHostId ? agreementByHost.get(r.mediaHostId) : r.influencerId ? agreementByInfluencer.get(r.influencerId) : undefined;
+      if (!agreement) continue; // agreement was deleted since this post was tagged — falls back to per-campaign logic
+      const status = evalByKey.get(`${agreement.id}:${r.agreementWeekNumber}`)?.payment?.status;
+      result.set(r.id, status === "PAID" ? "PAID" : status === "PROCESSING" ? "PENDING_PAYMENT" : "UNPAID");
+    }
+    return result;
+  }
+
   private async ensure(organizationId: string, id: string) {
     const campaign = await this.prisma.influencer2Campaign.findFirst({ where: { id, organizationId } });
     if (!campaign) throw new NotFoundException("Campaign not found");
@@ -199,7 +238,14 @@ export class Influencer2CampaignsService {
     if (filters.mediaHostId) where.mediaHostId = filters.mediaHostId;
     if (filters.contentType) where.contentType = filters.contentType;
     if (filters.status) where.status = filters.status;
-    if (filters.paymentStatus) where.paymentStatus = filters.paymentStatus;
+    if (filters.paymentStatus) {
+      where.paymentStatus = filters.paymentStatus;
+      // We pay by week, not by post — a post tagged to an agreement week is paid (or not) as part
+      // of that week's ticket, never picked individually here, so "unpaid campaigns to pay" (the
+      // Record Payment beneficiary flow) must never surface one. Untagged posts (no agreement, or
+      // predate tagging) are unaffected and still show up exactly as before.
+      if (filters.paymentStatus === "NOT_PAID") where.agreementWeekNumber = null;
+    }
     if (filters.platformKey) where.platforms = { some: { platform: { key: filters.platformKey } } };
     if (filters.weekNumber != null && filters.from && filters.to) Object.assign(where, this.weekMatchFilter(filters.weekNumber, filters.from, filters.to));
     else if (filters.from && filters.to) where.createdAt = { gte: filters.from, lte: filters.to };
@@ -219,13 +265,14 @@ export class Influencer2CampaignsService {
       this.prisma.influencer2Campaign.count({ where }),
     ]);
 
-    const [influencerNameById, mediaHostNameById, approvedPayments] = await Promise.all([
+    const [influencerNameById, mediaHostNameById, approvedPayments, weeklyProgress] = await Promise.all([
       this.resolveInfluencerNames(organizationId, rows.map((r) => r.influencerId)),
       this.resolveMediaHostNames(organizationId, rows.map((r) => r.mediaHostId)),
       this.prisma.payment.findMany({
         where: { influencer2CampaignId: { in: rows.map((r) => r.id) }, status: "PROCESSING" },
         select: { influencer2CampaignId: true },
       }),
+      this.resolveWeeklyProgress(organizationId, rows),
     ]);
     const approvedCampaignIds = new Set(approvedPayments.map((p) => p.influencer2CampaignId));
 
@@ -240,7 +287,7 @@ export class Influencer2CampaignsService {
       return {
         campaign: {
           ...toNumericCampaign(campaign),
-          paymentProgress: this.paymentProgress(campaign.paymentStatus, approvedCampaignIds.has(campaign.id)),
+          paymentProgress: weeklyProgress.get(campaign.id) ?? this.paymentProgress(campaign.paymentStatus, approvedCampaignIds.has(campaign.id)),
         },
         influencerName: beneficiaryName,
         platformKeys: summaries.map((p) => p.platformKey),
@@ -317,12 +364,15 @@ export class Influencer2CampaignsService {
     ]);
 
     const platforms = platformRows.map((p) => this.summarizePlatform(p));
-    const approvedPayment = await this.prisma.payment.findFirst({ where: { influencer2CampaignId: id, status: "PROCESSING" }, select: { id: true } });
+    const [approvedPayment, weeklyProgress] = await Promise.all([
+      this.prisma.payment.findFirst({ where: { influencer2CampaignId: id, status: "PROCESSING" }, select: { id: true } }),
+      this.resolveWeeklyProgress(organizationId, [campaign]),
+    ]);
 
     return {
       campaign: {
         ...toNumericCampaign(campaign),
-        paymentProgress: this.paymentProgress(campaign.paymentStatus, Boolean(approvedPayment)),
+        paymentProgress: weeklyProgress.get(campaign.id) ?? this.paymentProgress(campaign.paymentStatus, Boolean(approvedPayment)),
       },
       influencer,
       mediaHost,
