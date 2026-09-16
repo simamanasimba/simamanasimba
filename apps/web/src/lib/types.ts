@@ -560,6 +560,9 @@ export interface Influencer2Campaign {
   paymentProgress?: "UNPAID" | "PENDING_PAYMENT" | "PAID";
   rateTzs?: number | null;
   totalTzs?: number | null;
+  /** Which week (per the beneficiary's own posting agreement cycle) this post counts toward —
+   * null when the beneficiary has no agreement, or the post predates this field. */
+  agreementWeekNumber?: number | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -90,6 +90,8 @@ export default function MediaHostDetailPage() {
         </div>
       </div>
 
+      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} canManage={canManagePayments} />
+
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
@@ -134,8 +136,6 @@ export default function MediaHostDetailPage() {
           </div>
         </Collapsible>
       </div>
-
-      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} canManage={canManagePayments} />
 
       {editing && (
         <MediaHostModal

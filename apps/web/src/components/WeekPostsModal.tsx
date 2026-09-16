@@ -28,10 +28,10 @@ export function WeekPostsModal({
   const { t } = useLang();
   const beneficiaryQuery = mediaHostId ? `mediaHostId=${mediaHostId}` : `influencerId=${influencerId}`;
   const { data, isLoading } = useQuery({
-    queryKey: ["posting-agreement-week-posts", organizationId, mediaHostId, influencerId, weekStart, weekEnd],
+    queryKey: ["posting-agreement-week-posts", organizationId, mediaHostId, influencerId, weekNumber, weekStart, weekEnd],
     queryFn: () =>
       api.get<PaginatedInfluencer2Campaigns>(
-        `/api/v1/organizations/${organizationId}/influencer2/campaigns?${beneficiaryQuery}&from=${weekStart}&to=${weekEnd}&pageSize=100`,
+        `/api/v1/organizations/${organizationId}/influencer2/campaigns?${beneficiaryQuery}&weekNumber=${weekNumber}&from=${weekStart}&to=${weekEnd}&pageSize=100`,
       ),
   });
 

@@ -1838,6 +1838,14 @@ model Influencer2Campaign {
   createdAt      DateTime                   @default(now()) @map("created_at")
   updatedAt      DateTime                   @updatedAt @map("updated_at")
 
+  /// Which week (1-based, per the beneficiary's own PostingAgreement.startDate cycle) this post
+  /// counts toward for weekly-agreement evaluation — set explicitly at creation (defaulting to the
+  /// current week, but changeable), never inferred from createdAt, since data entry can lag behind
+  /// when content actually went up. Null when the beneficiary has no posting agreement, or the post
+  /// predates this field — PostingAgreementsService then falls back to createdAt-range bucketing
+  /// for those rows only, see Influencer2CampaignsService.weeklyAssessment.
+  agreementWeekNumber Int? @map("agreement_week_number")
+
   // Filled in by PaymentsService.create() at pay time, mirroring how
   // MediaEngagement.rateTzs/totalTzs are never set at creation either.
   paymentStatus Influencer2PaymentStatus @default(NOT_PAID) @map("payment_status")

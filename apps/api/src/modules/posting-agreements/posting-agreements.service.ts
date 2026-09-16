@@ -174,11 +174,12 @@ export class PostingAgreementsService {
     if (!week) throw new BadRequestException("That week hasn't started yet for this agreement");
     if (week.weekEnd.getTime() > Date.now()) throw new BadRequestException("This week isn't finished yet — it can be evaluated once it ends");
 
-    const summary = await this.campaigns.summary(organizationId, {
+    const summary = await this.campaigns.weeklyAssessment(organizationId, {
       mediaHostId: agreement.mediaHostId ?? undefined,
       influencerId: agreement.influencerId ?? undefined,
-      from: week.weekStart,
-      to: week.weekEnd,
+      weekNumber,
+      weekStart: week.weekStart,
+      weekEnd: week.weekEnd,
     });
 
     const postTargetMet = agreement.postsPerWeek != null ? summary.totalPosts >= agreement.postsPerWeek : null;

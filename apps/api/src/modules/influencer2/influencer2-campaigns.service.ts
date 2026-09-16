@@ -170,6 +170,14 @@ export class Influencer2CampaignsService {
     return new Map(rows.map((r) => [r.id, r.name]));
   }
 
+  /** Which posts count toward one agreement week: tagged with that exact weekNumber, OR untagged
+   * (predates the tagging feature, or the beneficiary has no agreement) and created within the
+   * week's own date range as a fallback. Shared by list() (the "View posts" drill-down) and
+   * weeklyAssessment() (the actual evaluation totals) so both agree on the same post set. */
+  private weekMatchFilter(weekNumber: number, from: Date, to: Date): Prisma.Influencer2CampaignWhereInput {
+    return { OR: [{ agreementWeekNumber: weekNumber }, { agreementWeekNumber: null, createdAt: { gte: from, lte: to } }] };
+  }
+
   async list(
     organizationId: string,
     filters: {
@@ -181,6 +189,7 @@ export class Influencer2CampaignsService {
       paymentStatus?: "NOT_PAID" | "PAID";
       from?: Date;
       to?: Date;
+      weekNumber?: number;
     },
     page: number,
     pageSize: number,
@@ -192,7 +201,8 @@ export class Influencer2CampaignsService {
     if (filters.status) where.status = filters.status;
     if (filters.paymentStatus) where.paymentStatus = filters.paymentStatus;
     if (filters.platformKey) where.platforms = { some: { platform: { key: filters.platformKey } } };
-    if (filters.from && filters.to) where.createdAt = { gte: filters.from, lte: filters.to };
+    if (filters.weekNumber != null && filters.from && filters.to) Object.assign(where, this.weekMatchFilter(filters.weekNumber, filters.from, filters.to));
+    else if (filters.from && filters.to) where.createdAt = { gte: filters.from, lte: filters.to };
 
     const [rows, total] = await Promise.all([
       this.prisma.influencer2Campaign.findMany({
@@ -258,6 +268,7 @@ export class Influencer2CampaignsService {
         endDate: dateOrUndefined(dto.endDate),
         status: dto.status,
         notes: dto.notes,
+        agreementWeekNumber: dto.agreementWeekNumber,
       },
     });
     return toNumericCampaign(row);
@@ -388,6 +399,47 @@ export class Influencer2CampaignsService {
       totalShares: hasShares ? totalShares : null,
       totalEngagement,
       engagementPerPost: postCount > 0 ? Math.round((totalEngagement / postCount) * 100) / 100 : null,
+    };
+  }
+
+  /** One posting-agreement week's totals — the posts that actually count toward it (see
+   * weekMatchFilter), using each post's current (isLatest) metrics rather than a collectedAt
+   * window, since a week is evaluated as "what do we know now about the posts tagged to it," not
+   * "what was recorded during that calendar week." */
+  async weeklyAssessment(organizationId: string, filter: { mediaHostId?: string; influencerId?: string; weekNumber: number; weekStart: Date; weekEnd: Date }) {
+    const beneficiary = filter.mediaHostId ? { mediaHostId: filter.mediaHostId } : { influencerId: filter.influencerId };
+    const campaignWhere: Prisma.Influencer2CampaignWhereInput = {
+      organizationId,
+      ...beneficiary,
+      ...this.weekMatchFilter(filter.weekNumber, filter.weekStart, filter.weekEnd),
+    };
+
+    const [postCount, values] = await Promise.all([
+      this.prisma.influencer2CampaignPlatform.count({ where: { campaign: campaignWhere } }),
+      this.prisma.influencer2MetricValue.findMany({
+        where: { isLatest: true, campaignPlatform: { campaign: campaignWhere } },
+        include: { metricDefinition: true },
+      }),
+    ]);
+
+    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
+    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
+    for (const v of values) {
+      const value = Number(v.value);
+      if (v.metricDefinition.countsAsEngagement) totalEngagement += value;
+      if (v.metricDefinition.category === "VIEWS") { totalViews += value; hasViews = true; }
+      else if (v.metricDefinition.category === "LIKES") { totalLikes += value; hasLikes = true; }
+      else if (v.metricDefinition.category === "COMMENTS") { totalComments += value; hasComments = true; }
+      else if (v.metricDefinition.category === "SHARES") { totalShares += value; hasShares = true; }
+    }
+
+    return {
+      totalPosts: postCount,
+      totalViews: hasViews ? totalViews : null,
+      totalLikes: hasLikes ? totalLikes : null,
+      totalComments: hasComments ? totalComments : null,
+      totalShares: hasShares ? totalShares : null,
+      totalEngagement,
     };
   }
 

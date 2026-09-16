@@ -42,10 +42,21 @@ export class Influencer2CampaignsController {
     @Query("pageSize") pageSize?: string,
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("weekNumber") weekNumber?: string,
   ) {
     return this.campaigns.list(
       organizationId,
-      { influencerId, mediaHostId, platformKey, contentType, status, paymentStatus, from: from ? new Date(from) : undefined, to: to ? new Date(to) : undefined },
+      {
+        influencerId,
+        mediaHostId,
+        platformKey,
+        contentType,
+        status,
+        paymentStatus,
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+        weekNumber: weekNumber ? Number(weekNumber) : undefined,
+      },
       Number(page) || 1,
       Number(pageSize) || 25,
     );

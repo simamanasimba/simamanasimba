@@ -92,6 +92,8 @@ export default function InfluencerDetailPage() {
         </div>
       </div>
 
+      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} canManage={canManagePayments} />
+
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
@@ -136,8 +138,6 @@ export default function InfluencerDetailPage() {
           </div>
         </Collapsible>
       </div>
-
-      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} canManage={canManagePayments} />
 
       {editing && (
         <InfluencerModal

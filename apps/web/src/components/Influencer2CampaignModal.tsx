@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Facebook, Instagram, Youtube, Twitter, Linkedin, Music2, Check, type LucideIcon } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useLang } from "@/lib/i18n";
-import type { Influencer, Influencer2Campaign, Influencer2ContentType, Influencer2Platform } from "@/lib/types";
+import type { Influencer, Influencer2Campaign, Influencer2ContentType, Influencer2Platform, PostingAgreement, PostingAgreementWeek } from "@/lib/types";
 
 const CONTENT_TYPES: Influencer2ContentType[] = ["VIDEO", "IMAGE", "REEL", "STORY", "ARTICLE", "PODCAST", "AUDIO", "OTHER"];
 
@@ -58,6 +58,7 @@ export function Influencer2CampaignModal({
   });
   const [selectedPlatformIds, setSelectedPlatformIds] = useState<Set<string>>(new Set());
   const [platformDrafts, setPlatformDrafts] = useState<Record<string, PlatformDraft>>({});
+  const [selectedWeek, setSelectedWeek] = useState<number | "">(initial?.agreementWeekNumber ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Belt-and-suspenders against a double-fire submit (fast double-click/double-tap racing ahead
@@ -80,6 +81,33 @@ export function Influencer2CampaignModal({
     queryFn: () => api.get<Influencer2Platform[]>(`/api/v1/organizations/${organizationId}/influencer2/platforms?contentType=${form.contentType}`),
     enabled: !initial,
   });
+
+  // If this post's beneficiary has a weekly posting agreement, let the user tag which week it
+  // counts toward — defaults to the current week, but a past week can be picked too (e.g. entering
+  // a post a few days late shouldn't make it silently count toward today's week instead).
+  const beneficiaryMediaHostId = fixedMediaHostId || undefined;
+  const beneficiaryInfluencerId = fixedMediaHostId ? undefined : (fixedInfluencerId || form.influencerId || undefined);
+  const hasBeneficiary = Boolean(beneficiaryMediaHostId || beneficiaryInfluencerId);
+  const beneficiaryQuery = beneficiaryMediaHostId ? `mediaHostId=${beneficiaryMediaHostId}` : `influencerId=${beneficiaryInfluencerId}`;
+
+  const { data: agreements } = useQuery({
+    queryKey: ["posting-agreements", organizationId, beneficiaryMediaHostId, beneficiaryInfluencerId],
+    queryFn: () => api.get<PostingAgreement[]>(`/api/v1/organizations/${organizationId}/posting-agreements?${beneficiaryQuery}`),
+    enabled: hasBeneficiary,
+  });
+  const agreement = agreements?.[0];
+
+  const { data: weeks } = useQuery({
+    queryKey: ["posting-agreement-weeks", organizationId, agreement?.id],
+    queryFn: () => api.get<PostingAgreementWeek[]>(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement!.id}/weeks`),
+    enabled: Boolean(agreement),
+  });
+
+  useEffect(() => {
+    // weeks is sorted newest-first, so [0] is always the current (highest-numbered) week —
+    // only auto-picks it when nothing's been explicitly chosen yet (new post, no prior value).
+    if (!initial && selectedWeek === "" && weeks && weeks.length > 0) setSelectedWeek(weeks[0].weekNumber);
+  }, [weeks, initial, selectedWeek]);
 
   function togglePlatform(platformId: string) {
     setSelectedPlatformIds((prev) => {
@@ -108,6 +136,7 @@ export function Influencer2CampaignModal({
         description: form.description || undefined,
         influencerId: fixedMediaHostId ? undefined : form.influencerId || undefined,
         mediaHostId: fixedMediaHostId || undefined,
+        agreementWeekNumber: selectedWeek === "" ? undefined : selectedWeek,
       };
 
       if (initial) {
@@ -174,6 +203,20 @@ export function Influencer2CampaignModal({
               <option value="">{t("noneOptionLabel")}</option>
               {(influencers ?? []).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
             </select>
+          </div>
+        )}
+
+        {agreement && weeks && weeks.length > 0 && (
+          <div>
+            <label className="label">{t("postAgreementWeekLabel")}</label>
+            <select className="input" value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value ? Number(e.target.value) : "")}>
+              {weeks.map((w) => (
+                <option key={w.weekNumber} value={w.weekNumber}>
+                  {t("weekLabel")} {w.weekNumber} ({w.weekStart.slice(0, 10)} – {w.weekEnd.slice(0, 10)})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted">{t("postAgreementWeekHelp")}</p>
           </div>
         )}
 
