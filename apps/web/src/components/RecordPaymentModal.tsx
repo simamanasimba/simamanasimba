@@ -7,7 +7,14 @@ import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/lib/i18n";
-import { PAYMENT_METHODS, type PaymentMethod, type MediaHost, type Influencer, type Member, type PaginatedMembers, type Influencer2Campaign, type PaginatedInfluencer2Campaigns } from "@/lib/types";
+import { PAYMENT_METHODS, type PaymentMethod, type MediaHost, type Influencer, type Member, type PaginatedMembers, type Influencer2Campaign, type PaginatedInfluencer2Campaigns, type Payment } from "@/lib/types";
+
+/** Sunday-anchored, matching PaymentsService.getFinanceDashboard's own week start. */
+function startOfWeek(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
 
 const METHOD_LABEL_KEYS: Record<PaymentMethod, "paymentMethodCash" | "paymentMethodBankTransfer" | "paymentMethodCheque" | "paymentMethodMobileMoney" | "paymentMethodCard" | "paymentMethodOnlinePayment"> = {
   CASH: "paymentMethodCash",
@@ -35,6 +42,21 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
   });
 
   const [beneficiaryType, setBeneficiaryType] = useState<"MEDIA_HOST" | "INFLUENCER" | "MEMBER">("INFLUENCER");
+  const isLeadersTab = beneficiaryType === "MEMBER";
+
+  // Since leaders are paid weekly, whoever already has a payment in flight for this week is shown
+  // lower down (and tagged), so the list naturally leads with who's still unpaid instead of
+  // treating every leader as equally due.
+  const { data: memberPayments } = useQuery({
+    queryKey: ["payments", organizationId, "MEMBER"],
+    queryFn: () => api.get<Payment[]>(`/api/v1/organizations/${organizationId}/payments?beneficiaryType=MEMBER`),
+    enabled: isLeadersTab,
+  });
+  const paidThisWeekMemberIds = new Set(
+    (memberPayments ?? [])
+      .filter((p) => p.status !== "REJECTED" && p.status !== "CANCELLED" && p.paymentDate.slice(0, 10) >= startOfWeek() && p.memberId)
+      .map((p) => p.memberId as string),
+  );
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Beneficiary | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Influencer2Campaign | null>(null);
@@ -76,11 +98,19 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
 
   const pool: Beneficiary[] = useMemo(() => {
     if (beneficiaryType === "MEDIA_HOST") return (hosts ?? []).map((h) => ({ ...h, kind: "MEDIA_HOST" as const }));
-    if (beneficiaryType === "MEMBER") return (leaders?.items ?? []).map((m) => ({ ...m, kind: "MEMBER" as const, name: `${m.firstName} ${m.lastName}` }));
+    if (beneficiaryType === "MEMBER") {
+      const rows = (leaders?.items ?? []).map((m) => ({ ...m, kind: "MEMBER" as const, name: `${m.firstName} ${m.lastName}` }));
+      // Unpaid-this-week leaders first — with hundreds of leaders, whoever's still owed for this
+      // week should never be buried under everyone who's already been paid.
+      return [...rows].sort((a, b) => Number(paidThisWeekMemberIds.has(a.id)) - Number(paidThisWeekMemberIds.has(b.id)));
+    }
     return (influencers ?? []).map((i) => ({ ...i, kind: "INFLUENCER" as const }));
-  }, [beneficiaryType, hosts, influencers, leaders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beneficiaryType, hosts, influencers, leaders, paidThisWeekMemberIds.size]);
 
-  const suggestions = search.trim().length === 0 ? [] : pool.filter((b) => b.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 6);
+  // The list is visible by default (capped so it stays fast to render with a large roster) — no
+  // need to already know a name to type before anything shows. Typing narrows it further.
+  const suggestions = (search.trim().length === 0 ? pool : pool.filter((b) => b.name.toLowerCase().includes(search.trim().toLowerCase()))).slice(0, 50);
 
   // Bank fields come straight from the beneficiary's saved profile — locked read-only when
   // that profile actually has them, so a payment can't silently drift from what's on file. If
@@ -195,31 +225,33 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
               <button type="button" onClick={() => { setSelected(null); setSelectedCampaign(null); }} className="text-sm font-semibold text-brand hover:underline">{t("changeSelectionCta")}</button>
             </div>
           ) : (
-            <div className="relative mt-2">
+            <div className="mt-2">
               <input
                 className="input"
                 placeholder={t("searchPersonPlaceholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              {search.trim().length > 0 && (
-                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-line bg-white shadow-lg">
-                  {suggestions.length === 0 ? (
-                    <p className="px-3.5 py-2.5 text-sm text-muted">{t("noMatchesFound")}</p>
-                  ) : (
-                    suggestions.map((b) => (
+              <div className="mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-line bg-white shadow-card">
+                {suggestions.length === 0 ? (
+                  <p className="px-3.5 py-2.5 text-sm text-muted">{t("noMatchesFound")}</p>
+                ) : (
+                  suggestions.map((b) => {
+                    const paidThisWeek = isLeadersTab && paidThisWeekMemberIds.has(b.id);
+                    return (
                       <button
                         key={b.id}
                         type="button"
                         onClick={() => pickBeneficiary(b)}
-                        className="block w-full px-3.5 py-2.5 text-left text-sm hover:bg-brand-50"
+                        className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-sm hover:bg-brand-50"
                       >
-                        {b.name}
+                        <span className={paidThisWeek ? "text-muted" : "text-ink"}>{b.name}</span>
+                        {paidThisWeek && <span className="badge bg-surface text-muted">{t("paidThisWeekLabel")}</span>}
                       </button>
-                    ))
-                  )}
-                </div>
-              )}
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </div>

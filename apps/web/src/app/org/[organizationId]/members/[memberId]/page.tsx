@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Member, Payment } from "@/lib/types";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
 import { EditMemberModal } from "@/components/EditMemberModal";
 import { PaymentHistoryTable } from "@/components/PaymentHistoryTable";
+import { RecordLeaderPaymentModal } from "@/components/RecordLeaderPaymentModal";
 import { useToast } from "@/components/Toast";
+import { useAuth } from "@/hooks/useAuth";
+import { canRecordPayment } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
 
 interface MemberProfile {
@@ -26,7 +29,11 @@ export default function MemberProfilePage() {
   const { t } = useLang();
   const { organizationId, memberId } = useParams<{ organizationId: string; memberId: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { data: me } = useAuth();
+  const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
+  const canPay = canRecordPayment(myRole);
 
   const { data, refetch } = useQuery({
     queryKey: ["member", organizationId, memberId],
@@ -34,6 +41,7 @@ export default function MemberProfilePage() {
   });
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [payingLeader, setPayingLeader] = useState(false);
 
   async function onDelete() {
     if (!confirm(t("confirmDeleteMember"))) return;
@@ -115,9 +123,28 @@ export default function MemberProfilePage() {
 
       {(member.isLeader || data.payments.length > 0) && (
         <>
-          <p className="text-sm text-muted">{t("totalPaidLabel")}: <span className="nums font-semibold text-ink">{data.totalPaid.toLocaleString()}</span></p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted">{t("totalPaidLabel")}: <span className="nums font-semibold text-ink">{data.totalPaid.toLocaleString()}</span></p>
+            {member.isLeader && canPay && (
+              <button className="btn-primary text-sm" onClick={() => setPayingLeader(true)}><Plus size={14} /> {t("recordLeaderPaymentCta")}</button>
+            )}
+          </div>
           <PaymentHistoryTable organizationId={organizationId} payments={data.payments} />
         </>
+      )}
+
+      {payingLeader && (
+        <RecordLeaderPaymentModal
+          organizationId={organizationId}
+          member={member}
+          onClose={() => setPayingLeader(false)}
+          onDone={() => {
+            setPayingLeader(false);
+            showToast("success", t("entriesSaved"));
+            refetch();
+            queryClient.invalidateQueries({ queryKey: ["finance-dashboard", organizationId] });
+          }}
+        />
       )}
 
       {editing && (
