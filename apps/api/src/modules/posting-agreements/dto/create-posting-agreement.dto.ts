@@ -1,5 +1,5 @@
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
-import { PostingAgreementEngagementMetric, PostingAgreementTargetType } from "@event-intel/database";
+import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { PostingAgreementEngagementMetric } from "@event-intel/database";
 
 export class CreatePostingAgreementDto {
   @IsOptional()
@@ -10,9 +10,13 @@ export class CreatePostingAgreementDto {
   @IsString()
   influencerId?: string;
 
-  @IsEnum(PostingAgreementTargetType)
-  targetType!: PostingAgreementTargetType;
+  /** The day this agreement's weekly cycle begins — week 1 runs startDate..startDate+6, week 2
+   * startDate+7..startDate+13, and so on, independent of any other agreement's own calendar. */
+  @IsDateString()
+  startDate!: string;
 
+  /** At least one of postsPerWeek or (engagementMetric + engagementTarget) is required — both can
+   * be set together, in which case a week only meets requirements when it passes both. */
   @IsOptional()
   @IsInt()
   @Min(1)

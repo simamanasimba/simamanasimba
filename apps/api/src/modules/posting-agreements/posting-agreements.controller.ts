@@ -1,8 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { PostingAgreementsService } from "./posting-agreements.service";
 import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
 import { UpdatePostingAgreementDto } from "./dto/update-posting-agreement.dto";
-import { EvaluateWeekDto } from "./dto/evaluate-week.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -40,19 +39,19 @@ export class PostingAgreementsController {
     return agreement;
   }
 
-  @Get(":agreementId/evaluations")
-  listEvaluations(@Param("organizationId") organizationId: string, @Param("agreementId") agreementId: string) {
-    return this.agreements.listEvaluations(organizationId, agreementId);
+  @Get(":agreementId/weeks")
+  listWeeks(@Param("organizationId") organizationId: string, @Param("agreementId") agreementId: string) {
+    return this.agreements.listWeeks(organizationId, agreementId);
   }
 
-  @Post(":agreementId/evaluate")
+  @Post(":agreementId/weeks/:weekNumber/evaluate")
   async evaluate(
     @Param("organizationId") organizationId: string,
     @Param("agreementId") agreementId: string,
-    @Body() dto: EvaluateWeekDto,
+    @Param("weekNumber", ParseIntPipe) weekNumber: number,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.agreements.evaluateWeek(organizationId, agreementId, dto.weekStart, user.id);
+    return this.agreements.evaluateWeek(organizationId, agreementId, weekNumber, user.id);
   }
 
   @Post("evaluations/:evaluationId/create-ticket")

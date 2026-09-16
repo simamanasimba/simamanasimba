@@ -662,16 +662,16 @@ export interface Influencer2CampaignDetail {
   totals: Influencer2Totals;
 }
 
-export type PostingAgreementTargetType = "POST_COUNT" | "ENGAGEMENT";
 export type PostingAgreementEngagementMetric = "VIEWS" | "LIKES" | "COMMENTS" | "SHARES" | "TOTAL_ENGAGEMENT";
 
-/** A media host/influencer's standing weekly deal — either N posts/week or an engagement target. */
+/** A media host/influencer's standing weekly deal, anchored to its own startDate — its own
+ * independent 7-day cycle, which can include a posts target, an engagement target, or both. */
 export interface PostingAgreement {
   id: string;
   organizationId: string;
   mediaHostId: string | null;
   influencerId: string | null;
-  targetType: PostingAgreementTargetType;
+  startDate: string;
   postsPerWeek: number | null;
   engagementMetric: PostingAgreementEngagementMetric | null;
   engagementTarget: number | null;
@@ -684,18 +684,36 @@ export interface PostingAgreement {
   updatedAt: string;
 }
 
-/** One week's actual posts/engagement measured against its agreement's target. */
+/** One agreement-relative week's actual posts/engagement measured against its target(s). */
 export interface PostingAgreementEvaluation {
   id: string;
   agreementId: string;
+  weekNumber: number;
   weekStart: string;
   weekEnd: string;
   actualPostCount: number;
-  actualEngagement: number | null;
+  actualViews: number | null;
+  actualLikes: number | null;
+  actualComments: number | null;
+  actualShares: number | null;
+  actualEngagement: number;
+  postTargetMet: boolean | null;
+  engagementTargetMet: boolean | null;
   targetMet: boolean;
   paymentId: string | null;
   evaluatedByUserId: string | null;
   createdAt: string;
+}
+
+export type PostingAgreementWeekStatus = "IN_PROGRESS" | "PENDING_EVALUATION" | "EVALUATED";
+
+/** GET .../posting-agreements/:id/weeks — every week from the agreement's startDate to now. */
+export interface PostingAgreementWeek {
+  weekNumber: number;
+  weekStart: string;
+  weekEnd: string;
+  status: PostingAgreementWeekStatus;
+  evaluation: PostingAgreementEvaluation | null;
 }
 
 export interface Influencer2MetricHistoryPoint {

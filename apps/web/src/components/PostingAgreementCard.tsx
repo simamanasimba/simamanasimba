@@ -2,18 +2,22 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Pencil, Receipt, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Pencil, Receipt, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { PostingAgreementModal } from "@/components/PostingAgreementModal";
-import type { PostingAgreement, PostingAgreementEngagementMetric, PostingAgreementEvaluation } from "@/lib/types";
+import { WeekPostsModal } from "@/components/WeekPostsModal";
+import type { PostingAgreement, PostingAgreementEngagementMetric, PostingAgreementWeek } from "@/lib/types";
 
-function mostRecentMonday(): string {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const diff = (day + 6) % 7; // days since Monday
-  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff));
-  return monday.toISOString().slice(0, 10);
+/** A small ✓/✗/— pill for one of the two possible per-week checks — "—" when that check isn't
+ * part of this agreement at all (postTargetMet/engagementTargetMet are null in that case). */
+function CheckPill({ met, label }: { met: boolean | null; label: string }) {
+  if (met == null) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${met ? "text-success" : "text-muted"}`}>
+      {met ? <CheckCircle2 size={13} /> : <XCircle size={13} />} {label}
+    </span>
+  );
 }
 
 export function PostingAgreementCard({
@@ -30,8 +34,8 @@ export function PostingAgreementCard({
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [weekStart, setWeekStart] = useState(mostRecentMonday());
-  const [busy, setBusy] = useState(false);
+  const [viewingWeek, setViewingWeek] = useState<PostingAgreementWeek | null>(null);
+  const [busyWeek, setBusyWeek] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const beneficiaryQuery = mediaHostId ? `mediaHostId=${mediaHostId}` : `influencerId=${influencerId}`;
@@ -42,9 +46,9 @@ export function PostingAgreementCard({
   });
   const agreement = agreements?.[0];
 
-  const { data: evaluations, refetch: refetchEvaluations } = useQuery({
-    queryKey: ["posting-agreement-evaluations", organizationId, agreement?.id],
-    queryFn: () => api.get<PostingAgreementEvaluation[]>(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement!.id}/evaluations`),
+  const { data: weeks, refetch: refetchWeeks } = useQuery({
+    queryKey: ["posting-agreement-weeks", organizationId, agreement?.id],
+    queryFn: () => api.get<PostingAgreementWeek[]>(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement!.id}/weeks`),
     enabled: Boolean(agreement),
   });
 
@@ -56,39 +60,61 @@ export function PostingAgreementCard({
     TOTAL_ENGAGEMENT: t("metricTotalEngagement"),
   };
 
-  async function evaluateWeek() {
+  async function evaluateWeek(weekNumber: number) {
     if (!agreement) return;
-    setBusy(true);
+    setBusyWeek(weekNumber);
     setError(null);
     try {
-      await api.post(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement.id}/evaluate`, { weekStart });
-      await refetchEvaluations();
+      await api.post(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement.id}/weeks/${weekNumber}/evaluate`, {});
+      await refetchWeeks();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("failedEvaluateWeek"));
     } finally {
-      setBusy(false);
+      setBusyWeek(null);
     }
   }
 
-  async function createTicket(evaluationId: string) {
-    setBusy(true);
+  async function createTicket(evaluationId: string, weekNumber: number) {
+    setBusyWeek(weekNumber);
     setError(null);
     try {
       await api.post(`/api/v1/organizations/${organizationId}/posting-agreements/evaluations/${evaluationId}/create-ticket`, {});
-      await refetchEvaluations();
+      await refetchWeeks();
       queryClient.invalidateQueries({ queryKey: ["payments"] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("failedCreateTicket"));
     } finally {
-      setBusy(false);
+      setBusyWeek(null);
     }
   }
 
   const targetLabel = agreement
-    ? agreement.targetType === "POST_COUNT"
-      ? `${agreement.postsPerWeek} ${t("postsPerWeekLabel").toLowerCase()}`
-      : `${agreement.engagementTarget?.toLocaleString()} ${metricLabel[agreement.engagementMetric!]}/wk`
+    ? [
+        agreement.postsPerWeek != null ? `${agreement.postsPerWeek} ${t("postsPerWeekLabel").toLowerCase()}` : null,
+        agreement.engagementMetric && agreement.engagementTarget != null
+          ? `${agreement.engagementTarget.toLocaleString()} ${metricLabel[agreement.engagementMetric]}/wk`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" + ")
     : null;
+
+  function actualEngagementForMetric(w: PostingAgreementWeek, metric: PostingAgreementEngagementMetric): number | null {
+    if (!w.evaluation) return null;
+    const e = w.evaluation;
+    switch (metric) {
+      case "VIEWS":
+        return e.actualViews;
+      case "LIKES":
+        return e.actualLikes;
+      case "COMMENTS":
+        return e.actualComments;
+      case "SHARES":
+        return e.actualShares;
+      case "TOTAL_ENGAGEMENT":
+        return e.actualEngagement;
+    }
+  }
 
   return (
     <div className="card space-y-4">
@@ -111,21 +137,16 @@ export function PostingAgreementCard({
           <div className="flex flex-wrap items-center gap-4 rounded-lg border border-line/60 bg-surface px-4 py-3 text-sm">
             <span className="font-medium text-ink">{targetLabel}</span>
             <span className="nums font-bold text-brand-700">{agreement.weeklyAmount.toLocaleString()} {agreement.currency}/wk</span>
+            <span className="text-xs text-muted">{t("agreementStartDateLabel")}: {agreement.startDate.slice(0, 10)}</span>
             <span className={`inline-flex items-center gap-1 text-xs font-medium ${agreement.isActive ? "text-success" : "text-muted"}`}>
               {agreement.isActive ? t("agreementActiveLabel") : t("agreementInactiveLabel")}
             </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-xs font-medium text-muted">{t("weekOfLabel")}</label>
-            <input type="date" className="input !w-auto !py-1.5 text-sm" value={weekStart} onChange={(e) => setWeekStart(e.target.value)} />
-            <button className="btn-primary text-sm" disabled={busy} onClick={evaluateWeek}>{t("evaluateThisWeekCta")}</button>
           </div>
           {error && <p className="text-sm text-brand">{error}</p>}
 
           <div>
             <h4 className="mb-2 text-sm font-semibold text-ink">{t("weeklyEvaluationsTitle")}</h4>
-            {(!evaluations || evaluations.length === 0) ? (
+            {(!weeks || weeks.length === 0) ? (
               <p className="text-sm text-muted">{t("noEvaluationsYet")}</p>
             ) : (
               <div className="overflow-x-auto">
@@ -133,31 +154,72 @@ export function PostingAgreementCard({
                   <thead>
                     <tr className="border-b border-line text-left text-xs text-muted">
                       <th className="py-1.5 pr-3">{t("weekOfLabel")}</th>
-                      <th className="py-1.5 pr-3">{agreement.targetType === "POST_COUNT" ? t("actualPostsLabel") : t("actualEngagementLabel")}</th>
+                      {agreement.postsPerWeek != null && <th className="py-1.5 pr-3">{t("actualPostsLabel")}</th>}
+                      {agreement.engagementMetric && <th className="py-1.5 pr-3">{metricLabel[agreement.engagementMetric]}</th>}
                       <th className="py-1.5 pr-3">{t("targetMetLabel")}</th>
                       <th className="py-1.5 pr-3" />
                     </tr>
                   </thead>
                   <tbody>
-                    {evaluations.map((ev) => (
-                      <tr key={ev.id} className="border-b border-line/60">
-                        <td className="py-1.5 pr-3 nums">{ev.weekStart.slice(0, 10)}</td>
-                        <td className="py-1.5 pr-3 nums">
-                          {agreement.targetType === "POST_COUNT" ? ev.actualPostCount : (ev.actualEngagement?.toLocaleString() ?? "—")}
-                        </td>
+                    {weeks.map((w) => (
+                      <tr key={w.weekNumber} className="border-b border-line/60">
                         <td className="py-1.5 pr-3">
-                          {ev.targetMet ? (
-                            <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 size={14} /> {t("targetMetLabel")}</span>
+                          <span className="nums font-medium text-ink">{t("weekLabel")} {w.weekNumber}</span>
+                          <span className="ml-1 text-xs text-muted">({w.weekStart.slice(0, 10)} – {w.weekEnd.slice(0, 10)})</span>
+                        </td>
+                        {agreement.postsPerWeek != null && (
+                          <td className="py-1.5 pr-3">
+                            {w.evaluation ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="nums">{w.evaluation.actualPostCount}</span>
+                                <CheckPill met={w.evaluation.postTargetMet} label="" />
+                              </div>
+                            ) : "—"}
+                          </td>
+                        )}
+                        {agreement.engagementMetric && (
+                          <td className="py-1.5 pr-3">
+                            {w.evaluation ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="nums">{(actualEngagementForMetric(w, agreement.engagementMetric)?.toLocaleString()) ?? "—"}</span>
+                                <CheckPill met={w.evaluation.engagementTargetMet} label="" />
+                              </div>
+                            ) : "—"}
+                          </td>
+                        )}
+                        <td className="py-1.5 pr-3">
+                          {w.status === "IN_PROGRESS" ? (
+                            <span className="text-xs text-muted">{t("weekInProgressLabel")}</span>
+                          ) : w.evaluation ? (
+                            w.evaluation.targetMet ? (
+                              <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 size={14} /> {t("targetMetLabel")}</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-muted"><XCircle size={14} /> {t("targetMissedLabel")}</span>
+                            )
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-muted"><XCircle size={14} /> {t("targetMissedLabel")}</span>
+                            <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
                           )}
                         </td>
                         <td className="py-1.5 pr-3 text-right">
-                          {ev.paymentId ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("ticketCreatedLabel")}</span>
-                          ) : ev.targetMet && canManage ? (
-                            <button className="btn-secondary !py-1 text-xs" disabled={busy} onClick={() => createTicket(ev.id)}>{t("createTicketCta")}</button>
-                          ) : null}
+                          <div className="flex items-center justify-end gap-2">
+                            {w.evaluation && (
+                              <button title={t("viewPostsCta")} className="text-muted hover:text-brand" onClick={() => setViewingWeek(w)}>
+                                <Eye size={14} />
+                              </button>
+                            )}
+                            {w.status === "PENDING_EVALUATION" && canManage && (
+                              <button className="btn-secondary !py-1 text-xs" disabled={busyWeek === w.weekNumber} onClick={() => evaluateWeek(w.weekNumber)}>
+                                {t("evaluateThisWeekCta")}
+                              </button>
+                            )}
+                            {w.evaluation?.paymentId ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("ticketCreatedLabel")}</span>
+                            ) : w.evaluation?.targetMet && canManage ? (
+                              <button className="btn-secondary !py-1 text-xs" disabled={busyWeek === w.weekNumber} onClick={() => createTicket(w.evaluation!.id, w.weekNumber)}>
+                                {t("createTicketCta")}
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -177,6 +239,18 @@ export function PostingAgreementCard({
           agreement={agreement}
           onClose={() => setShowModal(false)}
           onDone={() => { setShowModal(false); refetchAgreements(); }}
+        />
+      )}
+
+      {viewingWeek && (
+        <WeekPostsModal
+          organizationId={organizationId}
+          mediaHostId={mediaHostId}
+          influencerId={influencerId}
+          weekNumber={viewingWeek.weekNumber}
+          weekStart={viewingWeek.weekStart}
+          weekEnd={viewingWeek.weekEnd}
+          onClose={() => setViewingWeek(null)}
         />
       )}
     </div>

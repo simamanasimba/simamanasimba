@@ -1895,11 +1895,6 @@ model Influencer2MetricValue {
   @@map("influencer2_metric_values")
 }
 
-enum PostingAgreementTargetType {
-  POST_COUNT
-  ENGAGEMENT
-}
-
 enum PostingAgreementEngagementMetric {
   VIEWS
   LIKES
@@ -1908,19 +1903,20 @@ enum PostingAgreementEngagementMetric {
   TOTAL_ENGAGEMENT
 }
 
-/// A media host/influencer's standing weekly deal: either a target number of
-/// posts per week, or an engagement target on a chosen metric (views/likes/...).
-/// Belongs to EITHER a media host OR an influencer, mirroring Payment's own
-/// mediaHostId/influencerId pair. Meeting the target for a given week is
-/// recorded as a PostingAgreementEvaluation, which an admin can turn into a
-/// payment ticket — evaluation and ticket creation are always explicit,
-/// reviewable actions, never an unattended job that moves money on its own.
+/// A media host/influencer's standing weekly deal, anchored to its own `startDate` — each
+/// agreement runs its own independent 7-day cycle from the day it started, since two hosts can
+/// each begin posting on different days (week 1 is startDate..startDate+6, week 2 is
+/// startDate+7..startDate+13, and so on — see PostingAgreementsService.computeWeeks). A target can
+/// be a post count, an engagement metric, or both at once — a week only "meets requirements"
+/// (PostingAgreementEvaluation.targetMet) when every target that's actually configured is met, not
+/// just one of them. Belongs to EITHER a media host OR an influencer, mirroring Payment's own
+/// mediaHostId/influencerId pair.
 model PostingAgreement {
   id               String                             @id @default(uuid())
   organizationId   String                             @map("organization_id")
   mediaHostId      String?                            @map("media_host_id")
   influencerId     String?                            @map("influencer_id")
-  targetType       PostingAgreementTargetType          @map("target_type")
+  startDate        DateTime                           @map("start_date") @db.Date
   postsPerWeek     Int?                               @map("posts_per_week")
   engagementMetric PostingAgreementEngagementMetric?  @map("engagement_metric")
   engagementTarget Int?                               @map("engagement_target")
@@ -1943,27 +1939,38 @@ model PostingAgreement {
   @@map("posting_agreements")
 }
 
-/// One week's actual posts/engagement measured against its agreement's target,
-/// computed on demand (not a background job) from the same Influencer2Campaign
-/// data the Media/Influencer dashboards already read. `paymentId` is only set
-/// once an admin explicitly turns a met-target week into a real Payment
-/// (reusing Payment's existing PENDING -> approve -> paid workflow).
+/// One (agreement-relative) week's actual posts/engagement measured against its agreement's
+/// target(s), computed on demand from the same Influencer2Campaign aggregation the Media/
+/// Influencer dashboards already read — never a background job. `weekNumber` is 1-based and
+/// derived purely from the agreement's own startDate (see computeWeeks), so every agreement tracks
+/// its own calendar regardless of when others started. postTargetMet/engagementTargetMet are each
+/// null when that target isn't configured on the agreement at all; targetMet ("imefikia vigezo") is
+/// true only when every configured target passed. `paymentId` is only set once an admin explicitly
+/// turns a met-target week into a real Payment (reusing Payment's existing PENDING -> approve ->
+/// paid workflow) — evaluation and ticket creation are always explicit, reviewable actions.
 model PostingAgreementEvaluation {
-  id                String   @id @default(uuid())
-  agreementId       String   @map("agreement_id")
-  weekStart         DateTime @map("week_start") @db.Date
-  weekEnd           DateTime @map("week_end") @db.Date
-  actualPostCount   Int      @map("actual_post_count")
-  actualEngagement  Int?     @map("actual_engagement")
-  targetMet         Boolean  @map("target_met")
-  paymentId         String?  @unique @map("payment_id")
-  evaluatedByUserId String?  @map("evaluated_by_user_id")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                  String   @id @default(uuid())
+  agreementId         String   @map("agreement_id")
+  weekNumber          Int      @map("week_number")
+  weekStart           DateTime @map("week_start") @db.Date
+  weekEnd             DateTime @map("week_end") @db.Date
+  actualPostCount     Int      @map("actual_post_count")
+  actualViews         Int?     @map("actual_views")
+  actualLikes         Int?     @map("actual_likes")
+  actualComments      Int?     @map("actual_comments")
+  actualShares        Int?     @map("actual_shares")
+  actualEngagement    Int      @map("actual_engagement")
+  postTargetMet       Boolean? @map("post_target_met")
+  engagementTargetMet Boolean? @map("engagement_target_met")
+  targetMet           Boolean  @map("target_met")
+  paymentId           String?  @unique @map("payment_id")
+  evaluatedByUserId   String?  @map("evaluated_by_user_id")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   agreement PostingAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
   payment   Payment?         @relation(fields: [paymentId], references: [id])
 
-  @@unique([agreementId, weekStart])
+  @@unique([agreementId, weekNumber])
   @@index([agreementId])
   @@map("posting_agreement_evaluations")
 }

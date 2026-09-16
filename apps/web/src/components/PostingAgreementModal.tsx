@@ -4,10 +4,12 @@ import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useLang } from "@/lib/i18n";
-import type { PostingAgreement, PostingAgreementEngagementMetric, PostingAgreementTargetType } from "@/lib/types";
+import type { PostingAgreement, PostingAgreementEngagementMetric } from "@/lib/types";
 
 const ENGAGEMENT_METRICS: PostingAgreementEngagementMetric[] = ["VIEWS", "LIKES", "COMMENTS", "SHARES", "TOTAL_ENGAGEMENT"];
 
+/** A week can require a posts target, an engagement target, or both at once — each has its own
+ * on/off checkbox rather than an either/or select, since the two aren't mutually exclusive. */
 export function PostingAgreementModal({
   organizationId,
   mediaHostId,
@@ -25,8 +27,10 @@ export function PostingAgreementModal({
 }) {
   const { t } = useLang();
   const isEdit = Boolean(agreement);
+  const [wantsPosts, setWantsPosts] = useState(agreement ? agreement.postsPerWeek != null : true);
+  const [wantsEngagement, setWantsEngagement] = useState(agreement ? agreement.engagementMetric != null : false);
   const [form, setForm] = useState({
-    targetType: (agreement?.targetType ?? "POST_COUNT") as PostingAgreementTargetType,
+    startDate: agreement?.startDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
     postsPerWeek: agreement?.postsPerWeek != null ? String(agreement.postsPerWeek) : "",
     engagementMetric: (agreement?.engagementMetric ?? "VIEWS") as PostingAgreementEngagementMetric,
     engagementTarget: agreement?.engagementTarget != null ? String(agreement.engagementTarget) : "",
@@ -51,16 +55,20 @@ export function PostingAgreementModal({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!wantsPosts && !wantsEngagement) {
+      setError(t("agreementNeedsTargetError"));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const body = {
         mediaHostId,
         influencerId,
-        targetType: form.targetType,
-        postsPerWeek: form.targetType === "POST_COUNT" ? Number(form.postsPerWeek) : undefined,
-        engagementMetric: form.targetType === "ENGAGEMENT" ? form.engagementMetric : undefined,
-        engagementTarget: form.targetType === "ENGAGEMENT" ? Number(form.engagementTarget) : undefined,
+        startDate: form.startDate,
+        postsPerWeek: wantsPosts ? Number(form.postsPerWeek) : null,
+        engagementMetric: wantsEngagement ? form.engagementMetric : null,
+        engagementTarget: wantsEngagement ? Number(form.engagementTarget) : null,
         weeklyAmount: Number(form.weeklyAmount),
         currency: form.currency || undefined,
         notes: form.notes || undefined,
@@ -91,34 +99,46 @@ export function PostingAgreementModal({
     >
       <form id="posting-agreement-form" onSubmit={onSubmit} className="space-y-4">
         <div>
-          <label className="label">{t("targetTypeLabel")}</label>
-          <select className="input" value={form.targetType} onChange={(e) => set("targetType", e.target.value as PostingAgreementTargetType)}>
-            <option value="POST_COUNT">{t("targetTypePostCount")}</option>
-            <option value="ENGAGEMENT">{t("targetTypeEngagement")}</option>
-          </select>
+          <label className="label">{t("agreementStartDateLabel")}</label>
+          <input required type="date" className="input" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} />
+          <p className="mt-1 text-xs text-muted">{t("agreementStartDateHelp")}</p>
         </div>
 
-        {form.targetType === "POST_COUNT" ? (
-          <div>
-            <label className="label">{t("postsPerWeekLabel")}</label>
-            <input required type="number" min="1" className="input" value={form.postsPerWeek} onChange={(e) => set("postsPerWeek", e.target.value)} />
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">{t("agreementEngagementMetricLabel")}</label>
-              <select className="input" value={form.engagementMetric} onChange={(e) => set("engagementMetric", e.target.value as PostingAgreementEngagementMetric)}>
-                {ENGAGEMENT_METRICS.map((m) => (
-                  <option key={m} value={m}>{metricLabel[m]}</option>
-                ))}
-              </select>
+        <div className="rounded-xl border border-line/60 p-3.5">
+          <label className="flex items-center gap-2 text-sm font-medium text-ink">
+            <input type="checkbox" checked={wantsPosts} onChange={(e) => setWantsPosts(e.target.checked)} />
+            {t("targetTypePostCount")}
+          </label>
+          {wantsPosts && (
+            <div className="mt-2">
+              <label className="label">{t("postsPerWeekLabel")}</label>
+              <input required type="number" min="1" className="input" value={form.postsPerWeek} onChange={(e) => set("postsPerWeek", e.target.value)} />
             </div>
-            <div>
-              <label className="label">{t("engagementTargetLabel")}</label>
-              <input required type="number" min="1" className="input" value={form.engagementTarget} onChange={(e) => set("engagementTarget", e.target.value)} />
+          )}
+        </div>
+
+        <div className="rounded-xl border border-line/60 p-3.5">
+          <label className="flex items-center gap-2 text-sm font-medium text-ink">
+            <input type="checkbox" checked={wantsEngagement} onChange={(e) => setWantsEngagement(e.target.checked)} />
+            {t("targetTypeEngagement")}
+          </label>
+          {wantsEngagement && (
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">{t("agreementEngagementMetricLabel")}</label>
+                <select className="input" value={form.engagementMetric} onChange={(e) => set("engagementMetric", e.target.value as PostingAgreementEngagementMetric)}>
+                  {ENGAGEMENT_METRICS.map((m) => (
+                    <option key={m} value={m}>{metricLabel[m]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">{t("engagementTargetLabel")}</label>
+                <input required type="number" min="1" className="input" value={form.engagementTarget} onChange={(e) => set("engagementTarget", e.target.value)} />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
