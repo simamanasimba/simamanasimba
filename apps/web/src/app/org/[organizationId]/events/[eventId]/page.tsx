@@ -50,6 +50,9 @@ function EditEventModal({
     location: event.location ?? "",
     startDatetime: toDatetimeLocalValue(event.startDatetime),
     endDatetime: toDatetimeLocalValue(event.endDatetime),
+    recommendation: event.recommendation ?? "",
+    meetingNote: event.meetingNote ?? "",
+    budget: event.budget != null ? String(event.budget) : "",
   });
   const [allowWalkIn, setAllowWalkIn] = useState(event.allowWalkIns && event.allowNewMemberReg);
   const [limitOneResponse, setLimitOneResponse] = useState(event.limitOneResponsePerPerson);
@@ -65,6 +68,9 @@ function EditEventModal({
         ...form,
         startDatetime: new Date(form.startDatetime).toISOString(),
         endDatetime: new Date(form.endDatetime).toISOString(),
+        recommendation: form.recommendation || undefined,
+        meetingNote: form.meetingNote || undefined,
+        budget: form.budget ? Number(form.budget) : undefined,
         allowWalkIns: allowWalkIn,
         allowNewMemberReg: allowWalkIn,
         limitOneResponsePerPerson: limitOneResponse,
@@ -118,6 +124,18 @@ function EditEventModal({
             </span>
           </label>
         )}
+        <div>
+          <label className="label">{t("meetingBudgetLabel")}</label>
+          <input type="number" min="0" step="0.01" className="input" value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">{t("meetingRecommendationLabel")}</label>
+          <textarea className="input" rows={2} value={form.recommendation} onChange={(e) => setForm((f) => ({ ...f, recommendation: e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">{t("meetingNoteLabel")}</label>
+          <textarea className="input" rows={2} value={form.meetingNote} onChange={(e) => setForm((f) => ({ ...f, meetingNote: e.target.value }))} />
+        </div>
         {error && <p className="text-sm text-brand">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>
@@ -345,6 +363,29 @@ export default function EventDetailPage() {
         <StatCard label={t("statAttendanceRate")} value={`${((live?.attendanceRate ?? stats.attendanceRate) * 100).toFixed(1)}%`} />
         <StatCard label={t("statWalkIns")} value={live?.walkIns ?? stats.walkIns} />
       </div>
+
+      {(event.budget != null || event.recommendation || event.meetingNote) && (
+        <div className="card grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {event.budget != null && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingBudgetLabel")}</p>
+              <p className="nums mt-1 text-lg font-bold text-ink">{event.budget.toLocaleString()}</p>
+            </div>
+          )}
+          {event.recommendation && (
+            <div className="sm:col-span-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingRecommendationLabel")}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{event.recommendation}</p>
+            </div>
+          )}
+          {event.meetingNote && (
+            <div className="sm:col-span-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingNoteLabel")}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{event.meetingNote}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card">

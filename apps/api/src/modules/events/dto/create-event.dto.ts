@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
 
 export class CreateEventDto {
   @IsString()
@@ -58,6 +58,19 @@ export class CreateEventDto {
   @IsOptional()
   @IsBoolean()
   limitOneResponsePerPerson?: boolean;
+
+  @IsOptional()
+  @IsString()
+  recommendation?: string;
+
+  @IsOptional()
+  @IsString()
+  meetingNote?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  budget?: number;
 
   @IsOptional()
   @IsArray()

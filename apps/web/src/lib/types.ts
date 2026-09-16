@@ -71,6 +71,9 @@ export interface EventRecord {
   allowNewMemberReg: boolean;
   autoCheckInNewMembers: boolean;
   limitOneResponsePerPerson: boolean;
+  recommendation?: string | null;
+  meetingNote?: string | null;
+  budget?: number | null;
   createdBy?: { firstName: string; lastName: string } | null;
   attendanceCount?: number;
 }

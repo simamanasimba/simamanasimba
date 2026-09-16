@@ -372,6 +372,9 @@ model Event {
   // second Member/EventRegistration — a configurable "one response per person" cap
   // for the public walk-in form. Off by default (existing behavior unchanged).
   limitOneResponsePerPerson Boolean @default(false) @map("limit_one_response_per_person")
+  recommendation        String?  @db.Text
+  meetingNote           String?  @db.Text @map("meeting_note")
+  budget                Decimal? @db.Decimal(14, 2)
   monitoringKeywords    Json     @default("[]") @map("monitoring_keywords")
   customFields          Json     @default("{}") @map("custom_fields")
   createdByUserId       String   @map("created_by_user_id")

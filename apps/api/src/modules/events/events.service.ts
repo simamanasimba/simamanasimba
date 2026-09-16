@@ -9,6 +9,13 @@ import { renderQrCardPdf } from "../attendance/qr-card-pdf.util";
 import type { CreateEventDto } from "./dto/create-event.dto";
 import type { UpdateEventDto } from "./dto/update-event.dto";
 
+/** budget is a Prisma Decimal — same documented conversion applied everywhere else in this
+ * codebase (Influencer2Campaign.rateTzs/totalTzs), otherwise it'd serialize as a JSON string
+ * and silently break frontend arithmetic. */
+function toNumericEvent<T extends { budget: Prisma.Decimal | null }>(event: T) {
+  return { ...event, budget: event.budget != null ? Number(event.budget) : null };
+}
+
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -55,6 +62,9 @@ export class EventsService {
         requireApproval: dto.requireApproval,
         requirePhoneVerification: dto.requirePhoneVerification,
         autoCheckInNewMembers: dto.autoCheckInNewMembers,
+        recommendation: dto.recommendation,
+        meetingNote: dto.meetingNote,
+        budget: dto.budget,
         monitoringKeywords: dto.monitoringKeywords ?? [],
         status: "DRAFT",
       },
@@ -66,7 +76,7 @@ export class EventsService {
     // ever returned once (only its hash is persisted), so the frontend must
     // capture it from this response.
     const qr = attendanceEnabled ? await this.generateQr(organizationId, event.id) : null;
-    return { ...event, qr };
+    return { ...toNumericEvent(event), qr };
   }
 
   async list(organizationId: string, filters: { status?: EventStatus; eventType?: string; from?: string; to?: string } = {}) {
@@ -85,7 +95,7 @@ export class EventsService {
         _count: { select: { attendanceRecords: true } },
       },
     });
-    return events.map((e) => ({ ...e, attendanceCount: e._count.attendanceRecords }));
+    return events.map((e) => ({ ...toNumericEvent(e), attendanceCount: e._count.attendanceRecords }));
   }
 
   async listEventTypes(organizationId: string): Promise<string[]> {
@@ -108,7 +118,7 @@ export class EventsService {
     ]);
 
     return {
-      event,
+      event: toNumericEvent(event),
       stats: {
         registered: registrationCount,
         checkedIn: attendanceCount,
@@ -126,7 +136,7 @@ export class EventsService {
     if (effectiveEnd <= effectiveStart) {
       throw new BadRequestException("End time must be after the start time");
     }
-    return this.prisma.event.update({
+    const updated = await this.prisma.event.update({
       where: { id: eventId },
       data: {
         ...dto,
@@ -134,6 +144,7 @@ export class EventsService {
         endDatetime: dto.endDatetime ? new Date(dto.endDatetime) : undefined,
       },
     });
+    return toNumericEvent(updated);
   }
 
   async registerMember(organizationId: string, eventId: string, memberId: string, source: "ADMIN" | "SELF_SERVICE" | "WALK_IN" | "IMPORT" | "API" = "ADMIN") {
