@@ -485,6 +485,7 @@ export interface FinanceDashboard {
   spendByMediaHost: Array<{ mediaHostId: string | null; name: string; amount: number }>;
   spendByInfluencer: Array<{ influencerId: string | null; name: string; amount: number }>;
   spendByMember: Array<{ memberId: string | null; name: string; amount: number }>;
+  memberSpendBreakdown: { leaderPayments: number; meetingCosts: number; mediaEngagementCosts: number };
 }
 
 export type ExpenseCategory = "OPERATIONAL" | "ADMINISTRATIVE";

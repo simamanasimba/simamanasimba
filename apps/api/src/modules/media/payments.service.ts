@@ -222,7 +222,7 @@ export class PaymentsService {
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [today, week, month, total, pendingCount, paymentCount, byCampaign, byMediaHost, byInfluencer, byMember] = await Promise.all([
+    const [today, week, month, total, pendingCount, paymentCount, byCampaign, byMediaHost, byInfluencer, byMember, memberPayments, mediaHostPayments, influencerPayments, meetingBudgets] = await Promise.all([
       this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfToday } }, _sum: { amount: true } }),
       this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfWeek } }, _sum: { amount: true } }),
       this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfMonth } }, _sum: { amount: true } }),
@@ -233,6 +233,12 @@ export class PaymentsService {
       this.prisma.payment.groupBy({ by: ["mediaHostId"], where: { organizationId, status: "PAID", mediaHostId: { not: null } }, _sum: { amount: true } }),
       this.prisma.payment.groupBy({ by: ["influencerId"], where: { organizationId, status: "PAID", influencerId: { not: null } }, _sum: { amount: true } }),
       this.prisma.payment.groupBy({ by: ["memberId"], where: { organizationId, status: "PAID", memberId: { not: null } }, _sum: { amount: true } }),
+      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", beneficiaryType: "MEMBER" }, _sum: { amount: true } }),
+      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", beneficiaryType: "MEDIA_HOST" }, _sum: { amount: true } }),
+      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", beneficiaryType: "INFLUENCER" }, _sum: { amount: true } }),
+      // Meeting budgets are planned/allocated costs, not payments — there's no separate "meeting
+      // expense" record, so the budget figure itself is the closest thing to a cost for a meeting.
+      this.prisma.event.aggregate({ where: { organizationId, budget: { not: null } }, _sum: { budget: true } }),
     ]);
 
     const [campaigns, mediaHosts, influencers, members] = await Promise.all([
@@ -257,6 +263,14 @@ export class PaymentsService {
       spendByMediaHost: byMediaHost.map((r) => ({ mediaHostId: r.mediaHostId, name: hostName.get(r.mediaHostId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
       spendByInfluencer: byInfluencer.map((r) => ({ influencerId: r.influencerId, name: influencerName.get(r.influencerId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
       spendByMember: byMember.map((r) => ({ memberId: r.memberId, name: memberName.get(r.memberId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
+      // "Member spend" — the combined cost of engaging with members/leaders and running the
+      // media/influencer side, broken into these three lines so a click-through can show what
+      // actually made up the total instead of just one number.
+      memberSpendBreakdown: {
+        leaderPayments: Number(memberPayments._sum.amount ?? 0),
+        meetingCosts: Number(meetingBudgets._sum.budget ?? 0),
+        mediaEngagementCosts: Number(mediaHostPayments._sum.amount ?? 0) + Number(influencerPayments._sum.amount ?? 0),
+      },
     };
   }
 }

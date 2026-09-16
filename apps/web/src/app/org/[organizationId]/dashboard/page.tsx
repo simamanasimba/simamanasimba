@@ -182,18 +182,21 @@ export default function DashboardPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-extrabold text-ink">{t("navDashboard")}</h1>
-        <div className="flex flex-wrap items-end gap-3">
-          {(view === "members" || view === "media" || view === "influencers") && <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />}
-          <div>
-            <label className="label">{t("dashboardViewLabel")}</label>
-            <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>
-              <option value="members">{t("navWanachamaEngagement")}</option>
-              <option value="media">{t("navMediaEngagementView")}</option>
-              <option value="influencers">{t("navInfluencersView")}</option>
-            </select>
-          </div>
+        <div>
+          <label className="label">{t("dashboardViewLabel")}</label>
+          <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>
+            <option value="members">{t("navWanachamaEngagement")}</option>
+            <option value="media">{t("navMediaEngagementView")}</option>
+            <option value="influencers">{t("navInfluencersView")}</option>
+          </select>
         </div>
       </div>
+
+      {/* Own row, below the title/selector — its width changes on its own (custom date inputs,
+          the saved-views list appearing/disappearing) used to sit in the same wrapping flex row as
+          the view selector, so those width changes shoved the selector around mid-interaction.
+          Keeping it on a separate row means neither can ever move the other. */}
+      <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
       {view === "media" && <MediaEngagementOverview organizationId={organizationId} range={dateRangeFilter.range} />}
       {view === "influencers" && <CollectiveCampaignSummary organizationId={organizationId} scope="ALL_INFLUENCERS" range={dateRangeFilter.range} />}
