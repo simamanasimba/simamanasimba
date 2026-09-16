@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { Download, Image as ImageIcon, FileText, RefreshCw, Search, CheckCircle2, Copy, Check, Trash2 } from "lucide-react";
+import { Download, Image as ImageIcon, FileText, RefreshCw, Search, CheckCircle2, Copy, Check, Trash2, Pencil, Plus } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { EventRecord, EventWithStats, LiveStats } from "@/lib/types";
 import { StatCard } from "@/components/StatCard";
@@ -50,9 +50,6 @@ function EditEventModal({
     location: event.location ?? "",
     startDatetime: toDatetimeLocalValue(event.startDatetime),
     endDatetime: toDatetimeLocalValue(event.endDatetime),
-    recommendation: event.recommendation ?? "",
-    meetingNote: event.meetingNote ?? "",
-    budget: event.budget != null ? String(event.budget) : "",
   });
   const [allowWalkIn, setAllowWalkIn] = useState(event.allowWalkIns && event.allowNewMemberReg);
   const [limitOneResponse, setLimitOneResponse] = useState(event.limitOneResponsePerPerson);
@@ -68,9 +65,6 @@ function EditEventModal({
         ...form,
         startDatetime: new Date(form.startDatetime).toISOString(),
         endDatetime: new Date(form.endDatetime).toISOString(),
-        recommendation: form.recommendation || undefined,
-        meetingNote: form.meetingNote || undefined,
-        budget: form.budget ? Number(form.budget) : undefined,
         allowWalkIns: allowWalkIn,
         allowNewMemberReg: allowWalkIn,
         limitOneResponsePerPerson: limitOneResponse,
@@ -124,17 +118,71 @@ function EditEventModal({
             </span>
           </label>
         )}
+        {error && <p className="text-sm text-brand">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>
+          <button type="submit" disabled={submitting} className="btn-primary">{submitting ? t("saving") : t("save")}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Recommendation/meeting note/budget are entered separately from the general Edit Meeting form —
+ * they describe how the meeting actually went, so they only make sense to fill in afterward, not
+ * bundled with the name/time/location fields you'd set up front. */
+function KeynotesModal({
+  organizationId,
+  event,
+  onClose,
+  onSaved,
+}: {
+  organizationId: string;
+  event: EventRecord;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useLang();
+  const [form, setForm] = useState({
+    recommendation: event.recommendation ?? "",
+    meetingNote: event.meetingNote ?? "",
+    budget: event.budget != null ? String(event.budget) : "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.patch(`/api/v1/organizations/${organizationId}/events/${event.id}`, {
+        recommendation: form.recommendation || undefined,
+        meetingNote: form.meetingNote || undefined,
+        budget: form.budget ? Number(form.budget) : undefined,
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("failedUpdateEvent"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={t("meetingKeynotesTitle")} onClose={onClose}>
+      <form onSubmit={onSubmit} className="space-y-3">
         <div>
           <label className="label">{t("meetingBudgetLabel")}</label>
           <input type="number" min="0" step="0.01" className="input" value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
         </div>
         <div>
           <label className="label">{t("meetingRecommendationLabel")}</label>
-          <textarea className="input" rows={2} value={form.recommendation} onChange={(e) => setForm((f) => ({ ...f, recommendation: e.target.value }))} />
+          <textarea className="input" rows={3} value={form.recommendation} onChange={(e) => setForm((f) => ({ ...f, recommendation: e.target.value }))} />
         </div>
         <div>
           <label className="label">{t("meetingNoteLabel")}</label>
-          <textarea className="input" rows={2} value={form.meetingNote} onChange={(e) => setForm((f) => ({ ...f, meetingNote: e.target.value }))} />
+          <textarea className="input" rows={3} value={form.meetingNote} onChange={(e) => setForm((f) => ({ ...f, meetingNote: e.target.value }))} />
         </div>
         {error && <p className="text-sm text-brand">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
@@ -177,6 +225,7 @@ export default function EventDetailPage() {
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [editingKeynotes, setEditingKeynotes] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
 
   const { data: org } = useQuery({
@@ -364,27 +413,52 @@ export default function EventDetailPage() {
         <StatCard label={t("statWalkIns")} value={live?.walkIns ?? stats.walkIns} />
       </div>
 
-      {(event.budget != null || event.recommendation || event.meetingNote) && (
-        <div className="card grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {event.budget != null && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingBudgetLabel")}</p>
-              <p className="nums mt-1 text-lg font-bold text-ink">{event.budget.toLocaleString()}</p>
-            </div>
-          )}
-          {event.recommendation && (
-            <div className="sm:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingRecommendationLabel")}</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{event.recommendation}</p>
-            </div>
-          )}
-          {event.meetingNote && (
-            <div className="sm:col-span-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingNoteLabel")}</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{event.meetingNote}</p>
-            </div>
+      <div className="card">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{t("meetingKeynotesTitle")}</h2>
+          {event.budget != null || event.recommendation || event.meetingNote ? (
+            <button title={t("edit")} className="text-muted hover:text-brand" onClick={() => setEditingKeynotes(true)}><Pencil size={14} /></button>
+          ) : (
+            <button className="btn-secondary text-sm" onClick={() => setEditingKeynotes(true)}><Plus size={14} /> {t("addKeynotesCta")}</button>
           )}
         </div>
+        {event.budget == null && !event.recommendation && !event.meetingNote ? (
+          <p className="text-sm text-muted">{t("noKeynotesYet")}</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {event.budget != null && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingBudgetLabel")}</p>
+                <p className="nums mt-1 text-lg font-bold text-ink">{event.budget.toLocaleString()}</p>
+              </div>
+            )}
+            {event.recommendation && (
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingRecommendationLabel")}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{event.recommendation}</p>
+              </div>
+            )}
+            {event.meetingNote && (
+              <div className="sm:col-span-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t("meetingNoteLabel")}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{event.meetingNote}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {editingKeynotes && (
+        <KeynotesModal
+          organizationId={organizationId}
+          event={event}
+          onClose={() => setEditingKeynotes(false)}
+          onSaved={() => {
+            setEditingKeynotes(false);
+            queryClient.invalidateQueries({ queryKey: ["event", organizationId, eventId] });
+            showToast("success", t("eventUpdated"));
+          }}
+        />
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
