@@ -54,11 +54,20 @@ export default function Influencer2DetailPage() {
     refresh();
   }
 
+  /** Where "back"/delete should return to — the influencer or media host this post belongs to
+   * (never the standalone /influencer2 list, which has no nav entry and isn't where anyone
+   * actually came from; see backHref below for the same logic used before data has loaded). */
+  function beneficiaryHref(d: Influencer2CampaignDetail) {
+    if (d.influencer) return `/org/${organizationId}/influencers/${d.influencer.id}/campaigns`;
+    if (d.mediaHost) return `/org/${organizationId}/media-hosts/${d.mediaHost.id}/campaigns`;
+    return `/org/${organizationId}/influencer2`;
+  }
+
   async function onDeleteCampaign() {
     if (!data || !confirm(data.campaign.name)) return;
     try {
       await api.delete(`/api/v1/organizations/${organizationId}/influencer2/campaigns/${campaignId}`);
-      router.push(`/org/${organizationId}/influencer2`);
+      router.push(beneficiaryHref(data));
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Failed");
     }
@@ -71,7 +80,7 @@ export default function Influencer2DetailPage() {
   return (
     <RequireAccess area="influencer2">
       <div className="space-y-6">
-        <Link href={`/org/${organizationId}/influencer2`} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-brand">
+        <Link href={beneficiaryHref(data)} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-brand">
           <ArrowLeft size={15} /> {t("backToListCta")}
         </Link>
 

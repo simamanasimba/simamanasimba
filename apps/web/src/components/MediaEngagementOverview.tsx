@@ -181,7 +181,7 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide text-muted">
                       <th className="pb-1.5 font-semibold">{t("typeLabel")}</th>
-                      <th className="pb-1.5 text-right font-semibold">{t("totalCampaignsLabel")}</th>
+                      <th className="pb-1.5 text-right font-semibold">{t("totalPostsLabel")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line/60">
