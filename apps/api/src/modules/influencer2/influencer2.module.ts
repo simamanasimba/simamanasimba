@@ -18,5 +18,10 @@ import { AuditService } from "../../common/audit.service";
 @Module({
   controllers: [Influencer2PlatformsController, Influencer2CampaignsController],
   providers: [Influencer2PlatformsService, Influencer2CampaignsService, OrgMembershipGuard, AuditService],
+  // Exported so PostingAgreementsModule can reuse summary()'s weekly post/engagement
+  // aggregation instead of duplicating it — this is a new third module depending on
+  // Influencer2's service, not a MediaModule<->Influencer2Module link, so the isolation
+  // note above still holds.
+  exports: [Influencer2CampaignsService],
 })
 export class Influencer2Module {}

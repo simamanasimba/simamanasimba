@@ -56,6 +56,7 @@ model Organization {
   regionTargets          RegionTarget[]
   mediaOutlets           MediaOutlet[]
   dashboardSavedViews    DashboardSavedView[]
+  postingAgreements      PostingAgreement[]
 
   @@map("organizations")
 }
@@ -1163,6 +1164,7 @@ model MediaHost {
   payments       Payment[]
   engagements    MediaEngagement[]
   mediaOutlet    MediaOutlet?        @relation(fields: [mediaOutletId], references: [id])
+  postingAgreements PostingAgreement[]
 
   @@index([organizationId])
   @@map("media_hosts")
@@ -1240,6 +1242,7 @@ model Influencer {
   trackerEntries TrackerEntry[]
   payments       Payment[]
   engagements    MediaEngagement[]
+  postingAgreements PostingAgreement[]
 
   @@index([organizationId])
   @@map("influencers")
@@ -1594,6 +1597,7 @@ model Payment {
   influencer          Influencer?          @relation(fields: [influencerId], references: [id])
   mediaEngagement     MediaEngagement?     @relation(fields: [mediaEngagementId], references: [id])
   influencer2Campaign Influencer2Campaign? @relation(fields: [influencer2CampaignId], references: [id])
+  postingAgreementEvaluation PostingAgreementEvaluation?
 
   @@index([organizationId])
   @@index([campaignId])
@@ -1882,4 +1886,77 @@ model Influencer2MetricValue {
   @@index([campaignPlatformId, metricDefinitionId, collectedAt])
   @@index([campaignPlatformId, isLatest])
   @@map("influencer2_metric_values")
+}
+
+enum PostingAgreementTargetType {
+  POST_COUNT
+  ENGAGEMENT
+}
+
+enum PostingAgreementEngagementMetric {
+  VIEWS
+  LIKES
+  COMMENTS
+  SHARES
+  TOTAL_ENGAGEMENT
+}
+
+/// A media host/influencer's standing weekly deal: either a target number of
+/// posts per week, or an engagement target on a chosen metric (views/likes/...).
+/// Belongs to EITHER a media host OR an influencer, mirroring Payment's own
+/// mediaHostId/influencerId pair. Meeting the target for a given week is
+/// recorded as a PostingAgreementEvaluation, which an admin can turn into a
+/// payment ticket — evaluation and ticket creation are always explicit,
+/// reviewable actions, never an unattended job that moves money on its own.
+model PostingAgreement {
+  id               String                             @id @default(uuid())
+  organizationId   String                             @map("organization_id")
+  mediaHostId      String?                            @map("media_host_id")
+  influencerId     String?                            @map("influencer_id")
+  targetType       PostingAgreementTargetType          @map("target_type")
+  postsPerWeek     Int?                               @map("posts_per_week")
+  engagementMetric PostingAgreementEngagementMetric?  @map("engagement_metric")
+  engagementTarget Int?                               @map("engagement_target")
+  weeklyAmount     Decimal                            @db.Decimal(14, 2) @map("weekly_amount")
+  currency         String                             @default("TZS")
+  isActive         Boolean                            @default(true) @map("is_active")
+  notes            String?                            @db.Text
+  createdByUserId  String?                            @map("created_by_user_id")
+  createdAt        DateTime                           @default(now()) @map("created_at")
+  updatedAt        DateTime                           @updatedAt @map("updated_at")
+
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mediaHost    MediaHost?                   @relation(fields: [mediaHostId], references: [id])
+  influencer   Influencer?                  @relation(fields: [influencerId], references: [id])
+  evaluations  PostingAgreementEvaluation[]
+
+  @@index([organizationId])
+  @@index([mediaHostId])
+  @@index([influencerId])
+  @@map("posting_agreements")
+}
+
+/// One week's actual posts/engagement measured against its agreement's target,
+/// computed on demand (not a background job) from the same Influencer2Campaign
+/// data the Media/Influencer dashboards already read. `paymentId` is only set
+/// once an admin explicitly turns a met-target week into a real Payment
+/// (reusing Payment's existing PENDING -> approve -> paid workflow).
+model PostingAgreementEvaluation {
+  id                String   @id @default(uuid())
+  agreementId       String   @map("agreement_id")
+  weekStart         DateTime @map("week_start") @db.Date
+  weekEnd           DateTime @map("week_end") @db.Date
+  actualPostCount   Int      @map("actual_post_count")
+  actualEngagement  Int?     @map("actual_engagement")
+  targetMet         Boolean  @map("target_met")
+  paymentId         String?  @unique @map("payment_id")
+  evaluatedByUserId String?  @map("evaluated_by_user_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  agreement PostingAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  payment   Payment?         @relation(fields: [paymentId], references: [id])
+
+  @@unique([agreementId, weekStart])
+  @@index([agreementId])
+  @@map("posting_agreement_evaluations")
 }

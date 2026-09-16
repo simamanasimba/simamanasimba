@@ -12,9 +12,10 @@ import { LoadingWord } from "@/components/LoadingWord";
 import { Collapsible } from "@/components/Collapsible";
 import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
+import { PostingAgreementCard } from "@/components/PostingAgreementCard";
 import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
-import { canManageInfluencer2 } from "@/lib/permissions";
+import { canManageInfluencer2, canRecordPayment } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
 
 /** Same Influencer 2 campaign system as the Influencer pages, scoped to this
@@ -28,6 +29,7 @@ export default function MediaHostDetailPage() {
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const canManage = canManageInfluencer2(myRole);
+  const canManagePayments = canRecordPayment(myRole);
   const dateRangeFilter = useDateRangeFilter("weekly");
   const { range } = dateRangeFilter;
 
@@ -132,6 +134,8 @@ export default function MediaHostDetailPage() {
           </div>
         </Collapsible>
       </div>
+
+      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} canManage={canManagePayments} />
 
       {editing && (
         <MediaHostModal

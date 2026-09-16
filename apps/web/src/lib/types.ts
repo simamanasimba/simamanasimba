@@ -658,6 +658,42 @@ export interface Influencer2CampaignDetail {
   totals: Influencer2Totals;
 }
 
+export type PostingAgreementTargetType = "POST_COUNT" | "ENGAGEMENT";
+export type PostingAgreementEngagementMetric = "VIEWS" | "LIKES" | "COMMENTS" | "SHARES" | "TOTAL_ENGAGEMENT";
+
+/** A media host/influencer's standing weekly deal — either N posts/week or an engagement target. */
+export interface PostingAgreement {
+  id: string;
+  organizationId: string;
+  mediaHostId: string | null;
+  influencerId: string | null;
+  targetType: PostingAgreementTargetType;
+  postsPerWeek: number | null;
+  engagementMetric: PostingAgreementEngagementMetric | null;
+  engagementTarget: number | null;
+  weeklyAmount: number;
+  currency: string;
+  isActive: boolean;
+  notes: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One week's actual posts/engagement measured against its agreement's target. */
+export interface PostingAgreementEvaluation {
+  id: string;
+  agreementId: string;
+  weekStart: string;
+  weekEnd: string;
+  actualPostCount: number;
+  actualEngagement: number | null;
+  targetMet: boolean;
+  paymentId: string | null;
+  evaluatedByUserId: string | null;
+  createdAt: string;
+}
+
 export interface Influencer2MetricHistoryPoint {
   collectedAt: string;
   value: number;
