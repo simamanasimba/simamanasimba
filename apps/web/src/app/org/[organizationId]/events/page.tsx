@@ -18,7 +18,7 @@ interface CreatedEvent extends EventRecord {
 function NewEventModal({ organizationId, onClose, onCreated }: { organizationId: string; onClose: () => void; onCreated: (event: CreatedEvent) => void }) {
   const { t } = useLang();
   const EVENT_TYPE_SUGGESTIONS = [t("etMatch"), t("etTraining"), t("etMeeting"), t("etBoardMeeting"), t("etCampaign"), t("etFanEvent")];
-  const [form, setForm] = useState({ name: "", eventType: "", location: "", startDatetime: "", endDatetime: "", recommendation: "", meetingNote: "", budget: "" });
+  const [form, setForm] = useState({ name: "", eventType: "", location: "", startDatetime: "", endDatetime: "" });
   const [allowWalkIn, setAllowWalkIn] = useState(false);
   const [limitOneResponse, setLimitOneResponse] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,9 +33,6 @@ function NewEventModal({ organizationId, onClose, onCreated }: { organizationId:
         ...form,
         startDatetime: new Date(form.startDatetime).toISOString(),
         endDatetime: new Date(form.endDatetime).toISOString(),
-        recommendation: form.recommendation || undefined,
-        meetingNote: form.meetingNote || undefined,
-        budget: form.budget ? Number(form.budget) : undefined,
         allowWalkIns: allowWalkIn,
         allowNewMemberReg: allowWalkIn,
         limitOneResponsePerPerson: limitOneResponse,
@@ -100,18 +97,6 @@ function NewEventModal({ organizationId, onClose, onCreated }: { organizationId:
             </span>
           </label>
         )}
-        <div>
-          <label className="label">{t("meetingBudgetLabel")}</label>
-          <input type="number" min="0" step="0.01" className="input" value={form.budget} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} />
-        </div>
-        <div>
-          <label className="label">{t("meetingRecommendationLabel")}</label>
-          <textarea className="input" rows={2} value={form.recommendation} onChange={(e) => setForm((f) => ({ ...f, recommendation: e.target.value }))} />
-        </div>
-        <div>
-          <label className="label">{t("meetingNoteLabel")}</label>
-          <textarea className="input" rows={2} value={form.meetingNote} onChange={(e) => setForm((f) => ({ ...f, meetingNote: e.target.value }))} />
-        </div>
         {error && <p className="text-sm text-brand">{error}</p>}
         <p className="text-xs text-muted">{t("qrAutoHelp")}</p>
         <div className="flex justify-end gap-2 pt-2">
