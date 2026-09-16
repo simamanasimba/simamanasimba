@@ -91,6 +91,7 @@ const DICT = {
     // Page titles & primary actions
     membersTitle: "Members",
     totalMembers: "total members",
+    newMembersInRangeLabel: "New members",
     newMember: "New member",
     export: "Export",
     import: "Import",
@@ -1185,6 +1186,7 @@ const DICT = {
 
     membersTitle: "Wanachama",
     totalMembers: "jumla ya wanachama",
+    newMembersInRangeLabel: "Wanachama wapya",
     newMember: "Ongeza mwanachama",
     export: "Pakua",
     import: "Pakia",

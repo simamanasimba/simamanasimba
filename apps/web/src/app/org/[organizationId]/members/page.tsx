@@ -12,6 +12,7 @@ import { ImportMembersModal } from "@/components/ImportMembersModal";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { RequireAccess } from "@/components/RequireAccess";
+import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useLang } from "@/lib/i18n";
 
 function BulkEmailModal({
@@ -124,6 +125,8 @@ export default function MembersPage() {
   const [pageSize, setPageSize] = useState(25);
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const dateRangeFilter = useDateRangeFilter("weekly");
+  const { range } = dateRangeFilter;
 
   const filterParams = {
     q,
@@ -143,6 +146,14 @@ export default function MembersPage() {
       Object.entries(filterParams).forEach(([k, v]) => v && params.set(k, v));
       return api.get<PaginatedMembers>(`/api/v1/organizations/${organizationId}/members?${params}`);
     },
+  });
+
+  const { data: newMembersInRange } = useQuery({
+    queryKey: ["members-new-in-range", organizationId, range.from, range.to],
+    queryFn: () =>
+      api.get<PaginatedMembers>(
+        `/api/v1/organizations/${organizationId}/members?registeredFrom=${range.from}&registeredTo=${range.to}&pageSize=1`,
+      ),
   });
 
   function resetPage() {
@@ -218,6 +229,8 @@ export default function MembersPage() {
           <h1 className="font-display text-2xl font-extrabold text-ink">{t("membersTitle")}</h1>
           <p className="text-sm text-muted">
             <span className="nums font-semibold text-ink">{data?.total ?? 0}</span> {t("totalMembers")}
+            {" · "}
+            <span className="nums font-semibold text-ink">{newMembersInRange?.total ?? 0}</span> {t("newMembersInRangeLabel")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -232,6 +245,8 @@ export default function MembersPage() {
           </button>
         </div>
       </div>
+
+      <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
       <div className="card">
         <div className="flex flex-wrap items-center gap-3">

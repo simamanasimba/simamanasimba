@@ -79,7 +79,7 @@ function RegionTable({ title, rows, metric }: { title: string; rows: Array<{ reg
  * leaders (no historical tracking exists for when someone became a leader). */
 export function PerformanceReportView({ organizationId, onConfigureTargets }: { organizationId: string; onConfigureTargets: () => void }) {
   const { t } = useLang();
-  const [monthsBack, setMonthsBack] = useState<string>("3");
+  const [monthsBack, setMonthsBack] = useState<string>("weekly");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const isCustom = monthsBack === "custom";
@@ -90,9 +90,11 @@ export function PerformanceReportView({ organizationId, onConfigureTargets }: { 
     queryFn: () => {
       const params = isCustom
         ? `?startDate=${customStart}&endDate=${customEnd}`
-        : monthsBack === "start"
-          ? ""
-          : `?monthsBack=${monthsBack}`;
+        : monthsBack === "weekly"
+          ? `?startDate=${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}`
+          : monthsBack === "start"
+            ? ""
+            : `?monthsBack=${monthsBack}`;
       return api.get<PerformanceReport>(`/api/v1/organizations/${organizationId}/analytics/performance-report${params}`);
     },
     enabled: !isCustom || Boolean(customReady),
@@ -115,6 +117,7 @@ export function PerformanceReportView({ organizationId, onConfigureTargets }: { 
           <div>
             <label className="label">{t("compareWithLabel")}</label>
             <select className="input" value={monthsBack} onChange={(e) => setMonthsBack(e.target.value)}>
+              <option value="weekly">{t("dateRangeWeekly")}</option>
               <option value="1">{t("compare1MonthLabel")}</option>
               <option value="3">{t("compare3MonthsLabel")}</option>
               <option value="6">{t("compare6MonthsLabel")}</option>
