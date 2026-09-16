@@ -67,16 +67,24 @@ export class AnalyticsService {
     return { total, active, inactive, target: org?.memberTarget ?? null };
   }
 
-  async membersByRegion(organizationId: string) {
+  /** Without a range, every member currently in the org (the roster's live composition). With a
+   * range, only those who registered within it — "who joined this week, by region" — same "created
+   * in this window" semantics the Media/Influencer dashboards already use for their own range filter. */
+  async membersByRegion(organizationId: string, from?: Date, to?: Date) {
     const rows = await this.prisma.member.groupBy({
       by: ["region"],
-      where: { organizationId },
+      where: { organizationId, ...(from && to ? { registrationDate: { gte: from, lte: to } } : {}) },
       _count: { _all: true },
       orderBy: { _count: { region: "desc" } },
     });
     return rows.map((r) => ({ region: r.region ?? "Unknown", count: r._count._all }));
   }
 
+  /** Never range-filtered, even though membersByRegion above now can be — isLeader has no change
+   * history (just a live boolean), so filtering by registrationDate would silently mislabel "long-
+   * time leaders who happened to join outside this window" as absent, implying a leadership trend
+   * the data can't actually support. Same honesty rule performanceReport() already applies to
+   * leaders. Always the current, live picture. */
   async leadersByRegion(organizationId: string) {
     const rows = await this.prisma.member.groupBy({
       by: ["region"],

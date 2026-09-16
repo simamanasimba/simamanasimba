@@ -107,14 +107,25 @@ export default function DashboardPage() {
     queryFn: () => api.get<MembershipSummary>(`/api/v1/organizations/${organizationId}/analytics/membership-summary`),
   });
 
+  const { range } = dateRangeFilter;
+
+  // Kept on its own fixed 12-month trend, independent of the filter below — a cumulative growth
+  // LINE only reads as a trend across several buckets; collapsing it to interval=month inside a
+  // 7-day weekly window would leave a single dot, not a chart. The filter instead scopes the
+  // region bar chart and the "new members" stat to "who joined in this range."
   const { data: growth } = useQuery({
     queryKey: ["analytics-growth", organizationId],
     queryFn: () => api.get<GrowthPoint[]>(`/api/v1/organizations/${organizationId}/analytics/membership-growth?interval=month`),
   });
 
   const { data: byRegion } = useQuery({
-    queryKey: ["analytics-region", organizationId],
-    queryFn: () => api.get<RegionCount[]>(`/api/v1/organizations/${organizationId}/analytics/members/by-region`),
+    queryKey: ["analytics-region", organizationId, range.from, range.to],
+    queryFn: () => api.get<RegionCount[]>(`/api/v1/organizations/${organizationId}/analytics/members/by-region?from=${range.from}&to=${range.to}`),
+  });
+
+  const { data: newMembersInRange } = useQuery({
+    queryKey: ["members-new-in-range", organizationId, range.from, range.to],
+    queryFn: () => api.get<{ total: number }>(`/api/v1/organizations/${organizationId}/members?registeredFrom=${range.from}&registeredTo=${range.to}&pageSize=1`),
   });
 
   const { data: leadersByRegion } = useQuery({
@@ -172,7 +183,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-extrabold text-ink">{t("navDashboard")}</h1>
         <div className="flex flex-wrap items-end gap-3">
-          {(view === "media" || view === "influencers") && <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />}
+          {(view === "members" || view === "media" || view === "influencers") && <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />}
           <div>
             <label className="label">{t("dashboardViewLabel")}</label>
             <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>
@@ -191,7 +202,7 @@ export default function DashboardPage() {
         <>
       {/* Compact stat tiles instead of the bigger StatCards — leaves more room for the charts
           below without pushing the page past one screen. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <StatTile
           label={t("statTotalMembers")}
           value={(summary?.total ?? 0).toLocaleString()}
@@ -199,6 +210,7 @@ export default function DashboardPage() {
           icon={Users}
           href={`/org/${organizationId}/members`}
         />
+        <StatTile label={t("newMembersInRangeLabel")} value={(newMembersInRange?.total ?? 0).toLocaleString()} icon={Users} href={`/org/${organizationId}/members`} />
         <StatTile label={t("totalSpend")} value={(financeDashboard?.totalSpend ?? 0).toLocaleString()} icon={Wallet} href={`/org/${organizationId}/finance/reports?view=finance`} />
         <StatTile label={t("statTotalMeetings")} value={events?.length ?? "—"} icon={CalendarDays} href={`/org/${organizationId}/events`} />
       </div>
@@ -207,7 +219,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="card lg:col-span-3">
           <div className="mb-1 flex items-center justify-between">
-            <h2 className="font-display text-sm font-bold text-ink">{t("membersByRegion")}</h2>
+            <h2 className="font-display text-sm font-bold text-ink">{t("membersByRegion")} <span className="font-normal text-muted">— {t("newMembersInRangeLabel").toLowerCase()}</span></h2>
             {isOrgAdmin(myRole) && (
               <button title={t("editTargetsCta")} className="text-muted hover:text-brand" onClick={() => setShowEditTargets(true)}>
                 <Settings2 size={14} />

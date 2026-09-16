@@ -26,8 +26,8 @@ export class AnalyticsController {
   }
 
   @Get("members/by-region")
-  byRegion(@Param("organizationId") organizationId: string) {
-    return this.analytics.membersByRegion(organizationId);
+  byRegion(@Param("organizationId") organizationId: string, @Query("from") from?: string, @Query("to") to?: string) {
+    return this.analytics.membersByRegion(organizationId, from ? new Date(from) : undefined, to ? new Date(to) : undefined);
   }
 
   @Get("members/by-region/leaders")
