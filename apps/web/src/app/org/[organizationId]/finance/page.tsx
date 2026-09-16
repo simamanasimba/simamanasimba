@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, Search, Wallet } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Payment, MediaCampaign, MediaHost, Influencer, Member, PaginatedMembers, Expense, ExpenseCategory } from "@/lib/types";
 import { Modal } from "@/components/Modal";
@@ -40,12 +40,19 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
     description: "",
   });
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const memberBeneficiaries: Array<{ id: string; name: string }> = (leaders?.items ?? []).map((m: Member) => ({ id: m.id, name: `${m.firstName} ${m.lastName}` }));
-  const beneficiaries: Array<{ id: string; name: string }> =
+  const allBeneficiaries: Array<{ id: string; name: string }> =
     form.beneficiaryType === "MEDIA_HOST" ? (hosts ?? []) : form.beneficiaryType === "MEMBER" ? memberBeneficiaries : (influencers ?? []);
+  // Only entries with an amount already typed always stay visible, even once a search hides them
+  // from the plain list — otherwise typing a search after keying in a few amounts would look like
+  // it silently discarded them.
+  const beneficiaries = search.trim()
+    ? allBeneficiaries.filter((b) => b.name.toLowerCase().includes(search.trim().toLowerCase()) || Number(amounts[b.id]) > 0)
+    : allBeneficiaries;
   const entries = Object.entries(amounts)
     .map(([beneficiaryId, raw]) => ({ beneficiaryId, amount: Number(raw) }))
     .filter((e) => e.amount > 0);
@@ -54,6 +61,7 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
   function setBeneficiaryType(beneficiaryType: "MEDIA_HOST" | "INFLUENCER" | "MEMBER") {
     setForm((f) => ({ ...f, beneficiaryType }));
     setAmounts({});
+    setSearch("");
   }
 
   function setAmount(beneficiaryId: string, value: string) {
@@ -134,6 +142,16 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
           <input className="input mt-6" placeholder={t("currencyLabel")} value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))} />
         </div>
 
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            className="input pl-9"
+            placeholder={t("searchPersonPlaceholder")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
         <div className="card max-h-[320px] overflow-auto p-0">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-surface text-left text-xs uppercase tracking-wide text-muted">
@@ -160,7 +178,9 @@ function AddPaymentModal({ organizationId, onClose, onDone }: { organizationId: 
               {beneficiaries.length === 0 && (
                 <tr>
                   <td colSpan={2} className="px-4 py-6 text-center text-muted">
-                    {form.beneficiaryType === "MEDIA_HOST" ? t("noMediaHostsFound") : form.beneficiaryType === "MEMBER" ? t("noLeadersFound") : t("noInfluencersFound")}
+                    {allBeneficiaries.length > 0
+                      ? t("noMatchesFound")
+                      : form.beneficiaryType === "MEDIA_HOST" ? t("noMediaHostsFound") : form.beneficiaryType === "MEMBER" ? t("noLeadersFound") : t("noInfluencersFound")}
                   </td>
                 </tr>
               )}
