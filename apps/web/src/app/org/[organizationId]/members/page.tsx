@@ -386,8 +386,11 @@ export default function MembersPage() {
                 </td>
                 <td className="px-4 py-3 text-muted">{m.region ?? "—"}</td>
                 <td className="px-4 py-3">
-                  <span className="text-muted">{MEMBERSHIP_TYPE_KEYS[m.membershipType] ? t(MEMBERSHIP_TYPE_KEYS[m.membershipType]) : m.membershipType}</span>
-                  {m.isLeader && <span className="badge ml-1.5 bg-brand-50 text-brand-700">{t("leaderBadge")}</span>}
+                  {m.isLeader ? (
+                    <span className="badge bg-brand-50 text-brand-700">{t("leaderBadge")}</span>
+                  ) : (
+                    <span className="text-muted">{MEMBERSHIP_TYPE_KEYS[m.membershipType] ? t(MEMBERSHIP_TYPE_KEYS[m.membershipType]) : m.membershipType}</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`badge ${m.membershipStatus === "ACTIVE" ? "bg-green-50 text-success" : "bg-brand-50 text-brand-700"}`}>
@@ -418,8 +421,11 @@ export default function MembersPage() {
               <p className="font-mono text-xs text-brand-700">{m.membershipNumber ?? m.campaignId}</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                 <span>{m.region ?? "—"}</span>
-                <span>{MEMBERSHIP_TYPE_KEYS[m.membershipType] ? t(MEMBERSHIP_TYPE_KEYS[m.membershipType]) : m.membershipType}</span>
-                {m.isLeader && <span className="badge bg-brand-50 text-brand-700">{t("leaderBadge")}</span>}
+                {m.isLeader ? (
+                  <span className="badge bg-brand-50 text-brand-700">{t("leaderBadge")}</span>
+                ) : (
+                  <span>{MEMBERSHIP_TYPE_KEYS[m.membershipType] ? t(MEMBERSHIP_TYPE_KEYS[m.membershipType]) : m.membershipType}</span>
+                )}
                 <span className={`badge ${m.membershipStatus === "ACTIVE" ? "bg-green-50 text-success" : "bg-brand-50 text-brand-700"}`}>
                   {MEMBERSHIP_STATUS_KEYS[m.membershipStatus] ? t(MEMBERSHIP_STATUS_KEYS[m.membershipStatus]) : m.membershipStatus}
                 </span>

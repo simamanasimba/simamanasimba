@@ -68,7 +68,7 @@ export default function MemberProfilePage() {
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <div><p className="text-muted">{t("fieldType")}</p><p className="font-medium text-ink">{member.membershipType}</p></div>
+          <div><p className="text-muted">{t("fieldType")}</p><p className="font-medium text-ink">{member.isLeader ? t("leaderBadge") : member.membershipType}</p></div>
           <div><p className="text-muted">{t("phone")}</p><p className="font-medium text-ink">{member.phone ?? "—"}</p></div>
           <div><p className="text-muted">{t("email")}</p><p className="font-medium text-ink">{member.email ?? "—"}</p></div>
           <div><p className="text-muted">{t("region")}</p><p className="font-medium text-ink">{member.region ?? "—"} {member.district ? `/ ${member.district}` : ""}</p></div>
