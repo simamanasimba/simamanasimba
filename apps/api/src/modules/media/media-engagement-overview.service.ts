@@ -1,6 +1,5 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
-import { latestPerCampaignPlatformMetric } from "../../common/metric-window.util";
 
 type MetricTotals = { likes: number; comments: number; views: number; shares: number };
 
@@ -35,19 +34,26 @@ export class MediaEngagementOverviewService {
     }
 
     // MediaEngagement's likes/comments are a single cumulative snapshot per row (no history), so
-    // a date range reads as "engagement last recorded/updated during this window" via updatedAt.
-    // Influencer2MetricValue does keep history — see metric-window.util.ts for how a range reduces
-    // it to the latest collected-in-window figure per (campaignPlatform, metricDefinition).
+    // a date range reads as "engagement last recorded/updated during this window" via updatedAt —
+    // that legacy model has no separate published-date field, so this is the best available signal
+    // for it specifically. Influencer2 posts DO have one (platform.publishedAt), so a "weekly
+    // report" for them means "published this week," not "typed into the system this week" — data
+    // entry commonly lags behind the actual post. isLatest:true always gives each platform's
+    // CURRENT numbers; the range only narrows WHICH platforms count, via publishedInRange below.
     const updatedInRange = range ? { updatedAt: { gte: range.from, lte: range.to } } : {};
-    const i2ValueWhere = (beneficiary: "mediaHostId" | "influencerId") =>
-      range
-        ? { collectedAt: { gte: range.from, lte: range.to }, campaignPlatform: { campaign: { organizationId, [beneficiary]: { not: null } } } }
-        : { isLatest: true, campaignPlatform: { campaign: { organizationId, [beneficiary]: { not: null } } } };
+    const publishedInRange = range
+      ? { OR: [{ publishedAt: { gte: range.from, lte: range.to } }, { publishedAt: null, createdAt: { gte: range.from, lte: range.to } }] }
+      : {};
+    const i2ValueWhere = (beneficiary: "mediaHostId" | "influencerId") => ({
+      isLatest: true,
+      campaignPlatform: { campaign: { organizationId, [beneficiary]: { not: null } }, ...publishedInRange },
+    });
 
-    // "Posted in range" — a host counts as active for the period if it either got a new
-    // Influencer 2 campaign platform (a post) or a legacy MediaEngagement row created during the
-    // window, regardless of whether a metric value has been recorded for it yet. Only queried
-    // when a range is given; all-time behavior (every registered host counts) is unchanged.
+    // "Posted in range" — a host counts as active for the period if it either published an
+    // Influencer 2 post (by publishedAt, falling back to createdAt only when publishedAt was never
+    // set) or has a legacy MediaEngagement row created during the window, regardless of whether a
+    // metric value has been recorded for it yet. Only queried when a range is given; all-time
+    // behavior (every registered host counts) is unchanged.
     const createdInRange = range ? { createdAt: { gte: range.from, lte: range.to } } : {};
 
     const [legacyHostEngagements, legacyInfluencerEngagements, i2HostValuesRaw, i2InfluencerValuesRaw, postedPlatformsInRange, legacyCreatedInRange] = await Promise.all([
@@ -71,7 +77,7 @@ export class MediaEngagementOverviewService {
       }),
       range
         ? this.prisma.influencer2CampaignPlatform.findMany({
-            where: { campaign: { organizationId, mediaHostId: { not: null } }, ...createdInRange },
+            where: { campaign: { organizationId, mediaHostId: { not: null } }, ...publishedInRange },
             select: { campaign: { select: { mediaHostId: true } } },
           })
         : Promise.resolve([]),
@@ -82,8 +88,10 @@ export class MediaEngagementOverviewService {
           })
         : Promise.resolve([]),
     ]);
-    const i2HostValues = range ? latestPerCampaignPlatformMetric(i2HostValuesRaw) : i2HostValuesRaw;
-    const i2InfluencerValues = range ? latestPerCampaignPlatformMetric(i2InfluencerValuesRaw) : i2InfluencerValuesRaw;
+    // i2ValueWhere always queries isLatest:true, so these are already at most one row per
+    // (campaignPlatform, metricDefinition) — no further reduction needed.
+    const i2HostValues = i2HostValuesRaw;
+    const i2InfluencerValues = i2InfluencerValuesRaw;
 
     // A host counts as "posted in range" via either source, independent of whether a metric
     // value has been recorded for it yet.

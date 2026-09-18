@@ -6,7 +6,6 @@ import { UpdateInfluencer2CampaignDto } from "./dto/update-influencer2-campaign.
 import { AddCampaignPlatformDto } from "./dto/add-campaign-platform.dto";
 import { UpdateCampaignPlatformDto } from "./dto/update-campaign-platform.dto";
 import { SubmitMetricsDto } from "./dto/submit-metrics.dto";
-import { latestPerCampaignPlatformMetric } from "../../common/metric-window.util";
 
 interface PlatformMetricSummary {
   metricDefinitionId: string;
@@ -217,6 +216,30 @@ export class Influencer2CampaignsService {
     return { OR: [{ agreementWeekNumber: weekNumber }, { agreementWeekNumber: null, createdAt: { gte: from, lte: to } }] };
   }
 
+  /** A "weekly report" means "what was PUBLISHED this week" — not "what got typed into the system
+   * this week." Data entry commonly lags behind the actual post (someone adds Monday's post on
+   * Wednesday), so filtering by createdAt silently dropped real posts from the window they were
+   * actually published in. Matches a platform's own publishedAt falling in range, falling back to
+   * that platform's createdAt only when publishedAt was never set at all. Used everywhere a
+   * dashboard/report scopes campaigns to a date range — never for the explicit agreementWeekNumber
+   * tag above, which is a deliberate, higher-precision signal of its own. */
+  private publishedPlatformFilter(from: Date, to: Date): Prisma.Influencer2CampaignPlatformWhereInput {
+    return {
+      OR: [
+        { publishedAt: { gte: from, lte: to } },
+        { publishedAt: null, createdAt: { gte: from, lte: to } },
+      ],
+    };
+  }
+
+  /** "This campaign has at least one platform published in range" — the right question for
+   * whether a POST belongs in a given week's report. Metric totals need the stricter, per-platform
+   * version above instead (a campaign with one platform published this week and another published
+   * last week must only count the first platform's numbers toward this week). */
+  private publishedDateFilter(from: Date, to: Date): Prisma.Influencer2CampaignWhereInput {
+    return { platforms: { some: this.publishedPlatformFilter(from, to) } };
+  }
+
   async list(
     organizationId: string,
     filters: {
@@ -246,9 +269,29 @@ export class Influencer2CampaignsService {
       // predate tagging) are unaffected and still show up exactly as before.
       if (filters.paymentStatus === "NOT_PAID") where.agreementWeekNumber = null;
     }
-    if (filters.platformKey) where.platforms = { some: { platform: { key: filters.platformKey } } };
-    if (filters.weekNumber != null && filters.from && filters.to) Object.assign(where, this.weekMatchFilter(filters.weekNumber, filters.from, filters.to));
-    else if (filters.from && filters.to) where.createdAt = { gte: filters.from, lte: filters.to };
+    if (filters.weekNumber != null && filters.from && filters.to) {
+      // The explicit per-post week tag (or its createdAt fallback) — a different, higher-
+      // precision signal than "published in range" below, used only for the posting-agreement
+      // week drill-down.
+      Object.assign(where, this.weekMatchFilter(filters.weekNumber, filters.from, filters.to));
+      if (filters.platformKey) where.platforms = { some: { platform: { key: filters.platformKey } } };
+    } else {
+      // platformKey and the published-date range both narrow the SAME `platforms.some` relation —
+      // combined into one condition (rather than two separate `where.platforms` assignments, which
+      // would just overwrite each other) so "posted on Instagram" and "published this week" can be
+      // required together correctly.
+      const platformConditions: Prisma.Influencer2CampaignPlatformWhereInput[] = [];
+      if (filters.platformKey) platformConditions.push({ platform: { key: filters.platformKey } });
+      if (filters.from && filters.to) {
+        platformConditions.push({
+          OR: [
+            { publishedAt: { gte: filters.from, lte: filters.to } },
+            { publishedAt: null, createdAt: { gte: filters.from, lte: filters.to } },
+          ],
+        });
+      }
+      if (platformConditions.length > 0) where.platforms = { some: { AND: platformConditions } };
+    }
 
     const [rows, total] = await Promise.all([
       this.prisma.influencer2Campaign.findMany({
@@ -398,12 +441,15 @@ export class Influencer2CampaignsService {
             ? { influencerId: { not: null } }
             : {};
 
-    // A metric value is an append-only snapshot, not a per-period delta — there's nothing to sum
-    // "for this week" beyond the figures that were actually recorded during it. With a range, skip
-    // the all-time isLatest flag and instead take the latest snapshot collected inside the window
-    // per (campaignPlatform, metricDefinition) — see metric-window.util.ts.
+    // A "weekly report" means "what was published this week" — see publishedDateFilter. With a
+    // range, the campaign set narrows to posts published in it; metrics are always each post's
+    // CURRENT (isLatest) numbers, i.e. "here's what we know now about what went up this week," not
+    // "numbers that happened to be typed in during this window" (collectedAt), which is a
+    // different, less useful question and was silently hiding real posts/engagement whenever data
+    // entry lagged behind the actual publish date.
     const hasRange = Boolean(filter.from && filter.to);
-    const rangeFilter = hasRange ? { gte: filter.from, lte: filter.to } : undefined;
+    const publishedFilter = hasRange ? this.publishedDateFilter(filter.from!, filter.to!) : {};
+    const campaignWhere: Prisma.Influencer2CampaignWhereInput = { organizationId, ...beneficiary, ...publishedFilter };
 
     // "Post" means one piece of content (one Influencer2Campaign row) — the same thing the
     // Media/Influencer list pages' "Posts" column and the Media-by-type/report-details table
@@ -411,27 +457,23 @@ export class Influencer2CampaignsService {
     // Influencer2CampaignPlatform rows here instead (as this used to) silently inflated the total
     // for anything with more than one platform, disagreeing with every other "Posts" figure in the
     // app for the exact same data.
-    const [campaignCount, rawValues, beneficiaryRows] = await Promise.all([
-      this.prisma.influencer2Campaign.count({ where: { organizationId, ...beneficiary, ...(rangeFilter ? { createdAt: rangeFilter } : {}) } }),
-      hasRange
-        ? this.prisma.influencer2MetricValue.findMany({
-            where: { collectedAt: rangeFilter, campaignPlatform: { campaign: { organizationId, ...beneficiary } } },
-            include: { metricDefinition: true },
-            orderBy: { collectedAt: "desc" },
-          })
-        : this.prisma.influencer2MetricValue.findMany({
-            where: { isLatest: true, campaignPlatform: { campaign: { organizationId, ...beneficiary } } },
-            include: { metricDefinition: true },
-          }),
+    const [campaignCount, values, beneficiaryRows] = await Promise.all([
+      this.prisma.influencer2Campaign.count({ where: campaignWhere }),
+      this.prisma.influencer2MetricValue.findMany({
+        where: {
+          isLatest: true,
+          campaignPlatform: { campaign: { organizationId, ...beneficiary }, ...(hasRange ? this.publishedPlatformFilter(filter.from!, filter.to!) : {}) },
+        },
+        include: { metricDefinition: true },
+      }),
       filter.scope
         ? this.prisma.influencer2Campaign.findMany({
-            where: { organizationId, ...beneficiary, ...(rangeFilter ? { createdAt: rangeFilter } : {}) },
+            where: campaignWhere,
             select: { influencerId: true, mediaHostId: true },
             distinct: filter.scope === "ALL_MEDIA_HOSTS" ? ["mediaHostId"] : ["influencerId"],
           })
         : Promise.resolve(null),
     ]);
-    const values = hasRange ? latestPerCampaignPlatformMetric(rawValues) : rawValues;
 
     let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
     let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
@@ -510,7 +552,7 @@ export class Influencer2CampaignsService {
    */
   async reportDetails(organizationId: string, filter: { scope: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS"; from?: Date; to?: Date }) {
     const beneficiary = filter.scope === "ALL_MEDIA_HOSTS" ? { mediaHostId: { not: null } } : { influencerId: { not: null } };
-    const rangeFilter = filter.from && filter.to ? { createdAt: { gte: filter.from, lte: filter.to } } : {};
+    const rangeFilter = filter.from && filter.to ? this.publishedDateFilter(filter.from, filter.to) : {};
 
     const campaigns = await this.prisma.influencer2Campaign.findMany({
       where: { organizationId, ...beneficiary, ...rangeFilter },
