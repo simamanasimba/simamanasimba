@@ -8,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { StatTile } from "@/components/StatTile";
 import { CampaignReportModal } from "@/components/CampaignReportModal";
+import { formatRangeLabel } from "@/components/DateRangeFilter";
 import { useLang } from "@/lib/i18n";
 import type { MediaEngagementOverview as OverviewData, Influencer2CampaignSummary, Influencer2CampaignReportDetails } from "@/lib/types";
 
@@ -81,6 +82,8 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range)}</span></p>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label={t("activeMediaLabel")} value={data.activeMediaCount} icon={Building2} onClick={() => setShowReport(true)} />
         <StatTile label={t("activeMediaHostsLabel")} value={data.activeHostCount} icon={Users} onClick={() => setShowReport(true)} />

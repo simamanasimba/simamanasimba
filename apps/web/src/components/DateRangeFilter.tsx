@@ -16,6 +16,16 @@ function isoDaysAgo(days: number): string {
   return d.toISOString();
 }
 
+/** The exact dates a range-scoped stat tile covers, e.g. "Sep 11 – Sep 18" — shown next to
+ * numbers like "Total Posts" so it's never ambiguous whether a figure is all-time (an unfiltered
+ * list page's own total) or scoped to whatever range is currently selected above it. */
+export function formatRangeLabel(range: { from: string; to: string }): string {
+  const from = new Date(range.from);
+  const to = new Date(range.to);
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  return `${from.toLocaleDateString(undefined, opts)} – ${to.toLocaleDateString(undefined, opts)}`;
+}
+
 /** Weekly = rolling last 7 days, monthly = rolling last 30 days — both end "now" so the
  * dashboard reads live rather than snapping to a fixed calendar week/month boundary. */
 export function useDateRangeFilter(defaultPreset: DateRangePreset = "weekly") {

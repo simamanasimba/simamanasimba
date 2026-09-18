@@ -13,7 +13,7 @@ import { Collapsible } from "@/components/Collapsible";
 import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { PostingAgreementCard } from "@/components/PostingAgreementCard";
-import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
+import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2, canRecordPayment } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
@@ -93,6 +93,8 @@ export default function MediaHostDetailPage() {
       <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} canManage={canManagePayments} />
 
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
+
+      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range)}</span></p>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Link href={`/org/${organizationId}/media-hosts/${hostId}/campaigns`} className="card block h-full transition hover:-translate-y-0.5 hover:shadow-lg">

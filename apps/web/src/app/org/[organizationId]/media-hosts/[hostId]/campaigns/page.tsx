@@ -10,7 +10,7 @@ import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
-import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
+import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2 } from "@/lib/permissions";
 import { PAYMENT_PROGRESS_LABEL_KEYS, PAYMENT_PROGRESS_BADGE } from "@/lib/paymentProgress";
@@ -77,6 +77,8 @@ export default function MediaHostCampaignsPage() {
         </div>
 
         <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
+
+        <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range)}</span></p>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="card"><p className="text-xs text-muted">{t("totalPostsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{summary?.totalPosts ?? "—"}</p></div>

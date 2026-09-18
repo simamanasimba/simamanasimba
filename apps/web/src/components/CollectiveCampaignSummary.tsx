@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { CampaignReportModal } from "@/components/CampaignReportModal";
+import { formatRangeLabel } from "@/components/DateRangeFilter";
 import { useLang } from "@/lib/i18n";
 import type { Influencer2CampaignSummary } from "@/lib/types";
 
@@ -45,13 +46,16 @@ export function CollectiveCampaignSummary({
   );
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-      {tile(beneficiaryLabel, summary?.totalBeneficiaries ?? "—", true)}
-      {tile(t("totalPostsLabel"), summary?.totalPosts ?? "—")}
-      {tile(t("influencer2TotalViewsLabel"), summary?.totalViews != null ? summary.totalViews.toLocaleString() : "—")}
-      {tile(t("influencer2TotalLikesLabel"), summary?.totalLikes != null ? summary.totalLikes.toLocaleString() : "—")}
-      {tile(t("influencer2TotalEngagementLabel"), summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—", true)}
-      {tile(t("avgEngagementPerPostLabel"), summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—")}
+    <div className="space-y-2">
+      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range)}</span></p>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {tile(beneficiaryLabel, summary?.totalBeneficiaries ?? "—", true)}
+        {tile(t("totalPostsLabel"), summary?.totalPosts ?? "—")}
+        {tile(t("influencer2TotalViewsLabel"), summary?.totalViews != null ? summary.totalViews.toLocaleString() : "—")}
+        {tile(t("influencer2TotalLikesLabel"), summary?.totalLikes != null ? summary.totalLikes.toLocaleString() : "—")}
+        {tile(t("influencer2TotalEngagementLabel"), summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—", true)}
+        {tile(t("avgEngagementPerPostLabel"), summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—")}
+      </div>
 
       {showReport && (
         <CampaignReportModal organizationId={organizationId} scope={scope} range={range} onClose={() => setShowReport(false)} />
