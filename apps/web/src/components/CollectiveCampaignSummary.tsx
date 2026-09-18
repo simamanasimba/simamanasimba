@@ -47,7 +47,7 @@ export function CollectiveCampaignSummary({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range)}</span></p>
+      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {tile(beneficiaryLabel, summary?.totalBeneficiaries ?? "—", true)}
         {tile(t("totalPostsLabel"), summary?.totalPosts ?? "—")}

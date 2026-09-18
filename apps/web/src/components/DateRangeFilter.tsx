@@ -8,7 +8,7 @@ import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 import type { DashboardSavedView } from "@/lib/types";
 
-export type DateRangePreset = "weekly" | "monthly" | "custom";
+export type DateRangePreset = "weekly" | "monthly" | "allTime" | "custom";
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -16,10 +16,17 @@ function isoDaysAgo(days: number): string {
   return d.toISOString();
 }
 
+// Well before this app's own earliest possible record — used as "from" for the "All time" preset
+// so it always covers everything without needing to ask the server what the real earliest date is.
+const EPOCH = "2000-01-01T00:00:00.000Z";
+
 /** The exact dates a range-scoped stat tile covers, e.g. "Sep 11 – Sep 18" — shown next to
  * numbers like "Total Posts" so it's never ambiguous whether a figure is all-time (an unfiltered
- * list page's own total) or scoped to whatever range is currently selected above it. */
-export function formatRangeLabel(range: { from: string; to: string }): string {
+ * list page's own total) or scoped to whatever range is currently selected above it. Special-cases
+ * the "All time" preset's EPOCH sentinel so that reads as "All time" instead of a literal (and
+ * misleading-looking) date back in year 2000. */
+export function formatRangeLabel(range: { from: string; to: string }, allTimeLabel?: string): string {
+  if (range.from === EPOCH && allTimeLabel) return allTimeLabel;
   const from = new Date(range.from);
   const to = new Date(range.to);
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
@@ -38,6 +45,7 @@ export function useDateRangeFilter(defaultPreset: DateRangePreset = "weekly") {
     const to = new Date().toISOString();
     if (preset === "weekly") return { from: isoDaysAgo(7), to };
     if (preset === "monthly") return { from: isoDaysAgo(30), to };
+    if (preset === "allTime") return { from: EPOCH, to };
     return {
       from: customFrom ? new Date(`${customFrom}T00:00:00`).toISOString() : isoDaysAgo(7),
       to: customTo ? new Date(`${customTo}T23:59:59`).toISOString() : to,
@@ -122,6 +130,7 @@ export function DateRangeFilterControl(props: ReturnType<typeof useDateRangeFilt
         <select className="input-auto" value={preset} onChange={(e) => onPresetChange(e.target.value as DateRangePreset)}>
           <option value="weekly">{t("dateRangeWeekly")}</option>
           <option value="monthly">{t("dateRangeMonthly")}</option>
+          <option value="allTime">{t("dateRangeAllTime")}</option>
           <option value="custom">{t("dateRangeCustom")}</option>
         </select>
         {preset === "custom" && (

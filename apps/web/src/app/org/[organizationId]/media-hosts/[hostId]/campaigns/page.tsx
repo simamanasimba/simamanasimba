@@ -34,7 +34,10 @@ export default function MediaHostCampaignsPage() {
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
-  const dateRangeFilter = useDateRangeFilter("weekly");
+  // A list of every post defaults to showing every post — "weekly" as a default here silently
+  // hid posts older than 7 days (a genuinely confusing "missing post" experience), unlike the
+  // profile page's own stat tiles, where a weekly-by-default *summary* is the actual intent.
+  const dateRangeFilter = useDateRangeFilter("allTime");
   const { range } = dateRangeFilter;
 
   const { data: profile } = useQuery({
@@ -78,7 +81,7 @@ export default function MediaHostCampaignsPage() {
 
         <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
-        <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range)}</span></p>
+        <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="card"><p className="text-xs text-muted">{t("totalPostsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{summary?.totalPosts ?? "—"}</p></div>

@@ -82,7 +82,7 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range)}</span></p>
+      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label={t("activeMediaLabel")} value={data.activeMediaCount} icon={Building2} onClick={() => setShowReport(true)} />
