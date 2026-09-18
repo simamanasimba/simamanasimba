@@ -93,7 +93,7 @@ export default function MediaHostsPage() {
                   <th className="whitespace-nowrap px-4 py-3">{t("mediaOutletLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3">{t("mediaChannelLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3">{t("mediaSessionLabel")}</th>
-                  <th className="whitespace-nowrap px-4 py-3" title={t("allTimeTotalHint")}>{t("campaignsColLabel")}</th>
+                  <th className="whitespace-nowrap px-4 py-3" title={t("allTimeTotalHint")}>{t("allTimePostsColLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3">{t("addedLabel")}</th>
                   <th className="whitespace-nowrap px-4 py-3" />
                 </tr>
