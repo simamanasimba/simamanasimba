@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bookmark, BookmarkPlus, Save, Trash2 } from "lucide-react";
+import { Bookmark, BookmarkPlus, Save, Copy, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/Toast";
@@ -91,20 +91,34 @@ export function DateRangeFilterControl(props: ReturnType<typeof useDateRangeFilt
     if (view) applySavedView(view);
   }
 
-  async function onSaveOrUpdate() {
-    if (!customFrom || !customTo) return;
+  /** Overwrites the currently-selected view's dates in place. */
+  async function onUpdateExisting() {
+    if (!customFrom || !customTo || !selectedView) return;
     setSaving(true);
     try {
-      if (selectedView && isDirty) {
-        await api.patch(`/api/v1/organizations/${organizationId}/dashboard-saved-views/${selectedView.id}`, { from: customFrom, to: customTo });
-        showToast("success", t("viewUpdated"));
-      } else {
-        const name = window.prompt(t("saveViewNamePrompt"));
-        if (!name || !name.trim()) return;
-        const created = await api.post<DashboardSavedView>(`/api/v1/organizations/${organizationId}/dashboard-saved-views`, { name, from: customFrom, to: customTo });
-        setSelectedViewId(created.id);
-        showToast("success", t("viewSaved"));
-      }
+      await api.patch(`/api/v1/organizations/${organizationId}/dashboard-saved-views/${selectedView.id}`, { from: customFrom, to: customTo });
+      showToast("success", t("viewUpdated"));
+      queryClient.invalidateQueries({ queryKey: ["dashboard-saved-views", organizationId] });
+    } catch (err) {
+      showToast("error", err instanceof ApiError ? err.message : t("viewSaveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Creates a brand-new view from the current dates — used both when nothing is selected yet, and
+   * (per explicit request) as an alternative to overwriting an already-selected view when its dates
+   * changed, so editing a saved view's dates doesn't force a choice between losing the original or
+   * silently overwriting it. */
+  async function onSaveAsNew() {
+    if (!customFrom || !customTo) return;
+    const name = window.prompt(t("saveViewNamePrompt"));
+    if (!name || !name.trim()) return;
+    setSaving(true);
+    try {
+      const created = await api.post<DashboardSavedView>(`/api/v1/organizations/${organizationId}/dashboard-saved-views`, { name, from: customFrom, to: customTo });
+      setSelectedViewId(created.id);
+      showToast("success", t("viewSaved"));
       queryClient.invalidateQueries({ queryKey: ["dashboard-saved-views", organizationId] });
     } catch (err) {
       showToast("error", err instanceof ApiError ? err.message : t("viewSaveFailed"));
@@ -138,16 +152,38 @@ export function DateRangeFilterControl(props: ReturnType<typeof useDateRangeFilt
             <input type="date" className="input-auto" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
             <span className="text-xs text-muted">{t("dateRangeToLabel")}</span>
             <input type="date" className="input-auto" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
-            <button
-              type="button"
-              title={isDirty ? t("saveChangesCta") : t("saveViewCta")}
-              onClick={onSaveOrUpdate}
-              disabled={!customFrom || !customTo || saving}
-              className="btn-secondary px-2.5 py-1.5 text-xs disabled:opacity-40"
-            >
-              {isDirty ? <Save size={14} /> : <BookmarkPlus size={14} />}
-              {isDirty ? t("saveChangesCta") : t("saveViewCta")}
-            </button>
+            {isDirty ? (
+              <>
+                <button
+                  type="button"
+                  title={t("saveChangesCta")}
+                  onClick={onUpdateExisting}
+                  disabled={!customFrom || !customTo || saving}
+                  className="btn-secondary px-2.5 py-1.5 text-xs disabled:opacity-40"
+                >
+                  <Save size={14} /> {t("saveChangesCta")}
+                </button>
+                <button
+                  type="button"
+                  title={t("saveAsNewViewCta")}
+                  onClick={onSaveAsNew}
+                  disabled={!customFrom || !customTo || saving}
+                  className="btn-secondary px-2.5 py-1.5 text-xs disabled:opacity-40"
+                >
+                  <Copy size={14} /> {t("saveAsNewViewCta")}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                title={t("saveViewCta")}
+                onClick={onSaveAsNew}
+                disabled={!customFrom || !customTo || saving}
+                className="btn-secondary px-2.5 py-1.5 text-xs disabled:opacity-40"
+              >
+                <BookmarkPlus size={14} /> {t("saveViewCta")}
+              </button>
+            )}
           </>
         )}
       </div>
