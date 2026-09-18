@@ -405,9 +405,14 @@ export class Influencer2CampaignsService {
     const hasRange = Boolean(filter.from && filter.to);
     const rangeFilter = hasRange ? { gte: filter.from, lte: filter.to } : undefined;
 
-    const [campaignCount, postCount, rawValues, beneficiaryRows] = await Promise.all([
+    // "Post" means one piece of content (one Influencer2Campaign row) — the same thing the
+    // Media/Influencer list pages' "Posts" column and the Media-by-type/report-details table
+    // count. A post cross-posted to 2 platforms is still one post, not two: counting
+    // Influencer2CampaignPlatform rows here instead (as this used to) silently inflated the total
+    // for anything with more than one platform, disagreeing with every other "Posts" figure in the
+    // app for the exact same data.
+    const [campaignCount, rawValues, beneficiaryRows] = await Promise.all([
       this.prisma.influencer2Campaign.count({ where: { organizationId, ...beneficiary, ...(rangeFilter ? { createdAt: rangeFilter } : {}) } }),
-      this.prisma.influencer2CampaignPlatform.count({ where: { campaign: { organizationId, ...beneficiary }, ...(rangeFilter ? { createdAt: rangeFilter } : {}) } }),
       hasRange
         ? this.prisma.influencer2MetricValue.findMany({
             where: { collectedAt: rangeFilter, campaignPlatform: { campaign: { organizationId, ...beneficiary } } },
@@ -441,14 +446,14 @@ export class Influencer2CampaignsService {
 
     return {
       totalCampaigns: campaignCount,
-      totalPosts: postCount,
+      totalPosts: campaignCount,
       totalBeneficiaries: beneficiaryRows?.length ?? null,
       totalViews: hasViews ? totalViews : null,
       totalLikes: hasLikes ? totalLikes : null,
       totalComments: hasComments ? totalComments : null,
       totalShares: hasShares ? totalShares : null,
       totalEngagement,
-      engagementPerPost: postCount > 0 ? Math.round((totalEngagement / postCount) * 100) / 100 : null,
+      engagementPerPost: campaignCount > 0 ? Math.round((totalEngagement / campaignCount) * 100) / 100 : null,
     };
   }
 
@@ -464,8 +469,11 @@ export class Influencer2CampaignsService {
       ...this.weekMatchFilter(filter.weekNumber, filter.weekStart, filter.weekEnd),
     };
 
+    // Same "one post = one Influencer2Campaign row, not one per platform" rule as summary() —
+    // otherwise a single post cross-posted to 2 platforms would count double toward a weekly
+    // posts-per-week target, and its reach would look like it came from twice as many posts.
     const [postCount, values] = await Promise.all([
-      this.prisma.influencer2CampaignPlatform.count({ where: { campaign: campaignWhere } }),
+      this.prisma.influencer2Campaign.count({ where: campaignWhere }),
       this.prisma.influencer2MetricValue.findMany({
         where: { isLatest: true, campaignPlatform: { campaign: campaignWhere } },
         include: { metricDefinition: true },
