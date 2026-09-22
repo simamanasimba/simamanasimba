@@ -156,9 +156,9 @@ export function PostingAgreementModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">{wantsPosts ? t("amountPerPostLabel") : t("weeklyAmountLabel")}</label>
+            <label className="label">{t("weeklyAmountLabel")}</label>
             <input required type="number" min="0" step="0.01" className="input" value={form.weeklyAmount} onChange={(e) => set("weeklyAmount", e.target.value)} />
-            <p className="mt-1 text-xs text-muted">{wantsPosts ? t("amountPerPostHelp") : t("flatAmountHelp")}</p>
+            <p className="mt-1 text-xs text-muted">{t("flatAmountHelp")}</p>
           </div>
           <div>
             <label className="label">{t("currencyLabel")}</label>

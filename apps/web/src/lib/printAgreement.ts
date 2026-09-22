@@ -17,8 +17,7 @@ export function printAgreement(params: {
     beneficiary: string;
     agreementDate: string;
     target: string;
-    ratePerPost: string;
-    flatAmount: string;
+    amount: string;
     status: string;
     active: string;
     inactive: string;
@@ -34,7 +33,7 @@ export function printAgreement(params: {
     [labels.beneficiary, escapeHtml(beneficiaryName)],
     [labels.agreementDate, agreement.startDate.slice(0, 10)],
     [labels.target, targetLabel ? escapeHtml(targetLabel) : "—"],
-    [agreement.postsPerWeek != null ? labels.ratePerPost : labels.flatAmount, `${agreement.currency} ${agreement.weeklyAmount.toLocaleString()}`],
+    [labels.amount, `${agreement.currency} ${agreement.weeklyAmount.toLocaleString()}`],
     [labels.status, agreement.isActive ? labels.active : labels.inactive],
   ];
   if (agreement.notes) rows.push([labels.notes, escapeHtml(agreement.notes).replace(/\n/g, "<br/>")]);

@@ -699,9 +699,11 @@ export type PostingAgreementEngagementMetric = "VIEWS" | "LIKES" | "COMMENTS" | 
 
 /** A media host/influencer's standing deal — general configuration only. `startDate` is a
  * reference date (when it was agreed) and plays no part in counting anything; counting happens
- * per campaign (Influencer2Folder). `weeklyAmount` is the rate PAID PER POST when postsPerWeek is
- * set (total = weeklyAmount × actual post count once met), or a flat amount when it's an
- * engagement-only agreement. `attachmentUrl` is an optional copy of the signed contract, for
+ * per campaign (Influencer2Folder). `weeklyAmount` is the FLAT agreed amount paid once the
+ * target(s) are met — it never scales up when the actual count exceeds the target (the target is
+ * a minimum, not a per-unit rate); Finance can still pay a different amount when actually marking
+ * a ticket paid (Payment.paidAmount + a required variance note), but the agreement itself is
+ * always one fixed figure. `attachmentUrl` is an optional copy of the signed contract, for
  * reference only. */
 export interface PostingAgreement {
   id: string;
@@ -769,9 +771,8 @@ export interface PostingAgreementReadyForPayment {
   beneficiaryType: "MEDIA_HOST" | "INFLUENCER";
   beneficiaryId: string;
   beneficiaryName: string;
-  /** Rate per post — null for an engagement-only agreement, where `amount` is a flat figure instead. */
-  ratePerPost: number | null;
-  /** What this group is actually worth: ratePerPost × actualPostCount, or the flat agreement amount. */
+  /** The flat agreed amount for meeting the minimum target — same as PostingAgreement.weeklyAmount,
+   * paid once regardless of how far actualPostCount exceeds the target. */
   amount: number;
   currency: string;
   actualPostCount: number;

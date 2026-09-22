@@ -119,18 +119,13 @@ export function PostingFoldersPanel({
     queryFn: () => api.get<Influencer2Folder[]>(`/api/v1/organizations/${organizationId}/influencer2/folders?${beneficiaryQuery}`),
   });
 
-  // Needed to compute what a met-target folder is actually worth (rate × actual posts) — see
-  // PostingAgreementsService.computeAmount, mirrored here for display only.
+  // Needed to show what a met-target folder is worth — the flat agreed amount, same for every
+  // folder regardless of how far actualPostCount exceeds the target.
   const { data: agreements } = useQuery({
     queryKey: ["posting-agreements", organizationId, mediaHostId, influencerId],
     queryFn: () => api.get<PostingAgreement[]>(`/api/v1/organizations/${organizationId}/posting-agreements?${beneficiaryQuery}`),
   });
   const agreement = agreements?.[0];
-
-  function computeAmount(folder: Influencer2Folder): number | null {
-    if (!agreement || !folder.evaluation) return null;
-    return agreement.postsPerWeek != null ? agreement.weeklyAmount * folder.evaluation.actualPostCount : agreement.weeklyAmount;
-  }
 
   async function evaluateFolder(folder: Influencer2Folder) {
     if (!folder.agreementId) return;
@@ -230,7 +225,7 @@ export function PostingFoldersPanel({
                     )}
                   </td>
                   <td className="py-1.5 pr-3 nums">
-                    {computeAmount(f) != null ? `${agreement?.currency} ${computeAmount(f)!.toLocaleString()}` : "—"}
+                    {f.evaluation && agreement ? `${agreement.currency} ${agreement.weeklyAmount.toLocaleString()}` : "—"}
                   </td>
                   <td className="py-1.5 pr-3 text-right">
                     <div className="flex items-center justify-end gap-2">

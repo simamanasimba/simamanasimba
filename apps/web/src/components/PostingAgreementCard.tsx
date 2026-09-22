@@ -130,8 +130,7 @@ export function PostingAgreementCard({
         beneficiary: t("beneficiaryLabel"),
         agreementDate: t("agreementStartDateLabel"),
         target: t("targetTypePostCount"),
-        ratePerPost: t("amountPerPostLabel"),
-        flatAmount: t("weeklyAmountLabel"),
+        amount: t("weeklyAmountLabel"),
         status: t("paymentStatusLabel"),
         active: t("agreementActiveLabel"),
         inactive: t("agreementInactiveLabel"),
@@ -167,12 +166,6 @@ export function PostingAgreementCard({
       case "TOTAL_ENGAGEMENT":
         return e.actualEngagement;
     }
-  }
-
-  /** Mirrors PostingAgreementsService.computeAmount — a rate per post (scales with volume) when a
-   * post-count target is configured, otherwise a flat amount. */
-  function computeAmount(evaluation: NonNullable<PostingAgreementWeek["evaluation"]>): number {
-    return agreement && agreement.postsPerWeek != null ? agreement.weeklyAmount * evaluation.actualPostCount : (agreement?.weeklyAmount ?? 0);
   }
 
   return (
@@ -217,9 +210,7 @@ export function PostingAgreementCard({
         <>
           <div className="flex flex-wrap items-center gap-4 rounded-lg border border-line/60 bg-surface px-4 py-3 text-sm">
             <span className="font-medium text-ink">{targetLabel}</span>
-            <span className="nums font-bold text-brand-700">
-              {agreement.weeklyAmount.toLocaleString()} {agreement.currency}{agreement.postsPerWeek != null ? t("perPostSuffix") : ""}
-            </span>
+            <span className="nums font-bold text-brand-700">{agreement.weeklyAmount.toLocaleString()} {agreement.currency}</span>
             <span className="text-xs text-muted">{t("agreementStartDateLabel")}: {agreement.startDate.slice(0, 10)}</span>
             {agreement.attachmentUrl && (
               <a href={agreement.attachmentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
@@ -290,7 +281,7 @@ export function PostingAgreementCard({
                           )}
                         </td>
                         <td className="py-1.5 pr-3 nums">
-                          {w.evaluation ? `${agreement.currency} ${computeAmount(w.evaluation).toLocaleString()}` : "—"}
+                          {w.evaluation ? `${agreement.currency} ${agreement.weeklyAmount.toLocaleString()}` : "—"}
                         </td>
                         <td className="py-1.5 pr-3 text-right">
                           <div className="flex items-center justify-end gap-2">

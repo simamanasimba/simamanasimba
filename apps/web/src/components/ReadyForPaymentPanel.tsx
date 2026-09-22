@@ -93,12 +93,7 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
                   </td>
                   <td className="nums px-4 py-2.5">{row.actualPostCount}</td>
                   <td className="nums px-4 py-2.5">{row.actualEngagement.toLocaleString()}</td>
-                  <td className="nums px-4 py-2.5 font-semibold text-ink">
-                    {row.currency} {row.amount.toLocaleString()}
-                    {row.ratePerPost != null && (
-                      <div className="text-xs font-normal text-muted">{row.actualPostCount} × {row.currency} {row.ratePerPost.toLocaleString()}</div>
-                    )}
-                  </td>
+                  <td className="nums px-4 py-2.5 font-semibold text-ink">{row.currency} {row.amount.toLocaleString()}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
                     {canPay && (
                       <button disabled={actingId === row.evaluationId} onClick={() => createTicket(row)} className="btn-primary !py-1.5 text-xs">
