@@ -5,6 +5,7 @@ import { Influencer2CampaignsService } from "../influencer2/influencer2-campaign
 import { Influencer2FoldersService } from "../influencer2/influencer2-folders.service";
 import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
 import { UpdatePostingAgreementDto } from "./dto/update-posting-agreement.dto";
+import { MarkAgreementPaidDto } from "./dto/mark-agreement-paid.dto";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_WEEK = 7 * MS_PER_DAY;
@@ -355,18 +356,19 @@ export class PostingAgreementsService {
     }));
   }
 
-  /** Turns a met-target week into a real Payment — always PENDING, exactly like every other
-   * payment in this system, so it still goes through the normal approve -> mark-paid workflow.
-   * Never automatic: only callable once an admin has looked at an evaluation and chosen to act
-   * on it, and only once per week (paymentId is unique on the evaluation). */
-  async createTicket(organizationId: string, evaluationId: string, userId: string) {
+  /** Shared groundwork for turning a met-target evaluation into money: the checks (exists, no
+   * ticket yet, target actually met), the human-readable label for which week/campaign this is,
+   * the agreed amount, and a notes string describing how the target was met. Used by both
+   * createTicket (the older PENDING-ticket path, kept for any code still calling it) and
+   * markPaidDirectly (the one Finance actually uses now — see its own doc comment for why). */
+  private async resolvePayableEvaluation(organizationId: string, evaluationId: string) {
     const evaluation = await this.prisma.postingAgreementEvaluation.findFirst({
       where: { id: evaluationId, agreement: { organizationId } },
       include: { agreement: true },
     });
     if (!evaluation) throw new NotFoundException("Evaluation not found");
-    if (evaluation.paymentId) throw new BadRequestException("A payment ticket already exists for this week");
-    if (!evaluation.targetMet) throw new BadRequestException("This week's requirements were not met — no ticket to create");
+    if (evaluation.paymentId) throw new BadRequestException("A payment already exists for this week/campaign");
+    if (!evaluation.targetMet) throw new BadRequestException("This week's/campaign's requirements were not met — no payment to record");
 
     const agreement = evaluation.agreement;
     const beneficiaryType: PaymentBeneficiaryType = agreement.mediaHostId ? "MEDIA_HOST" : "INFLUENCER";
@@ -387,6 +389,16 @@ export class PostingAgreementsService {
       notesParts.push(`${actual} ${agreement.engagementMetric} vs target of ${agreement.engagementTarget}`);
     }
 
+    return { evaluation, agreement, beneficiaryType, groupLabel, amount, notes: notesParts.join("; ") };
+  }
+
+  /** Turns a met-target week into a real Payment — always PENDING, going through the normal
+   * approve -> mark-paid workflow. Superseded by markPaidDirectly for the UI's own "mark as paid"
+   * action (that multi-stage pipeline was confusing here — nothing pointed at where a ticket
+   * actually went), kept only in case anything else still depends on the PENDING-ticket shape. */
+  async createTicket(organizationId: string, evaluationId: string, userId: string) {
+    const { evaluation, agreement, beneficiaryType, groupLabel, amount, notes } = await this.resolvePayableEvaluation(organizationId, evaluationId);
+
     const payment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.payment.create({
         data: {
@@ -398,7 +410,7 @@ export class PostingAgreementsService {
           amount,
           currency: agreement.currency,
           description: `Posting agreement — ${groupLabel}`,
-          notes: notesParts.join("; "),
+          notes,
           status: "PENDING",
           createdByUserId: userId,
         },
@@ -408,5 +420,50 @@ export class PostingAgreementsService {
     });
 
     return { ...payment, amount: Number(payment.amount) };
+  }
+
+  /** The one real "pay" action: records a met-target week/campaign as PAID immediately — no
+   * separate approve step, no PENDING limbo. This *is* Finance actually paying someone, right
+   * here, with whatever they attach as proof — not a request that goes somewhere unseen. Only
+   * once per week/campaign (paymentId is unique on the evaluation, same guard as createTicket). */
+  async markPaidDirectly(organizationId: string, evaluationId: string, dto: MarkAgreementPaidDto, userId: string) {
+    const { evaluation, agreement, beneficiaryType, groupLabel, amount, notes } = await this.resolvePayableEvaluation(organizationId, evaluationId);
+
+    const paidAmount = dto.amountPaid ?? amount;
+    const amountVarianceNote = paidAmount !== amount ? `Paid ${paidAmount} instead of the agreed ${amount}` : null;
+
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.payment.create({
+        data: {
+          organizationId,
+          beneficiaryType,
+          mediaHostId: agreement.mediaHostId,
+          influencerId: agreement.influencerId,
+          paymentDate: new Date(`${dto.paymentDate}T00:00:00.000Z`),
+          amount,
+          currency: agreement.currency,
+          description: `Posting agreement — ${groupLabel}`,
+          notes,
+          method: dto.method,
+          referenceNumber: dto.referenceNumber,
+          bankName: dto.bankName,
+          bankAccountName: dto.bankAccountName,
+          bankAccountNumber: dto.bankAccountNumber,
+          bankTransactionRef: dto.bankTransactionRef,
+          mobileMoneyNumber: dto.mobileMoneyNumber,
+          mobileMoneyTransactionId: dto.mobileMoneyTransactionId,
+          status: "PAID",
+          paidAmount,
+          amountVarianceNote,
+          createdByUserId: userId,
+          approvedByUserId: userId,
+          approvedAt: new Date(),
+        },
+      });
+      await tx.postingAgreementEvaluation.update({ where: { id: evaluation.id }, data: { paymentId: created.id } });
+      return created;
+    });
+
+    return { ...payment, amount: Number(payment.amount), paidAmount: payment.paidAmount != null ? Number(payment.paidAmount) : null };
   }
 }

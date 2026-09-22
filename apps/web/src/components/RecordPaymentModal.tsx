@@ -7,7 +7,7 @@ import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/lib/i18n";
-import { PAYMENT_METHODS, type PaymentMethod, type MediaHost, type Influencer, type Member, type PaginatedMembers, type Influencer2Campaign, type PaginatedInfluencer2Campaigns, type Payment } from "@/lib/types";
+import { PAYMENT_METHODS, type PaymentMethod, type MediaHost, type Influencer, type Member, type PaginatedMembers, type Influencer2Campaign, type PaginatedInfluencer2Campaigns, type Payment, type PostingAgreement } from "@/lib/types";
 
 /** Sunday-anchored, matching PaymentsService.getFinanceDashboard's own week start. */
 function startOfWeek(): string {
@@ -65,7 +65,24 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
   const [error, setError] = useState<string | null>(null);
 
   const isMember = beneficiaryType === "MEMBER";
-  const unpaidCampaignsUrl = selected && !isMember
+
+  // Whether this exact beneficiary is paid entirely through the campaign/posting-agreement system
+  // — if so, individual posts are never offered here at all, full stop, no matter whether any of
+  // them happen to be tagged to a campaign yet. Payment for an agreement-covered beneficiary only
+  // ever happens through its Campaigns panel/Finance's ready-for-payment queue.
+  const agreementBeneficiaryQuery = selected && !isMember
+    ? selected.kind === "MEDIA_HOST"
+      ? `mediaHostId=${selected.id}`
+      : `influencerId=${selected.id}`
+    : null;
+  const { data: beneficiaryAgreements, isLoading: loadingAgreement } = useQuery({
+    queryKey: ["posting-agreements", organizationId, selected?.kind, selected?.id],
+    queryFn: () => api.get<PostingAgreement[]>(`/api/v1/organizations/${organizationId}/posting-agreements?${agreementBeneficiaryQuery}`),
+    enabled: Boolean(agreementBeneficiaryQuery),
+  });
+  const hasActiveAgreement = Boolean(beneficiaryAgreements?.some((a) => a.isActive));
+
+  const unpaidCampaignsUrl = selected && !isMember && !hasActiveAgreement
     ? selected.kind === "MEDIA_HOST"
       ? `/api/v1/organizations/${organizationId}/influencer2/campaigns?mediaHostId=${selected.id}&paymentStatus=NOT_PAID&pageSize=100`
       : `/api/v1/organizations/${organizationId}/influencer2/campaigns?influencerId=${selected.id}&paymentStatus=NOT_PAID&pageSize=100`
@@ -256,13 +273,19 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
           )}
         </div>
 
-        {selected && !isMember && loadingCampaigns && <p className="text-sm text-muted">{t("loadingCampaignsLabel")}</p>}
+        {selected && !isMember && loadingAgreement && <p className="text-sm text-muted">{t("loadingCampaignsLabel")}</p>}
 
-        {selected && !isMember && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) === 0 && (
+        {selected && !isMember && !loadingAgreement && hasActiveAgreement && (
+          <p className="rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-muted">{t("paidThroughAgreementHint")}</p>
+        )}
+
+        {selected && !isMember && !loadingAgreement && !hasActiveAgreement && loadingCampaigns && <p className="text-sm text-muted">{t("loadingCampaignsLabel")}</p>}
+
+        {selected && !isMember && !loadingAgreement && !hasActiveAgreement && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) === 0 && (
           <p className="rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-muted">{t("noPendingUnpaidCampaign")}</p>
         )}
 
-        {selected && !isMember && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) > 0 && !selectedCampaign && (
+        {selected && !isMember && !loadingAgreement && !hasActiveAgreement && !loadingCampaigns && (unpaidCampaigns?.items.length ?? 0) > 0 && !selectedCampaign && (
           <div>
             <label className="label">{t("selectCampaignLabel")}</label>
             <div className="space-y-2">

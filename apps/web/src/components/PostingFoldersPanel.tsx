@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Eye, Pencil, Plus, Receipt, Trash2, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
+import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import { useLang } from "@/lib/i18n";
 import type { Influencer2Folder, PostingAgreement } from "@/lib/types";
 
@@ -88,7 +89,7 @@ function FolderModal({
 }
 
 /** The "campaign" side of a posting agreement: named, dated groupings of posts (e.g. "Week 1"),
- * each measured against the beneficiary's own agreement target — the same evaluate/create-ticket
+ * each measured against the beneficiary's own agreement target — the same evaluate/mark-as-paid
  * flow PostingAgreementCard's auto-computed weeks offer, just for a folder the admin created and
  * dated by hand instead of a rigid 7-day cycle. */
 export function PostingFoldersPanel({
@@ -105,6 +106,7 @@ export function PostingFoldersPanel({
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [modalState, setModalState] = useState<"new" | Influencer2Folder | null>(null);
+  const [payingFolder, setPayingFolder] = useState<Influencer2Folder | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,21 +158,6 @@ export function PostingFoldersPanel({
       await refetch();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("failedEvaluateWeek"));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function createTicket(folder: Influencer2Folder) {
-    if (!folder.evaluation) return;
-    setBusyId(folder.id);
-    setError(null);
-    try {
-      await api.post(`/api/v1/organizations/${organizationId}/posting-agreements/evaluations/${folder.evaluation.id}/create-ticket`, {});
-      await refetch();
-      queryClient.invalidateQueries({ queryKey: ["payments"] });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("failedCreateTicket"));
     } finally {
       setBusyId(null);
     }
@@ -264,10 +251,10 @@ export function PostingFoldersPanel({
                         </button>
                       )}
                       {f.evaluation?.paymentId ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("ticketCreatedLabel")}</span>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("paymentStatusPaid")}</span>
                       ) : f.evaluation?.targetMet && canManage ? (
-                        <button className="btn-secondary !py-1 text-xs" disabled={busyId === f.id} onClick={() => createTicket(f)}>
-                          {t("createTicketCta")}
+                        <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingFolder(f)}>
+                          {t("markAsPaidTitle")}
                         </button>
                       ) : null}
                       {canManage && (
@@ -293,6 +280,22 @@ export function PostingFoldersPanel({
           initial={modalState === "new" ? undefined : modalState}
           onClose={() => setModalState(null)}
           onDone={() => { setModalState(null); refetch(); }}
+        />
+      )}
+
+      {payingFolder?.evaluation && agreement && (
+        <MarkAgreementPaidModal
+          organizationId={organizationId}
+          evaluationId={payingFolder.evaluation.id}
+          agreedAmount={agreement.weeklyAmount}
+          currency={agreement.currency}
+          onClose={() => setPayingFolder(null)}
+          onDone={() => {
+            setPayingFolder(null);
+            refetch();
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+            queryClient.invalidateQueries({ queryKey: ["finance-dashboard"] });
+          }}
         />
       )}
     </div>

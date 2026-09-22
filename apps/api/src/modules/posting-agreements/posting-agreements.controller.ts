@@ -3,6 +3,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { PostingAgreementsService } from "./posting-agreements.service";
 import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
 import { UpdatePostingAgreementDto } from "./dto/update-posting-agreement.dto";
+import { MarkAgreementPaidDto } from "./dto/mark-agreement-paid.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -112,6 +113,28 @@ export class PostingAgreementsController {
       entityType: "payment",
       entityId: payment.id,
       metadata: { amount: payment.amount },
+    });
+    return payment;
+  }
+
+  /** The action the UI actually uses: records a met-target week/campaign as paid immediately,
+   * with whatever proof (attachment) Finance uploads separately right after via the existing
+   * payments/:paymentId/attachment endpoint. */
+  @Post("evaluations/:evaluationId/mark-paid")
+  async markPaid(
+    @Param("organizationId") organizationId: string,
+    @Param("evaluationId") evaluationId: string,
+    @Body() dto: MarkAgreementPaidDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const payment = await this.agreements.markPaidDirectly(organizationId, evaluationId, dto, user.id);
+    await this.audit.record({
+      organizationId,
+      userId: user.id,
+      action: "posting_agreement.marked_paid",
+      entityType: "payment",
+      entityId: payment.id,
+      metadata: { amount: payment.amount, paidAmount: payment.paidAmount },
     });
     return payment;
   }

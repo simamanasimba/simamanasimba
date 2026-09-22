@@ -4,39 +4,23 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Receipt } from "lucide-react";
-import { api, ApiError } from "@/lib/api";
-import { useToast } from "@/components/Toast";
+import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
+import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import type { PostingAgreementReadyForPayment } from "@/lib/types";
 
 /** Finance's own queue, pulled straight from every agreement in the org rather than requiring a
- * visit to each host's/influencer's own page: every completed week that met its posting/
- * engagement target and hasn't been turned into a payment ticket yet. */
+ * visit to each host's/influencer's own page: every completed week/campaign that met its posting/
+ * engagement target and hasn't been paid yet. */
 export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationId: string; canPay: boolean }) {
   const { t } = useLang();
-  const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [actingId, setActingId] = useState<string | null>(null);
+  const [payingRow, setPayingRow] = useState<PostingAgreementReadyForPayment | null>(null);
 
   const { data: rows } = useQuery({
     queryKey: ["posting-agreements", organizationId, "ready-for-payment"],
     queryFn: () => api.get<PostingAgreementReadyForPayment[]>(`/api/v1/organizations/${organizationId}/posting-agreements/ready-for-payment`),
   });
-
-  async function createTicket(row: PostingAgreementReadyForPayment) {
-    setActingId(row.evaluationId);
-    try {
-      await api.post(`/api/v1/organizations/${organizationId}/posting-agreements/evaluations/${row.evaluationId}/create-ticket`, {});
-      showToast("success", t("paymentApprovedToast"));
-      queryClient.invalidateQueries({ queryKey: ["posting-agreements", organizationId, "ready-for-payment"] });
-      queryClient.invalidateQueries({ queryKey: ["payments", organizationId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-dashboard", organizationId] });
-    } catch (err) {
-      showToast("error", err instanceof ApiError ? err.message : t("failedCreateTicket"));
-    } finally {
-      setActingId(null);
-    }
-  }
 
   const beneficiaryHref = (row: PostingAgreementReadyForPayment) =>
     row.beneficiaryType === "MEDIA_HOST"
@@ -96,8 +80,8 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
                   <td className="nums px-4 py-2.5 font-semibold text-ink">{row.currency} {row.amount.toLocaleString()}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
                     {canPay && (
-                      <button disabled={actingId === row.evaluationId} onClick={() => createTicket(row)} className="btn-primary !py-1.5 text-xs">
-                        <Receipt size={13} /> {t("createTicketCta")}
+                      <button onClick={() => setPayingRow(row)} className="btn-primary !py-1.5 text-xs">
+                        <Receipt size={13} /> {t("markAsPaidTitle")}
                       </button>
                     )}
                   </td>
@@ -106,6 +90,22 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
             </tbody>
           </table>
         </div>
+      )}
+
+      {payingRow && (
+        <MarkAgreementPaidModal
+          organizationId={organizationId}
+          evaluationId={payingRow.evaluationId}
+          agreedAmount={payingRow.amount}
+          currency={payingRow.currency}
+          onClose={() => setPayingRow(null)}
+          onDone={() => {
+            setPayingRow(null);
+            queryClient.invalidateQueries({ queryKey: ["posting-agreements", organizationId, "ready-for-payment"] });
+            queryClient.invalidateQueries({ queryKey: ["payments", organizationId] });
+            queryClient.invalidateQueries({ queryKey: ["finance-dashboard", organizationId] });
+          }}
+        />
       )}
     </div>
   );

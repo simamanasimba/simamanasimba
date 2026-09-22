@@ -7,6 +7,7 @@ import { api, ApiError } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { PostingAgreementModal } from "@/components/PostingAgreementModal";
 import { WeekPostsModal } from "@/components/WeekPostsModal";
+import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import { printAgreement } from "@/lib/printAgreement";
 import type { PostingAgreement, PostingAgreementEngagementMetric, PostingAgreementWeek } from "@/lib/types";
 
@@ -39,6 +40,7 @@ export function PostingAgreementCard({
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [viewingWeek, setViewingWeek] = useState<PostingAgreementWeek | null>(null);
+  const [payingWeek, setPayingWeek] = useState<PostingAgreementWeek | null>(null);
   const [busyWeek, setBusyWeek] = useState<number | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,20 +77,6 @@ export function PostingAgreementCard({
       await refetchWeeks();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("failedEvaluateWeek"));
-    } finally {
-      setBusyWeek(null);
-    }
-  }
-
-  async function createTicket(evaluationId: string, weekNumber: number) {
-    setBusyWeek(weekNumber);
-    setError(null);
-    try {
-      await api.post(`/api/v1/organizations/${organizationId}/posting-agreements/evaluations/${evaluationId}/create-ticket`, {});
-      await refetchWeeks();
-      queryClient.invalidateQueries({ queryKey: ["payments"] });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("failedCreateTicket"));
     } finally {
       setBusyWeek(null);
     }
@@ -313,10 +301,10 @@ export function PostingAgreementCard({
                               </button>
                             )}
                             {w.evaluation?.paymentId ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("ticketCreatedLabel")}</span>
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("paymentStatusPaid")}</span>
                             ) : w.evaluation?.targetMet && canManage ? (
-                              <button className="btn-secondary !py-1 text-xs" disabled={busyWeek === w.weekNumber} onClick={() => createTicket(w.evaluation!.id, w.weekNumber)}>
-                                {t("createTicketCta")}
+                              <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingWeek(w)}>
+                                {t("markAsPaidTitle")}
                               </button>
                             ) : null}
                           </div>
@@ -351,6 +339,22 @@ export function PostingAgreementCard({
           weekStart={viewingWeek.weekStart}
           weekEnd={viewingWeek.weekEnd}
           onClose={() => setViewingWeek(null)}
+        />
+      )}
+
+      {payingWeek?.evaluation && agreement && (
+        <MarkAgreementPaidModal
+          organizationId={organizationId}
+          evaluationId={payingWeek.evaluation.id}
+          agreedAmount={agreement.weeklyAmount}
+          currency={agreement.currency}
+          onClose={() => setPayingWeek(null)}
+          onDone={() => {
+            setPayingWeek(null);
+            refetchWeeks();
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+            queryClient.invalidateQueries({ queryKey: ["finance-dashboard"] });
+          }}
         />
       )}
     </div>

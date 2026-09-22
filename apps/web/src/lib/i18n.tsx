@@ -804,6 +804,9 @@ const DICT = {
     readyForPaymentGroupColLabel: "Campaign",
     totalPendingPaymentLabel: "Total pending payment",
     totalAlreadyPaidLabel: "Total already paid",
+    markAsPaidTitle: "Mark as paid",
+    amountAgreedLabel: "Amount agreed",
+    failedMarkAgreementPaid: "Failed to record payment",
     foldersPanelTitle: "Campaigns",
     foldersPanelSubtitle: "Group posts under a named, dated campaign (e.g. \"Week 1\") and check it against the posting agreement's target.",
     newFolderCta: "New campaign",
@@ -1064,6 +1067,7 @@ const DICT = {
     noCampaignsYetForPerson: "No campaigns yet. Create one to start tracking and get paid for it.",
     selectCampaignLabel: "Select the post to pay",
     noPendingUnpaidCampaign: "No pending unpaid post for this user.",
+    paidThroughAgreementHint: "This one is paid through its posting agreement, not individual posts — go to their profile page's Campaigns panel or Finance's \"Ready for payment\" queue to create and pay a ticket.",
     loadingCampaignsLabel: "Checking for unpaid campaigns…",
 
     // Influencer 2 — isolated multi-platform content engagement module
@@ -1981,6 +1985,9 @@ const DICT = {
     readyForPaymentGroupColLabel: "Kampeni",
     totalPendingPaymentLabel: "Jumla ya malipo yanayosubiri",
     totalAlreadyPaidLabel: "Jumla ya yaliyokwisha lipwa",
+    markAsPaidTitle: "Weka kama imelipwa",
+    amountAgreedLabel: "Kiasi kilichokubaliwa",
+    failedMarkAgreementPaid: "Imeshindwa kurekodi malipo",
     foldersPanelTitle: "Kampeni",
     foldersPanelSubtitle: "Weka machapisho pamoja chini ya kampeni yenye jina na tarehe (mfano \"Wiki 1\") kisha angalia kama imefikia lengo la mkataba.",
     newFolderCta: "Kampeni mpya",
@@ -2241,6 +2248,7 @@ const DICT = {
     noCampaignsYetForPerson: "Hakuna kampeni bado. Unda moja kuanza kufuatilia na kulipwa.",
     selectCampaignLabel: "Chagua chapisho la kulipa",
     noPendingUnpaidCampaign: "Hakuna chapisho linalosubiri malipo kwa mtu huyu.",
+    paidThroughAgreementHint: "Huyu analipwa kupitia mkataba wake wa machapisho, si machapisho binafsi — nenda kwenye ukurasa wake wa Kampeni au foleni ya Fedha \"Tayari kwa malipo\" kutengeneza na kulipa tiketi.",
     loadingCampaignsLabel: "Inaangalia kampeni zisizolipwa…",
 
     // Influencer 2 — isolated multi-platform content engagement module
