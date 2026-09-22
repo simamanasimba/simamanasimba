@@ -73,6 +73,17 @@ export default function InfluencerDetailPage() {
   if (!data) return <LoadingWord />;
   const { influencer, payments } = data;
 
+  // Finance is directly responsible for this money, so it stays right at the top where they land
+  // — everyone else (Super Admin included) can still see and follow up, just further down, below
+  // the posts it's actually paying for.
+  const postingSection = (
+    <>
+      <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} compact={!canPayAgreement} />
+      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} />
+      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManageAgreement} canPay={canPayAgreement} />
+    </>
+  );
+
   return (
     <div className="space-y-6">
       <Link href={`/org/${organizationId}/influencers`} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-brand">
@@ -95,6 +106,8 @@ export default function InfluencerDetailPage() {
           <button title={t("deleteCta")} className="btn-secondary !p-2" onClick={onDelete}><Trash2 size={14} /></button>
         </div>
       </div>
+
+      {canPayAgreement && postingSection}
 
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
@@ -131,11 +144,7 @@ export default function InfluencerDetailPage() {
         viewAllPaymentsHref={`/org/${organizationId}/influencers/${influencerId}/payments`}
       />
 
-      <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} compact={!canPayAgreement} />
-
-      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} />
-
-      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManageAgreement} canPay={canPayAgreement} />
+      {!canPayAgreement && postingSection}
 
       <div className="card">
         <Collapsible title={t("bankingInfoTitle")} bare>

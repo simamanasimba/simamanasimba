@@ -71,6 +71,17 @@ export default function MediaHostDetailPage() {
   if (!data) return <LoadingWord />;
   const { host, payments } = data;
 
+  // Finance is directly responsible for this money, so it stays right at the top where they land
+  // — everyone else (Super Admin included) can still see and follow up, just further down, below
+  // the posts it's actually paying for.
+  const postingSection = (
+    <>
+      <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
+      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} />
+      <PostingFoldersPanel organizationId={organizationId} mediaHostId={hostId} canManage={canManageAgreement} canPay={canPayAgreement} />
+    </>
+  );
+
   return (
     <div className="space-y-6">
       <Link href={`/org/${organizationId}/media-hosts`} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-brand">
@@ -93,6 +104,8 @@ export default function MediaHostDetailPage() {
           <button title={t("deleteCta")} className="btn-secondary !p-2" onClick={onDelete}><Trash2 size={14} /></button>
         </div>
       </div>
+
+      {canPayAgreement && postingSection}
 
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
@@ -129,11 +142,7 @@ export default function MediaHostDetailPage() {
         viewAllPaymentsHref={`/org/${organizationId}/media-hosts/${hostId}/payments`}
       />
 
-      <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
-
-      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} />
-
-      <PostingFoldersPanel organizationId={organizationId} mediaHostId={hostId} canManage={canManageAgreement} canPay={canPayAgreement} />
+      {!canPayAgreement && postingSection}
 
       <div className="card">
         <Collapsible title={t("bankingInfoTitle")} bare>
