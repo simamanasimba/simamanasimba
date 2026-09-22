@@ -277,11 +277,15 @@ export class Influencer2CampaignsService {
     if (filters.status) where.status = filters.status;
     if (filters.paymentStatus) {
       where.paymentStatus = filters.paymentStatus;
-      // We pay by week, not by post — a post tagged to an agreement week is paid (or not) as part
-      // of that week's ticket, never picked individually here, so "unpaid campaigns to pay" (the
-      // Record Payment beneficiary flow) must never surface one. Untagged posts (no agreement, or
-      // predate tagging) are unaffected and still show up exactly as before.
-      if (filters.paymentStatus === "NOT_PAID") where.agreementWeekNumber = null;
+      // We pay by week/campaign, not by post — a post tagged to an agreement week OR filed under a
+      // campaign folder is paid (or not) as part of that group's ticket, never picked individually
+      // here, so "unpaid campaigns to pay" (the Record Payment beneficiary flow) must never surface
+      // one. Untagged posts (no agreement, no folder, or predate tagging) are unaffected and still
+      // show up exactly as before.
+      if (filters.paymentStatus === "NOT_PAID") {
+        where.agreementWeekNumber = null;
+        where.folderId = null;
+      }
     }
     if (filters.folderId) {
       // The "campaign-wise" drill-down — same set folderAssessment() totals up, so what's shown
