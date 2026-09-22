@@ -719,6 +719,23 @@ export interface PostingAgreementWeek {
   evaluation: PostingAgreementEvaluation | null;
 }
 
+/** GET .../posting-agreements/ready-for-payment — every completed week, across every agreement in
+ * the org, that met its target and hasn't been ticketed yet. */
+export interface PostingAgreementReadyForPayment {
+  evaluationId: string;
+  agreementId: string;
+  weekNumber: number;
+  weekStart: string;
+  weekEnd: string;
+  beneficiaryType: "MEDIA_HOST" | "INFLUENCER";
+  beneficiaryId: string;
+  beneficiaryName: string;
+  weeklyAmount: number;
+  currency: string;
+  actualPostCount: number;
+  actualEngagement: number;
+}
+
 export interface Influencer2MetricHistoryPoint {
   collectedAt: string;
   value: number;

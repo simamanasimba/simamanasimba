@@ -8,6 +8,7 @@ import { ArrowLeft, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2ContentType, InfluencerProfile, PaginatedInfluencer2Campaigns } from "@/lib/types";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
+import { BulkWeekAssignBar } from "@/components/BulkWeekAssignBar";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
 import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
@@ -34,6 +35,7 @@ export default function InfluencerCampaignsPage() {
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // A list of every post defaults to showing every post — "weekly" as a default here silently
   // hid posts older than 7 days (a genuinely confusing "missing post" experience), unlike the
   // profile page's own stat tiles, where a weekly-by-default *summary* is the actual intent.
@@ -63,6 +65,27 @@ export default function InfluencerCampaignsPage() {
     queryClient.invalidateQueries({ queryKey: ["influencer2-campaigns", organizationId, influencerId] });
     queryClient.invalidateQueries({ queryKey: ["influencer2-summary", influencerId] });
     queryClient.invalidateQueries({ queryKey: ["influencer-profile", influencerId] });
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const pageIds = data?.items.map((i) => i.campaign.id) ?? [];
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+  function toggleSelectAllOnPage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
   }
 
   return (
@@ -109,6 +132,16 @@ export default function InfluencerCampaignsPage() {
           </div>
         </div>
 
+        {canManage && (
+          <BulkWeekAssignBar
+            organizationId={organizationId}
+            influencerId={influencerId}
+            selectedIds={[...selectedIds]}
+            onClearSelection={() => setSelectedIds(new Set())}
+            onDone={refresh}
+          />
+        )}
+
         {!data ? (
           <LoadingWord />
         ) : data.items.length === 0 ? (
@@ -119,6 +152,11 @@ export default function InfluencerCampaignsPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-surface text-left text-xs uppercase tracking-wide text-muted">
                   <tr>
+                    {canManage && (
+                      <th className="w-8 px-4 py-2.5">
+                        <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAllOnPage} title={t("selectAllCta")} />
+                      </th>
+                    )}
                     <th className="px-4 py-2.5">{t("influencer2CampaignColLabel")}</th>
                     <th className="px-4 py-2.5">{t("influencer2ContentTypeColLabel")}</th>
                     <th className="px-4 py-2.5">{t("influencer2PlatformsColLabel")}</th>
@@ -130,6 +168,11 @@ export default function InfluencerCampaignsPage() {
                 <tbody className="divide-y divide-line">
                   {data.items.map(({ campaign, platformKeys, totals }) => (
                     <tr key={campaign.id} className="hover:bg-brand-50/40">
+                      {canManage && (
+                        <td className="px-4 py-2.5">
+                          <input type="checkbox" checked={selectedIds.has(campaign.id)} onChange={() => toggleSelected(campaign.id)} />
+                        </td>
+                      )}
                       <td className="px-4 py-2.5">
                         <Link href={`/org/${organizationId}/influencer2/${campaign.id}`} className="font-medium text-brand hover:underline">{campaign.name}</Link>
                       </td>

@@ -10,6 +10,7 @@ import type { Payment, MediaCampaign, MediaHost, Influencer, Member, PaginatedMe
 import { Modal } from "@/components/Modal";
 import { RecordPaymentModal } from "@/components/RecordPaymentModal";
 import { PendingApprovalPanel } from "@/components/PendingApprovalPanel";
+import { ReadyForPaymentPanel } from "@/components/ReadyForPaymentPanel";
 import { ProcessingPaymentsPanel } from "@/components/ProcessingPaymentsPanel";
 import { Collapsible } from "@/components/Collapsible";
 import { ExpenseModal } from "@/components/ExpenseModal";
@@ -328,6 +329,8 @@ export default function FinancePage() {
       <FinanceStatCards organizationId={organizationId} />
 
       {canApprove && <PendingApprovalPanel organizationId={organizationId} />}
+
+      <ReadyForPaymentPanel organizationId={organizationId} canPay={canPay} />
 
       <Link
         href={`/org/${organizationId}/finance/today`}
