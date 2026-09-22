@@ -5,6 +5,7 @@ import { Influencer2CampaignsService } from "./influencer2-campaigns.service";
 import { CreateInfluencer2CampaignDto } from "./dto/create-influencer2-campaign.dto";
 import { UpdateInfluencer2CampaignDto } from "./dto/update-influencer2-campaign.dto";
 import { BulkAssignWeekDto } from "./dto/bulk-assign-week.dto";
+import { BulkAssignFolderDto } from "./dto/bulk-assign-folder.dto";
 import { AddCampaignPlatformDto } from "./dto/add-campaign-platform.dto";
 import { UpdateCampaignPlatformDto } from "./dto/update-campaign-platform.dto";
 import { SubmitMetricsDto } from "./dto/submit-metrics.dto";
@@ -44,6 +45,9 @@ export class Influencer2CampaignsController {
     @Query("from") from?: string,
     @Query("to") to?: string,
     @Query("weekNumber") weekNumber?: string,
+    @Query("folderId") folderId?: string,
+    @Query("folderStart") folderStart?: string,
+    @Query("folderEnd") folderEnd?: string,
   ) {
     return this.campaigns.list(
       organizationId,
@@ -57,6 +61,9 @@ export class Influencer2CampaignsController {
         from: from ? new Date(from) : undefined,
         to: to ? new Date(to) : undefined,
         weekNumber: weekNumber ? Number(weekNumber) : undefined,
+        folderId,
+        folderStart: folderStart ? new Date(folderStart) : undefined,
+        folderEnd: folderEnd ? new Date(folderEnd) : undefined,
       },
       Number(page) || 1,
       Number(pageSize) || 25,
@@ -100,6 +107,22 @@ export class Influencer2CampaignsController {
       action: "influencer2_campaign.bulk_week_assigned",
       entityType: "influencer2_campaign",
       metadata: { campaignIds: dto.campaignIds, weekNumber: dto.weekNumber, updated: result.updated },
+    });
+    return result;
+  }
+
+  /** Registered before the ":campaignId" routes below so "bulk-folder" is never mistaken for a
+   * campaign id. */
+  @Patch("bulk-folder")
+  @Roles(...WRITE_ROLES)
+  async bulkAssignFolder(@Param("organizationId") organizationId: string, @Body() dto: BulkAssignFolderDto, @CurrentUser() user: RequestUser) {
+    const result = await this.campaigns.bulkAssignFolder(organizationId, dto.campaignIds, dto.folderId);
+    await this.audit.record({
+      organizationId,
+      userId: user.id,
+      action: "influencer2_campaign.bulk_folder_assigned",
+      entityType: "influencer2_campaign",
+      metadata: { campaignIds: dto.campaignIds, folderId: dto.folderId, updated: result.updated },
     });
     return result;
   }

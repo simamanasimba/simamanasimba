@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2ContentType, MediaHostProfile, PaginatedInfluencer2Campaigns } from "@/lib/types";
+import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2ContentType, Influencer2Folder, MediaHostProfile, PaginatedInfluencer2Campaigns } from "@/lib/types";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { BulkWeekAssignBar } from "@/components/BulkWeekAssignBar";
+import { BulkFolderAssignBar } from "@/components/BulkFolderAssignBar";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
 import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
@@ -25,6 +26,7 @@ const STATUSES: Influencer2CampaignStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "COM
  * campaigns" card on their profile page. Mirrors the influencer version. */
 export default function MediaHostCampaignsPage() {
   const { organizationId, hostId } = useParams<{ organizationId: string; hostId: string }>();
+  const searchParams = useSearchParams();
   const { t } = useLang();
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
@@ -34,6 +36,7 @@ export default function MediaHostCampaignsPage() {
   const [page, setPage] = useState(1);
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
+  const [folderId, setFolderId] = useState(searchParams.get("folderId") ?? "");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // A list of every post defaults to showing every post — "weekly" as a default here silently
@@ -52,12 +55,28 @@ export default function MediaHostCampaignsPage() {
     queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?mediaHostId=${hostId}&from=${range.from}&to=${range.to}`),
   });
 
-  const params = new URLSearchParams({ mediaHostId: hostId, page: String(page), pageSize: String(PAGE_SIZE), from: range.from, to: range.to });
+  const { data: folders } = useQuery({
+    queryKey: ["influencer2-folders", organizationId, hostId],
+    queryFn: () => api.get<Influencer2Folder[]>(`/api/v1/organizations/${organizationId}/influencer2/folders?mediaHostId=${hostId}`),
+  });
+  const selectedFolder = folders?.find((f) => f.id === folderId);
+
+  const params = new URLSearchParams({ mediaHostId: hostId, page: String(page), pageSize: String(PAGE_SIZE) });
   if (contentType) params.set("contentType", contentType);
   if (status) params.set("status", status);
+  if (folderId) {
+    // Viewing one campaign's posts overrides the date-range filter entirely — a campaign is its
+    // own scope, not narrowed further by whatever range happens to be selected above.
+    params.set("folderId", folderId);
+    if (selectedFolder?.startDate) params.set("folderStart", selectedFolder.startDate);
+    if (selectedFolder?.endDate) params.set("folderEnd", selectedFolder.endDate);
+  } else {
+    params.set("from", range.from);
+    params.set("to", range.to);
+  }
 
   const { data } = useQuery({
-    queryKey: ["influencer2-campaigns", organizationId, "media-host", hostId, contentType, status, page, range.from, range.to],
+    queryKey: ["influencer2-campaigns", organizationId, "media-host", hostId, contentType, status, folderId, page, range.from, range.to],
     queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?${params.toString()}`),
   });
 
@@ -115,7 +134,7 @@ export default function MediaHostCampaignsPage() {
 
         <h2 className="font-display text-base font-bold text-ink">{t("influencer2IndividualCampaignsTitle")}</h2>
 
-        <div className="card grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="card grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label className="label">{t("influencer2FilterContentType")}</label>
             <select className="input" value={contentType} onChange={(e) => { setContentType(e.target.value as Influencer2ContentType | ""); setPage(1); }}>
@@ -130,16 +149,32 @@ export default function MediaHostCampaignsPage() {
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+          <div>
+            <label className="label">{t("postFolderLabel")}</label>
+            <select className="input" value={folderId} onChange={(e) => { setFolderId(e.target.value); setPage(1); }}>
+              <option value="">{t("allLabel")}</option>
+              {(folders ?? []).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
         </div>
 
         {canManage && (
-          <BulkWeekAssignBar
-            organizationId={organizationId}
-            mediaHostId={hostId}
-            selectedIds={[...selectedIds]}
-            onClearSelection={() => setSelectedIds(new Set())}
-            onDone={refresh}
-          />
+          <div className="space-y-2">
+            <BulkWeekAssignBar
+              organizationId={organizationId}
+              mediaHostId={hostId}
+              selectedIds={[...selectedIds]}
+              onClearSelection={() => setSelectedIds(new Set())}
+              onDone={refresh}
+            />
+            <BulkFolderAssignBar
+              organizationId={organizationId}
+              mediaHostId={hostId}
+              selectedIds={[...selectedIds]}
+              onClearSelection={() => setSelectedIds(new Set())}
+              onDone={refresh}
+            />
+          </div>
         )}
 
         {!data ? (

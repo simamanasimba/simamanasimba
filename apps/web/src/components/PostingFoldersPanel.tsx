@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Pencil, Plus, Receipt, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Pencil, Plus, Receipt, Trash2, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useLang } from "@/lib/i18n";
@@ -108,6 +109,10 @@ export function PostingFoldersPanel({
   const [error, setError] = useState<string | null>(null);
 
   const beneficiaryQuery = mediaHostId ? `mediaHostId=${mediaHostId}` : `influencerId=${influencerId}`;
+  const postsHref = (folderId: string) =>
+    mediaHostId
+      ? `/org/${organizationId}/media-hosts/${mediaHostId}/campaigns?folderId=${folderId}`
+      : `/org/${organizationId}/influencers/${influencerId}/campaigns?folderId=${folderId}`;
 
   const { data: folders, refetch } = useQuery({
     queryKey: ["influencer2-folders", organizationId, mediaHostId, influencerId],
@@ -212,6 +217,9 @@ export function PostingFoldersPanel({
                   </td>
                   <td className="py-1.5 pr-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <Link href={postsHref(f.id)} title={t("viewPostsCta")} className="text-muted hover:text-brand">
+                        <Eye size={13} />
+                      </Link>
                       {f.agreementId && !f.evaluation && canManage && (
                         <button className="btn-secondary !py-1 text-xs" disabled={busyId === f.id} onClick={() => evaluateFolder(f)}>
                           {t("evaluateThisWeekCta")}

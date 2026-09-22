@@ -263,6 +263,9 @@ export class Influencer2CampaignsService {
       from?: Date;
       to?: Date;
       weekNumber?: number;
+      folderId?: string;
+      folderStart?: Date;
+      folderEnd?: Date;
     },
     page: number,
     pageSize: number,
@@ -280,7 +283,12 @@ export class Influencer2CampaignsService {
       // predate tagging) are unaffected and still show up exactly as before.
       if (filters.paymentStatus === "NOT_PAID") where.agreementWeekNumber = null;
     }
-    if (filters.weekNumber != null && filters.from && filters.to) {
+    if (filters.folderId) {
+      // The "campaign-wise" drill-down — same set folderAssessment() totals up, so what's shown
+      // here always agrees with the Campaigns panel's numbers.
+      Object.assign(where, this.folderMatchFilter(filters.folderId, filters.folderStart ?? null, filters.folderEnd ?? null));
+      if (filters.platformKey) where.platforms = { some: { platform: { key: filters.platformKey } } };
+    } else if (filters.weekNumber != null && filters.from && filters.to) {
       // The explicit per-post week tag (or its createdAt fallback) — a different, higher-
       // precision signal than "published in range" below, used only for the posting-agreement
       // week drill-down.
@@ -405,6 +413,16 @@ export class Influencer2CampaignsService {
     const result = await this.prisma.influencer2Campaign.updateMany({
       where: { id: { in: campaignIds }, organizationId },
       data: { agreementWeekNumber: weekNumber },
+    });
+    return { updated: result.count };
+  }
+
+  /** Same idea as bulkAssignWeek, for folders ("campaigns") — file several selected posts under
+   * one campaign at once instead of opening each one's own form. */
+  async bulkAssignFolder(organizationId: string, campaignIds: string[], folderId: string) {
+    const result = await this.prisma.influencer2Campaign.updateMany({
+      where: { id: { in: campaignIds }, organizationId },
+      data: { folderId },
     });
     return { updated: result.count };
   }
