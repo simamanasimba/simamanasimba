@@ -29,6 +29,8 @@ export function BulkFolderAssignBar({
   const { t } = useLang();
   const [folderId, setFolderId] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderStart, setNewFolderStart] = useState("");
+  const [newFolderEnd, setNewFolderEnd] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +54,8 @@ export function BulkFolderAssignBar({
           name: newFolderName.trim(),
           mediaHostId,
           influencerId,
+          startDate: newFolderStart || undefined,
+          endDate: newFolderEnd || undefined,
         });
         targetFolderId = folder.id;
       }
@@ -60,6 +64,8 @@ export function BulkFolderAssignBar({
       onClearSelection();
       setFolderId("");
       setNewFolderName("");
+      setNewFolderStart("");
+      setNewFolderEnd("");
       refetch();
       onDone();
     } catch (err) {
@@ -80,7 +86,11 @@ export function BulkFolderAssignBar({
         <option value={NEW_FOLDER_VALUE}>{t("createNewFolderCta")}</option>
       </select>
       {folderId === NEW_FOLDER_VALUE && (
-        <input className="input !w-auto" placeholder={t("newFolderNamePlaceholder")} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} />
+        <>
+          <input className="input !w-auto" placeholder={t("newFolderNamePlaceholder")} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} />
+          <input type="date" className="input !w-auto" title={t("folderStartDateLabel")} value={newFolderStart} onChange={(e) => setNewFolderStart(e.target.value)} />
+          <input type="date" className="input !w-auto" title={t("folderEndDateLabel")} value={newFolderEnd} onChange={(e) => setNewFolderEnd(e.target.value)} />
+        </>
       )}
       <button className="btn-primary !py-1.5 text-xs" disabled={!folderId || submitting} onClick={assign}>
         {t("bulkAssignFolderCta")}

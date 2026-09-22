@@ -63,6 +63,8 @@ export function Influencer2CampaignModal({
   const [selectedWeek, setSelectedWeek] = useState<number | "">(initial?.agreementWeekNumber ?? "");
   const [selectedFolderId, setSelectedFolderId] = useState<string>(initial?.folderId ?? "");
   const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderStart, setNewFolderStart] = useState("");
+  const [newFolderEnd, setNewFolderEnd] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Belt-and-suspenders against a double-fire submit (fast double-click/double-tap racing ahead
@@ -149,6 +151,8 @@ export function Influencer2CampaignModal({
           name: newFolderName.trim(),
           mediaHostId: beneficiaryMediaHostId,
           influencerId: beneficiaryInfluencerId,
+          startDate: newFolderStart || undefined,
+          endDate: newFolderEnd || undefined,
         });
         folderId = folder.id;
       }
@@ -257,13 +261,25 @@ export function Influencer2CampaignModal({
               <option value={NEW_FOLDER_VALUE}>{t("createNewFolderCta")}</option>
             </select>
             {selectedFolderId === NEW_FOLDER_VALUE && (
-              <input
-                autoFocus
-                className="input mt-2"
-                placeholder={t("newFolderNamePlaceholder")}
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-              />
+              <div className="mt-2 space-y-2">
+                <input
+                  autoFocus
+                  className="input"
+                  placeholder={t("newFolderNamePlaceholder")}
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label">{t("folderStartDateLabel")}</label>
+                    <input type="date" className="input" value={newFolderStart} onChange={(e) => setNewFolderStart(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label">{t("folderEndDateLabel")}</label>
+                    <input type="date" className="input" value={newFolderEnd} onChange={(e) => setNewFolderEnd(e.target.value)} />
+                  </div>
+                </div>
+              </div>
             )}
             <p className="mt-1 text-xs text-muted">{t("postFolderHelp")}</p>
           </div>
