@@ -62,6 +62,16 @@ export class PostingAgreementsController {
     return this.agreements.evaluateWeek(organizationId, agreementId, weekNumber, user.id);
   }
 
+  @Post(":agreementId/folders/:folderId/evaluate")
+  async evaluateFolder(
+    @Param("organizationId") organizationId: string,
+    @Param("agreementId") agreementId: string,
+    @Param("folderId") folderId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.agreements.evaluateFolder(organizationId, agreementId, folderId, user.id);
+  }
+
   @Post("evaluations/:evaluationId/create-ticket")
   async createTicket(@Param("organizationId") organizationId: string, @Param("evaluationId") evaluationId: string, @CurrentUser() user: RequestUser) {
     const payment = await this.agreements.createTicket(organizationId, evaluationId, user.id);

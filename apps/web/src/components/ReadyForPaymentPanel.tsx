@@ -57,7 +57,7 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
             <thead className="sticky top-0 bg-surface text-left text-xs uppercase tracking-wide text-muted">
               <tr>
                 <th className="whitespace-nowrap px-4 py-2.5">{t("beneficiaryLabel")}</th>
-                <th className="whitespace-nowrap px-4 py-2.5">{t("weekOfLabel")}</th>
+                <th className="whitespace-nowrap px-4 py-2.5">{t("readyForPaymentGroupColLabel")}</th>
                 <th className="whitespace-nowrap px-4 py-2.5">{t("actualPostsLabel")}</th>
                 <th className="whitespace-nowrap px-4 py-2.5">{t("metricTotalEngagement")}</th>
                 <th className="whitespace-nowrap px-4 py-2.5">{t("amountLabel")}</th>
@@ -71,8 +71,10 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
                     <Link href={beneficiaryHref(row)} className="hover:underline">{row.beneficiaryName}</Link>
                   </td>
                   <td className="px-4 py-2.5 text-muted">
-                    <span className="nums">{t("weekLabel")} {row.weekNumber}</span>
-                    <span className="ml-1 text-xs">({row.weekStart.slice(0, 10)} – {row.weekEnd.slice(0, 10)})</span>
+                    <span className="font-medium text-ink">{row.groupLabel}</span>
+                    {row.periodStart && row.periodEnd && (
+                      <span className="ml-1 text-xs">({row.periodStart.slice(0, 10)} – {row.periodEnd.slice(0, 10)})</span>
+                    )}
                   </td>
                   <td className="nums px-4 py-2.5">{row.actualPostCount}</td>
                   <td className="nums px-4 py-2.5">{row.actualEngagement.toLocaleString()}</td>

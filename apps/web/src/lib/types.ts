@@ -563,8 +563,38 @@ export interface Influencer2Campaign {
   /** Which week (per the beneficiary's own posting agreement cycle) this post counts toward —
    * null when the beneficiary has no agreement, or the post predates this field. */
   agreementWeekNumber?: number | null;
+  /** Which folder ("campaign") this post has been explicitly filed under — see Influencer2Folder. */
+  folderId?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** A named, dated grouping of posts for one beneficiary — user-facing "campaign" (e.g. "Week 1").
+ * `assessment` (only present on list responses) is that folder's current totals. */
+export interface Influencer2Folder {
+  id: string;
+  organizationId: string;
+  mediaHostId: string | null;
+  influencerId: string | null;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Only present on list() responses. */
+  assessment?: {
+    totalPosts: number;
+    totalViews: number | null;
+    totalLikes: number | null;
+    totalComments: number | null;
+    totalShares: number | null;
+    totalEngagement: number;
+  };
+  /** The beneficiary's active posting agreement (if any) and this folder's evaluation against it,
+   * if one has been run yet — only present on list() responses. */
+  agreementId?: string | null;
+  evaluation?: PostingAgreementEvaluation | null;
 }
 
 /** Used for both an influencer's and a media host's Influencer 2 stats. */
@@ -687,13 +717,16 @@ export interface PostingAgreement {
   updatedAt: string;
 }
 
-/** One agreement-relative week's actual posts/engagement measured against its target(s). */
+/** One group's (auto-computed week, or user-created folder/"campaign") actual posts/engagement
+ * measured against its agreement's target(s). weekNumber/weekStart/weekEnd are set for the older
+ * auto-week cycle; folderId is set for a folder instead — always exactly one or the other. */
 export interface PostingAgreementEvaluation {
   id: string;
   agreementId: string;
-  weekNumber: number;
-  weekStart: string;
-  weekEnd: string;
+  weekNumber: number | null;
+  weekStart: string | null;
+  weekEnd: string | null;
+  folderId?: string | null;
   actualPostCount: number;
   actualViews: number | null;
   actualLikes: number | null;
@@ -719,14 +752,15 @@ export interface PostingAgreementWeek {
   evaluation: PostingAgreementEvaluation | null;
 }
 
-/** GET .../posting-agreements/ready-for-payment — every completed week, across every agreement in
- * the org, that met its target and hasn't been ticketed yet. */
+/** GET .../posting-agreements/ready-for-payment — every completed week or folder, across every
+ * agreement in the org, that met its target and hasn't been ticketed yet. */
 export interface PostingAgreementReadyForPayment {
   evaluationId: string;
   agreementId: string;
-  weekNumber: number;
-  weekStart: string;
-  weekEnd: string;
+  /** "Week 3", or the folder's own name. */
+  groupLabel: string;
+  periodStart: string | null;
+  periodEnd: string | null;
   beneficiaryType: "MEDIA_HOST" | "INFLUENCER";
   beneficiaryId: string;
   beneficiaryName: string;

@@ -13,6 +13,7 @@ import { Collapsible } from "@/components/Collapsible";
 import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { PostingAgreementCard } from "@/components/PostingAgreementCard";
+import { PostingFoldersPanel } from "@/components/PostingFoldersPanel";
 import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2, canRecordPayment } from "@/lib/permissions";
@@ -93,6 +94,8 @@ export default function InfluencerDetailPage() {
       </div>
 
       <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} canManage={canManagePayments} />
+
+      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManagePayments} />
 
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 

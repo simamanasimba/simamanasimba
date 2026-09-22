@@ -216,6 +216,17 @@ export class Influencer2CampaignsService {
     return { OR: [{ agreementWeekNumber: weekNumber }, { agreementWeekNumber: null, createdAt: { gte: from, lte: to } }] };
   }
 
+  /** Which posts count toward one folder ("campaign"): explicitly filed under it (folderId), OR
+   * unfiled and published within the folder's own [startDate, endDate] if it has one — the
+   * "detect start and end, group by published date" auto-grouping. A folder with no date range
+   * set only ever picks up explicitly-filed posts. Shared by folderAssessment() (evaluation
+   * totals) and list()'s folder drill-down so both agree on the same post set. */
+  private folderMatchFilter(folderId: string, startDate: Date | null, endDate: Date | null): Prisma.Influencer2CampaignWhereInput {
+    const conditions: Prisma.Influencer2CampaignWhereInput[] = [{ folderId }];
+    if (startDate && endDate) conditions.push({ folderId: null, ...this.publishedDateFilter(startDate, endDate) });
+    return { OR: conditions };
+  }
+
   /** A "weekly report" means "what was PUBLISHED this week" — not "what got typed into the system
    * this week." Data entry commonly lags behind the actual post (someone adds Monday's post on
    * Wednesday), so filtering by createdAt silently dropped real posts from the window they were
@@ -359,6 +370,7 @@ export class Influencer2CampaignsService {
         status: dto.status,
         notes: dto.notes,
         agreementWeekNumber: dto.agreementWeekNumber,
+        folderId: dto.folderId,
       },
     });
     return toNumericCampaign(row);
@@ -527,6 +539,47 @@ export class Influencer2CampaignsService {
     // Same "one post = one Influencer2Campaign row, not one per platform" rule as summary() —
     // otherwise a single post cross-posted to 2 platforms would count double toward a weekly
     // posts-per-week target, and its reach would look like it came from twice as many posts.
+    const [postCount, values] = await Promise.all([
+      this.prisma.influencer2Campaign.count({ where: campaignWhere }),
+      this.prisma.influencer2MetricValue.findMany({
+        where: { isLatest: true, campaignPlatform: { campaign: campaignWhere } },
+        include: { metricDefinition: true },
+      }),
+    ]);
+
+    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
+    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
+    for (const v of values) {
+      const value = Number(v.value);
+      if (v.metricDefinition.countsAsEngagement) totalEngagement += value;
+      if (v.metricDefinition.category === "VIEWS") { totalViews += value; hasViews = true; }
+      else if (v.metricDefinition.category === "LIKES") { totalLikes += value; hasLikes = true; }
+      else if (v.metricDefinition.category === "COMMENTS") { totalComments += value; hasComments = true; }
+      else if (v.metricDefinition.category === "SHARES") { totalShares += value; hasShares = true; }
+    }
+
+    return {
+      totalPosts: postCount,
+      totalViews: hasViews ? totalViews : null,
+      totalLikes: hasLikes ? totalLikes : null,
+      totalComments: hasComments ? totalComments : null,
+      totalShares: hasShares ? totalShares : null,
+      totalEngagement,
+    };
+  }
+
+  /** One folder's ("campaign") totals — same shape and same "current metrics, not a collectedAt
+   * window" reasoning as weeklyAssessment(), just matched by folderMatchFilter instead of a
+   * computed week window. This is what a PostingAgreement's target is checked against once a
+   * folder (rather than an auto-computed week) is what's being evaluated. */
+  async folderAssessment(organizationId: string, filter: { mediaHostId?: string; influencerId?: string; folderId: string; startDate: Date | null; endDate: Date | null }) {
+    const beneficiary = filter.mediaHostId ? { mediaHostId: filter.mediaHostId } : { influencerId: filter.influencerId };
+    const campaignWhere: Prisma.Influencer2CampaignWhereInput = {
+      organizationId,
+      ...beneficiary,
+      ...this.folderMatchFilter(filter.folderId, filter.startDate, filter.endDate),
+    };
+
     const [postCount, values] = await Promise.all([
       this.prisma.influencer2Campaign.count({ where: campaignWhere }),
       this.prisma.influencer2MetricValue.findMany({

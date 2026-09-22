@@ -3,6 +3,8 @@ import { Influencer2PlatformsController } from "./influencer2-platforms.controll
 import { Influencer2PlatformsService } from "./influencer2-platforms.service";
 import { Influencer2CampaignsController } from "./influencer2-campaigns.controller";
 import { Influencer2CampaignsService } from "./influencer2-campaigns.service";
+import { Influencer2FoldersController } from "./influencer2-folders.controller";
+import { Influencer2FoldersService } from "./influencer2-folders.service";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { AuditService } from "../../common/audit.service";
 
@@ -16,12 +18,12 @@ import { AuditService } from "../../common/audit.service";
  * no need to import it again here.
  */
 @Module({
-  controllers: [Influencer2PlatformsController, Influencer2CampaignsController],
-  providers: [Influencer2PlatformsService, Influencer2CampaignsService, OrgMembershipGuard, AuditService],
+  controllers: [Influencer2PlatformsController, Influencer2CampaignsController, Influencer2FoldersController],
+  providers: [Influencer2PlatformsService, Influencer2CampaignsService, Influencer2FoldersService, OrgMembershipGuard, AuditService],
   // Exported so PostingAgreementsModule can reuse summary()'s weekly post/engagement
-  // aggregation instead of duplicating it — this is a new third module depending on
-  // Influencer2's service, not a MediaModule<->Influencer2Module link, so the isolation
-  // note above still holds.
-  exports: [Influencer2CampaignsService],
+  // aggregation (and now folderAssessment()/Influencer2FoldersService) instead of duplicating it
+  // — this is a new third module depending on Influencer2's services, not a
+  // MediaModule<->Influencer2Module link, so the isolation note above still holds.
+  exports: [Influencer2CampaignsService, Influencer2FoldersService],
 })
 export class Influencer2Module {}

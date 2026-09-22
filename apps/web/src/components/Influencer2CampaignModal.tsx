@@ -6,7 +6,9 @@ import { Facebook, Instagram, Youtube, Twitter, Linkedin, Music2, Check, type Lu
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useLang } from "@/lib/i18n";
-import type { Influencer, Influencer2Campaign, Influencer2ContentType, Influencer2Platform, PostingAgreement, PostingAgreementWeek } from "@/lib/types";
+import type { Influencer, Influencer2Campaign, Influencer2ContentType, Influencer2Folder, Influencer2Platform, PostingAgreement, PostingAgreementWeek } from "@/lib/types";
+
+const NEW_FOLDER_VALUE = "__new__";
 
 const CONTENT_TYPES: Influencer2ContentType[] = ["VIDEO", "IMAGE", "REEL", "STORY", "ARTICLE", "PODCAST", "AUDIO", "OTHER"];
 
@@ -59,6 +61,8 @@ export function Influencer2CampaignModal({
   const [selectedPlatformIds, setSelectedPlatformIds] = useState<Set<string>>(new Set());
   const [platformDrafts, setPlatformDrafts] = useState<Record<string, PlatformDraft>>({});
   const [selectedWeek, setSelectedWeek] = useState<number | "">(initial?.agreementWeekNumber ?? "");
+  const [selectedFolderId, setSelectedFolderId] = useState<string>(initial?.folderId ?? "");
+  const [newFolderName, setNewFolderName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Belt-and-suspenders against a double-fire submit (fast double-click/double-tap racing ahead
@@ -109,6 +113,15 @@ export function Influencer2CampaignModal({
     if (!initial && selectedWeek === "" && weeks && weeks.length > 0) setSelectedWeek(weeks[0].weekNumber);
   }, [weeks, initial, selectedWeek]);
 
+  // Which folder ("campaign") this post can be filed under — independent of the week tag above;
+  // a beneficiary needs no posting agreement at all to have folders, so this isn't gated on
+  // `hasBeneficiary && agreement` the way the week picker is.
+  const { data: folders } = useQuery({
+    queryKey: ["influencer2-folders", organizationId, beneficiaryMediaHostId, beneficiaryInfluencerId],
+    queryFn: () => api.get<Influencer2Folder[]>(`/api/v1/organizations/${organizationId}/influencer2/folders?${beneficiaryQuery}`),
+    enabled: hasBeneficiary,
+  });
+
   function togglePlatform(platformId: string) {
     setSelectedPlatformIds((prev) => {
       const next = new Set(prev);
@@ -130,6 +143,16 @@ export function Influencer2CampaignModal({
     setSubmitting(true);
     setError(null);
     try {
+      let folderId = selectedFolderId === NEW_FOLDER_VALUE ? undefined : selectedFolderId || undefined;
+      if (selectedFolderId === NEW_FOLDER_VALUE && newFolderName.trim()) {
+        const folder = await api.post<Influencer2Folder>(`/api/v1/organizations/${organizationId}/influencer2/folders`, {
+          name: newFolderName.trim(),
+          mediaHostId: beneficiaryMediaHostId,
+          influencerId: beneficiaryInfluencerId,
+        });
+        folderId = folder.id;
+      }
+
       const payload = {
         name: form.name,
         contentType: form.contentType,
@@ -137,6 +160,7 @@ export function Influencer2CampaignModal({
         influencerId: fixedMediaHostId ? undefined : form.influencerId || undefined,
         mediaHostId: fixedMediaHostId || undefined,
         agreementWeekNumber: selectedWeek === "" ? undefined : selectedWeek,
+        folderId,
       };
 
       if (initial) {
@@ -217,6 +241,31 @@ export function Influencer2CampaignModal({
               ))}
             </select>
             <p className="mt-1 text-xs text-muted">{t("postAgreementWeekHelp")}</p>
+          </div>
+        )}
+
+        {hasBeneficiary && (
+          <div>
+            <label className="label">{t("postFolderLabel")}</label>
+            <select className="input" value={selectedFolderId} onChange={(e) => setSelectedFolderId(e.target.value)}>
+              <option value="">{t("noneOptionLabel")}</option>
+              {(folders ?? []).map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}{f.startDate && f.endDate ? ` (${f.startDate.slice(0, 10)} – ${f.endDate.slice(0, 10)})` : ""}
+                </option>
+              ))}
+              <option value={NEW_FOLDER_VALUE}>{t("createNewFolderCta")}</option>
+            </select>
+            {selectedFolderId === NEW_FOLDER_VALUE && (
+              <input
+                autoFocus
+                className="input mt-2"
+                placeholder={t("newFolderNamePlaceholder")}
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+              />
+            )}
+            <p className="mt-1 text-xs text-muted">{t("postFolderHelp")}</p>
           </div>
         )}
 

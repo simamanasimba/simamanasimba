@@ -55,4 +55,10 @@ export class CreateInfluencer2CampaignDto {
   @IsInt()
   @Min(1)
   agreementWeekNumber?: number;
+
+  /** Which folder ("campaign") this post has been explicitly filed under — see the schema field
+   * comment on Influencer2Campaign.folderId. */
+  @IsOptional()
+  @IsString()
+  folderId?: string;
 }
