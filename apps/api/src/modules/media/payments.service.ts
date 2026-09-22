@@ -168,8 +168,8 @@ export class PaymentsService {
       throw new BadRequestException("The paid amount is different from the approved amount — please explain why");
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.payment.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.payment.update({
         where: { id: paymentId },
         data: {
           status: "PAID",
@@ -185,8 +185,13 @@ export class PaymentsService {
       if (payment.influencer2CampaignId) {
         await tx.influencer2Campaign.update({ where: { id: payment.influencer2CampaignId }, data: { paymentStatus: "PAID" } });
       }
-      return updated;
+      return result;
     });
+
+    // Every other read path (list()) converts Decimal -> number before it ever reaches the
+    // frontend — this one skipped that, so a client that trusts this response's amount/paidAmount
+    // as numbers (e.g. calling .toLocaleString() or doing arithmetic) got a Decimal object instead.
+    return { ...updated, amount: Number(updated.amount), paidAmount: updated.paidAmount != null ? Number(updated.paidAmount) : null };
   }
 
   async setAttachment(organizationId: string, paymentId: string, documentUrl: string) {

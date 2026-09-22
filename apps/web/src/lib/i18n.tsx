@@ -1069,7 +1069,8 @@ const DICT = {
     noCampaignsYetForPerson: "No campaigns yet. Create one to start tracking and get paid for it.",
     selectCampaignLabel: "Select the post to pay",
     noPendingUnpaidCampaign: "No pending unpaid post for this user.",
-    paidThroughAgreementHint: "This one is paid through its posting agreement, not individual posts — go to their profile page's Campaigns panel or Finance's \"Ready for payment\" queue to create and pay a ticket.",
+    paidThroughAgreementHint: "This one is paid through its posting agreement, not individual posts — pick a ready campaign/week below.",
+    noReadyAgreementCampaign: "No campaign or week has met its target and is ready to pay yet.",
     loadingCampaignsLabel: "Checking for unpaid campaigns…",
 
     // Influencer 2 — isolated multi-platform content engagement module
@@ -2252,7 +2253,8 @@ const DICT = {
     noCampaignsYetForPerson: "Hakuna kampeni bado. Unda moja kuanza kufuatilia na kulipwa.",
     selectCampaignLabel: "Chagua chapisho la kulipa",
     noPendingUnpaidCampaign: "Hakuna chapisho linalosubiri malipo kwa mtu huyu.",
-    paidThroughAgreementHint: "Huyu analipwa kupitia mkataba wake wa machapisho, si machapisho binafsi — nenda kwenye ukurasa wake wa Kampeni au foleni ya Fedha \"Tayari kwa malipo\" kutengeneza na kulipa tiketi.",
+    paidThroughAgreementHint: "Huyu analipwa kupitia mkataba wake wa machapisho, si machapisho binafsi — chagua kampeni au wiki iliyo tayari hapa chini.",
+    noReadyAgreementCampaign: "Hakuna kampeni au wiki iliyofikia lengo na iko tayari kulipwa bado.",
     loadingCampaignsLabel: "Inaangalia kampeni zisizolipwa…",
 
     // Influencer 2 — isolated multi-platform content engagement module

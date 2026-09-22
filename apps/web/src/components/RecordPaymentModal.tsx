@@ -1,13 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Upload } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Receipt, Upload } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
+import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/lib/i18n";
-import { PAYMENT_METHODS, type PaymentMethod, type MediaHost, type Influencer, type Member, type PaginatedMembers, type Influencer2Campaign, type PaginatedInfluencer2Campaigns, type Payment, type PostingAgreement } from "@/lib/types";
+import {
+  PAYMENT_METHODS,
+  type PaymentMethod,
+  type MediaHost,
+  type Influencer,
+  type Member,
+  type PaginatedMembers,
+  type Influencer2Campaign,
+  type PaginatedInfluencer2Campaigns,
+  type Payment,
+  type PostingAgreement,
+  type PostingAgreementReadyForPayment,
+} from "@/lib/types";
 
 /** Sunday-anchored, matching PaymentsService.getFinanceDashboard's own week start. */
 function startOfWeek(): string {
@@ -31,9 +44,23 @@ type Beneficiary = (MediaHost & { kind: "MEDIA_HOST" }) | (Influencer & { kind: 
  * leads into "pick an unpaid campaign to pay". Members (leaders, paid for things like attending
  * or organizing a meeting) have no campaign to link — selecting one skips straight to the amount/
  * method fields below. */
-export function RecordPaymentModal({ organizationId, onClose, onDone }: { organizationId: string; onClose: () => void; onDone: () => void }) {
+export function RecordPaymentModal({
+  organizationId,
+  canPayAgreements,
+  onClose,
+  onDone,
+}: {
+  organizationId: string;
+  /** Whether this viewer may actually mark an agreement campaign/week as paid (Finance only) —
+   * everyone else still sees which ones are ready, just without the action. */
+  canPayAgreements: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { t } = useLang();
+  const queryClient = useQueryClient();
   const { data: auth } = useAuth();
+  const [payingRow, setPayingRow] = useState<PostingAgreementReadyForPayment | null>(null);
   const { data: hosts } = useQuery({ queryKey: ["media-hosts", organizationId], queryFn: () => api.get<MediaHost[]>(`/api/v1/organizations/${organizationId}/media-hosts`) });
   const { data: influencers } = useQuery({ queryKey: ["influencers", organizationId], queryFn: () => api.get<Influencer[]>(`/api/v1/organizations/${organizationId}/influencers`) });
   const { data: leaders } = useQuery({
@@ -81,6 +108,16 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
     enabled: Boolean(agreementBeneficiaryQuery),
   });
   const hasActiveAgreement = Boolean(beneficiaryAgreements?.some((a) => a.isActive));
+
+  // Same org-wide queue Finance's own page reads, filtered down to just this beneficiary — so
+  // instead of a dead-end "go elsewhere" message, an agreement-covered beneficiary shows exactly
+  // which campaigns/weeks are ready to pay, right here.
+  const { data: readyForPayment, refetch: refetchReadyForPayment } = useQuery({
+    queryKey: ["posting-agreements", organizationId, "ready-for-payment"],
+    queryFn: () => api.get<PostingAgreementReadyForPayment[]>(`/api/v1/organizations/${organizationId}/posting-agreements/ready-for-payment`),
+    enabled: hasActiveAgreement,
+  });
+  const readyRowsForSelected = (readyForPayment ?? []).filter((r) => r.beneficiaryId === selected?.id);
 
   const unpaidCampaignsUrl = selected && !isMember && !hasActiveAgreement
     ? selected.kind === "MEDIA_HOST"
@@ -207,6 +244,7 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
   }
 
   return (
+    <>
     <Modal
       title={t("recordPaymentTitle")}
       onClose={onClose}
@@ -276,7 +314,32 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
         {selected && !isMember && loadingAgreement && <p className="text-sm text-muted">{t("loadingCampaignsLabel")}</p>}
 
         {selected && !isMember && !loadingAgreement && hasActiveAgreement && (
-          <p className="rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-muted">{t("paidThroughAgreementHint")}</p>
+          <div>
+            <p className="mb-2 text-xs text-muted">{t("paidThroughAgreementHint")}</p>
+            {readyRowsForSelected.length === 0 ? (
+              <p className="rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-muted">{t("noReadyAgreementCampaign")}</p>
+            ) : (
+              <div className="space-y-2">
+                {readyRowsForSelected.map((row) => (
+                  <div key={row.evaluationId} className="flex items-center justify-between rounded-xl border border-line px-3.5 py-2.5">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{row.groupLabel}</p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {row.actualPostCount} {t("actualPostsLabel").toLowerCase()} · {row.currency} {row.amount.toLocaleString()}
+                      </p>
+                    </div>
+                    {canPayAgreements ? (
+                      <button type="button" className="btn-primary !py-1.5 text-xs" onClick={() => setPayingRow(row)}>
+                        <Receipt size={13} /> {t("markAsPaidTitle")}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-muted">{t("awaitingFinanceLabel")}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {selected && !isMember && !loadingAgreement && !hasActiveAgreement && loadingCampaigns && <p className="text-sm text-muted">{t("loadingCampaignsLabel")}</p>}
@@ -401,5 +464,23 @@ export function RecordPaymentModal({ organizationId, onClose, onDone }: { organi
         {error && <p className="text-sm text-brand">{error}</p>}
       </form>
     </Modal>
+
+    {payingRow && (
+      <MarkAgreementPaidModal
+        organizationId={organizationId}
+        evaluationId={payingRow.evaluationId}
+        agreedAmount={payingRow.amount}
+        currency={payingRow.currency}
+        onClose={() => setPayingRow(null)}
+        onDone={() => {
+          setPayingRow(null);
+          refetchReadyForPayment();
+          queryClient.invalidateQueries({ queryKey: ["payments", organizationId] });
+          queryClient.invalidateQueries({ queryKey: ["finance-dashboard", organizationId] });
+          onDone();
+        }}
+      />
+    )}
+    </>
   );
 }

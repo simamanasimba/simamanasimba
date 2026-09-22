@@ -364,6 +364,7 @@ export default function FinancePage() {
       {showRecord && (
         <RecordPaymentModal
           organizationId={organizationId}
+          canPayAgreements={canPayAgreements}
           onClose={() => setShowRecord(false)}
           onDone={() => {
             setShowRecord(false);
