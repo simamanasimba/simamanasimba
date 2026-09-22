@@ -12,6 +12,7 @@ import { StatCard } from "@/components/StatCard";
 import { BrandMark } from "@/components/BrandMark";
 import { LoadingWord } from "@/components/LoadingWord";
 import { Modal } from "@/components/Modal";
+import { BulkCheckInModal } from "@/components/BulkCheckInModal";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 
@@ -226,6 +227,7 @@ export default function EventDetailPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editingKeynotes, setEditingKeynotes] = useState(false);
+  const [showBulkCheckIn, setShowBulkCheckIn] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
 
   const { data: org } = useQuery({
@@ -461,6 +463,18 @@ export default function EventDetailPage() {
         />
       )}
 
+      {showBulkCheckIn && (
+        <BulkCheckInModal
+          organizationId={organizationId}
+          eventId={eventId}
+          onClose={() => setShowBulkCheckIn(false)}
+          onDone={() => {
+            queryClient.invalidateQueries({ queryKey: ["event-attendance", organizationId, eventId] });
+            queryClient.invalidateQueries({ queryKey: ["event-live", organizationId, eventId] });
+          }}
+        />
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card">
           <div className="mb-3 flex items-center justify-between">
@@ -520,7 +534,10 @@ export default function EventDetailPage() {
         </div>
 
         <div className="card">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">{t("quickCheckInTitle")}</h2>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{t("quickCheckInTitle")}</h2>
+            <button type="button" onClick={() => setShowBulkCheckIn(true)} className="text-xs font-medium text-brand hover:underline">{t("bulkCheckInCta")}</button>
+          </div>
           <p className="mb-3 text-xs text-muted">{t("quickCheckInHelp")}</p>
           <div className="relative mb-3">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />

@@ -358,6 +358,72 @@ export class AttendanceService {
     return this.recordAttendance({ organizationId, eventId, memberId, method: "ADMIN", checkedInByUserId });
   }
 
+  /** Manual multi-select bulk check-in — same per-member logic as adminCheckIn(), just looped, so
+   * a member already checked in (or one that turns out not to exist, e.g. deleted mid-selection)
+   * never aborts the rest of the batch. */
+  async adminCheckInBulk(organizationId: string, eventId: string, memberIds: string[], checkedInByUserId: string) {
+    const event = await this.prisma.event.findFirst({ where: { id: eventId, organizationId } });
+    if (!event) throw new NotFoundException("Event not found");
+
+    const results: Array<{ memberId: string; status: "CHECKED_IN" | "ALREADY_CHECKED_IN" | "MEMBER_NOT_FOUND" }> = [];
+    for (const memberId of memberIds) {
+      const member = await this.prisma.member.findFirst({ where: { id: memberId, organizationId } });
+      if (!member) {
+        results.push({ memberId, status: "MEMBER_NOT_FOUND" });
+        continue;
+      }
+      await this.ensureRegistration(eventId, memberId, "ADMIN");
+      const result = await this.recordAttendance({ organizationId, eventId, memberId, method: "ADMIN", checkedInByUserId });
+      results.push({ memberId, status: result.status });
+    }
+    return {
+      checkedIn: results.filter((r) => r.status === "CHECKED_IN").length,
+      alreadyCheckedIn: results.filter((r) => r.status === "ALREADY_CHECKED_IN").length,
+      notFound: results.filter((r) => r.status === "MEMBER_NOT_FOUND").length,
+      results,
+    };
+  }
+
+  /** CSV/Excel-export bulk check-in — one row per member, matched by whichever column looks like a
+   * membership/campaign identifier (same lookup as the QR flow's manual-entry path, so a pasted
+   * membership number or campaign id both work). Uses AttendanceMethod.IMPORT so these rows are
+   * distinguishable from a single ADMIN check-in or a QR self-check-in in any report/export. */
+  async adminCheckInImport(organizationId: string, eventId: string, rows: Array<Record<string, string>>, checkedInByUserId: string) {
+    const event = await this.prisma.event.findFirst({ where: { id: eventId, organizationId } });
+    if (!event) throw new NotFoundException("Event not found");
+
+    const identifierKey = (row: Record<string, string>): string | undefined => {
+      const key = Object.keys(row).find((k) => /member|campaign|id|number/i.test(k));
+      return key ? row[key] : Object.values(row)[0];
+    };
+
+    const results: Array<{ row: number; identifier: string; status: "CHECKED_IN" | "ALREADY_CHECKED_IN" | "MEMBER_NOT_FOUND" | "EMPTY_ROW" }> = [];
+    let rowNumber = 1; // header is row 1, so the first data row is row 2
+    for (const row of rows) {
+      rowNumber += 1;
+      const identifier = identifierKey(row)?.trim() ?? "";
+      if (!identifier) {
+        results.push({ row: rowNumber, identifier, status: "EMPTY_ROW" });
+        continue;
+      }
+      const member = await this.members.findByIdentifier(organizationId, identifier);
+      if (!member) {
+        results.push({ row: rowNumber, identifier, status: "MEMBER_NOT_FOUND" });
+        continue;
+      }
+      await this.ensureRegistration(eventId, member.id, "ADMIN");
+      const result = await this.recordAttendance({ organizationId, eventId, memberId: member.id, method: "IMPORT", checkedInByUserId });
+      results.push({ row: rowNumber, identifier, status: result.status });
+    }
+    return {
+      checkedIn: results.filter((r) => r.status === "CHECKED_IN").length,
+      alreadyCheckedIn: results.filter((r) => r.status === "ALREADY_CHECKED_IN").length,
+      notFound: results.filter((r) => r.status === "MEMBER_NOT_FOUND").length,
+      emptyRows: results.filter((r) => r.status === "EMPTY_ROW").length,
+      results,
+    };
+  }
+
   async listAttendance(organizationId: string, eventId: string) {
     return this.prisma.attendanceRecord.findMany({
       where: { organizationId, eventId },
