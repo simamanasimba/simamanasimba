@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { PostingAgreementsService } from "./posting-agreements.service";
 import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
 import { UpdatePostingAgreementDto } from "./dto/update-posting-agreement.dto";
@@ -9,6 +10,7 @@ import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
+import { StorageService, MAX_UPLOAD_BYTES, sanitizeExtension } from "../storage/storage.service";
 
 @Controller("api/v1/organizations/:organizationId/posting-agreements")
 @UseGuards(OrgMembershipGuard, RolesGuard)
@@ -18,6 +20,7 @@ export class PostingAgreementsController {
   constructor(
     private readonly agreements: PostingAgreementsService,
     private readonly audit: AuditService,
+    private readonly storage: StorageService,
   ) {}
 
   @Get()
@@ -44,6 +47,22 @@ export class PostingAgreementsController {
   async update(@Param("organizationId") organizationId: string, @Param("agreementId") agreementId: string, @Body() dto: UpdatePostingAgreementDto, @CurrentUser() user: RequestUser) {
     const agreement = await this.agreements.update(organizationId, agreementId, dto);
     await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.updated", entityType: "posting_agreement", entityId: agreementId });
+    return agreement;
+  }
+
+  @Post(":agreementId/attachment")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  async uploadAttachment(
+    @Param("organizationId") organizationId: string,
+    @Param("agreementId") agreementId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!file) throw new BadRequestException("No file uploaded — expected a file under field name 'file'");
+    const ext = sanitizeExtension(file.originalname, "bin");
+    const url = await this.storage.upload(`posting-agreements/${organizationId}/${agreementId}.${ext}`, file.buffer, file.mimetype);
+    const agreement = await this.agreements.setAttachment(organizationId, agreementId, `${url}?v=${Date.now()}`);
+    await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.attachment_uploaded", entityType: "posting_agreement", entityId: agreementId });
     return agreement;
   }
 

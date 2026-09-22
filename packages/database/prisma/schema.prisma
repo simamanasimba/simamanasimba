@@ -1944,14 +1944,19 @@ enum PostingAgreementEngagementMetric {
   TOTAL_ENGAGEMENT
 }
 
-/// A media host/influencer's standing weekly deal, anchored to its own `startDate` — each
-/// agreement runs its own independent 7-day cycle from the day it started, since two hosts can
-/// each begin posting on different days (week 1 is startDate..startDate+6, week 2 is
-/// startDate+7..startDate+13, and so on — see PostingAgreementsService.computeWeeks). A target can
-/// be a post count, an engagement metric, or both at once — a week only "meets requirements"
-/// (PostingAgreementEvaluation.targetMet) when every target that's actually configured is met, not
-/// just one of them. Belongs to EITHER a media host OR an influencer, mirroring Payment's own
-/// mediaHostId/influencerId pair.
+/// A media host/influencer's standing deal — general configuration only (a post-count target, an
+/// engagement target, or both, plus the rate paid). `startDate` is a REFERENCE date only (when the
+/// deal was agreed) and plays no part in counting anything — counting happens per campaign
+/// (Influencer2Folder), each with its own date range, checked against this same configuration; the
+/// older auto-computed weekly cycle (see computeWeeks) still exists for agreements that predate
+/// folders, but new counting should go through folders. `weeklyAmount` is the rate paid PER POST
+/// when postsPerWeek is set (ticket amount = weeklyAmount × actual post count once the post target
+/// is met) — otherwise (engagement-only) it's a flat amount paid once the engagement target is
+/// met, since there's no post count to multiply by. A target can be a post count, an engagement
+/// metric, or both at once — "meets requirements" (PostingAgreementEvaluation.targetMet) only when
+/// every target that's actually configured is met. Belongs to EITHER a media host OR an influencer,
+/// mirroring Payment's own mediaHostId/influencerId pair. `attachmentUrl` is an optional copy of
+/// the signed agreement/contract, purely for reference — it never affects any calculation.
 model PostingAgreement {
   id               String                             @id @default(uuid())
   organizationId   String                             @map("organization_id")
@@ -1965,6 +1970,7 @@ model PostingAgreement {
   currency         String                             @default("TZS")
   isActive         Boolean                            @default(true) @map("is_active")
   notes            String?                            @db.Text
+  attachmentUrl    String?                            @map("attachment_url") @db.Text
   createdByUserId  String?                            @map("created_by_user_id")
   createdAt        DateTime                           @default(now()) @map("created_at")
   updatedAt        DateTime                           @updatedAt @map("updated_at")

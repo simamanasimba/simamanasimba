@@ -127,6 +127,14 @@ export class PostingAgreementsService {
     return { success: true };
   }
 
+  /** Attaches a copy of the signed agreement/contract — purely a reference document, never read
+   * by any evaluation or payment logic. */
+  async setAttachment(organizationId: string, id: string, attachmentUrl: string) {
+    await this.ensure(organizationId, id);
+    const row = await this.prisma.postingAgreement.update({ where: { id }, data: { attachmentUrl } });
+    return toNumericAgreement(row);
+  }
+
   /** Every week from the agreement's startDate to now, each merged with its evaluation if one
    * exists — the single source of truth the frontend reads instead of the admin picking a date. */
   async listWeeks(organizationId: string, agreementId: string) {
@@ -158,6 +166,15 @@ export class PostingAgreementsService {
       case "TOTAL_ENGAGEMENT":
         return summary.totalEngagement;
     }
+  }
+
+  /** What a met-target evaluation is actually worth: when the agreement has a post-count target,
+   * weeklyAmount is a RATE PAID PER POST, so the total scales with volume — 3 posts required, 5
+   * delivered, weeklyAmount=1000 pays 5000, not a flat 1000. Engagement-only agreements (no post
+   * target at all) have nothing to multiply by, so weeklyAmount is paid flat once the engagement
+   * target is met. */
+  private computeAmount(agreement: { postsPerWeek: number | null; weeklyAmount: Prisma.Decimal }, evaluation: { actualPostCount: number }): number {
+    return agreement.postsPerWeek != null ? agreement.weeklyAmount.toNumber() * evaluation.actualPostCount : agreement.weeklyAmount.toNumber();
   }
 
   /** Evaluates one (agreement-relative) week — reuses the same Influencer2Campaign aggregation the
@@ -330,7 +347,8 @@ export class PostingAgreementsService {
       beneficiaryType: e.agreement.mediaHostId ? ("MEDIA_HOST" as const) : ("INFLUENCER" as const),
       beneficiaryId: e.agreement.mediaHostId ?? e.agreement.influencerId,
       beneficiaryName: e.agreement.mediaHostId ? (hostName.get(e.agreement.mediaHostId) ?? "—") : (influencerName.get(e.agreement.influencerId!) ?? "—"),
-      weeklyAmount: Number(e.agreement.weeklyAmount),
+      ratePerPost: e.agreement.postsPerWeek != null ? Number(e.agreement.weeklyAmount) : null,
+      amount: this.computeAmount(e.agreement, e),
       currency: e.agreement.currency,
       actualPostCount: e.actualPostCount,
       actualEngagement: e.actualEngagement,
@@ -356,14 +374,17 @@ export class PostingAgreementsService {
       evaluation.weekNumber != null
         ? `week ${evaluation.weekNumber} (${evaluation.weekStart!.toISOString().slice(0, 10)} to ${evaluation.weekEnd!.toISOString().slice(0, 10)})`
         : ((await this.prisma.influencer2Folder.findUnique({ where: { id: evaluation.folderId! }, select: { name: true } }))?.name ?? "campaign");
+    const amount = this.computeAmount(agreement, evaluation);
     const notesParts: string[] = [];
-    if (agreement.postsPerWeek != null) notesParts.push(`${evaluation.actualPostCount} post(s) vs target of ${agreement.postsPerWeek}/week`);
+    if (agreement.postsPerWeek != null) {
+      notesParts.push(`${evaluation.actualPostCount} post(s) vs target of ${agreement.postsPerWeek} — ${agreement.currency} ${agreement.weeklyAmount.toNumber()}/post = ${agreement.currency} ${amount}`);
+    }
     if (agreement.engagementMetric && agreement.engagementTarget != null) {
       const actual = this.pickEngagementValue(
         { totalViews: evaluation.actualViews, totalLikes: evaluation.actualLikes, totalComments: evaluation.actualComments, totalShares: evaluation.actualShares, totalEngagement: evaluation.actualEngagement },
         agreement.engagementMetric,
       );
-      notesParts.push(`${actual} ${agreement.engagementMetric} vs target of ${agreement.engagementTarget}/week`);
+      notesParts.push(`${actual} ${agreement.engagementMetric} vs target of ${agreement.engagementTarget}`);
     }
 
     const payment = await this.prisma.$transaction(async (tx) => {
@@ -374,7 +395,7 @@ export class PostingAgreementsService {
           mediaHostId: agreement.mediaHostId,
           influencerId: agreement.influencerId,
           paymentDate: new Date(),
-          amount: agreement.weeklyAmount,
+          amount,
           currency: agreement.currency,
           description: `Posting agreement — ${groupLabel}`,
           notes: notesParts.join("; "),

@@ -697,8 +697,12 @@ export interface Influencer2CampaignDetail {
 
 export type PostingAgreementEngagementMetric = "VIEWS" | "LIKES" | "COMMENTS" | "SHARES" | "TOTAL_ENGAGEMENT";
 
-/** A media host/influencer's standing weekly deal, anchored to its own startDate — its own
- * independent 7-day cycle, which can include a posts target, an engagement target, or both. */
+/** A media host/influencer's standing deal — general configuration only. `startDate` is a
+ * reference date (when it was agreed) and plays no part in counting anything; counting happens
+ * per campaign (Influencer2Folder). `weeklyAmount` is the rate PAID PER POST when postsPerWeek is
+ * set (total = weeklyAmount × actual post count once met), or a flat amount when it's an
+ * engagement-only agreement. `attachmentUrl` is an optional copy of the signed contract, for
+ * reference only. */
 export interface PostingAgreement {
   id: string;
   organizationId: string;
@@ -712,6 +716,7 @@ export interface PostingAgreement {
   currency: string;
   isActive: boolean;
   notes: string | null;
+  attachmentUrl: string | null;
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -764,7 +769,10 @@ export interface PostingAgreementReadyForPayment {
   beneficiaryType: "MEDIA_HOST" | "INFLUENCER";
   beneficiaryId: string;
   beneficiaryName: string;
-  weeklyAmount: number;
+  /** Rate per post — null for an engagement-only agreement, where `amount` is a flat figure instead. */
+  ratePerPost: number | null;
+  /** What this group is actually worth: ratePerPost × actualPostCount, or the flat agreement amount. */
+  amount: number;
   currency: string;
   actualPostCount: number;
   actualEngagement: number;

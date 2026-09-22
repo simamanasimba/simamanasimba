@@ -104,6 +104,20 @@ export function PostingAgreementModal({
           <p className="mt-1 text-xs text-muted">{t("agreementStartDateHelp")}</p>
         </div>
 
+        {isEdit && (
+          <div>
+            <label className="label">{t("postingAgreementAttachmentLabel")}</label>
+            {agreement?.attachmentUrl ? (
+              <a href={agreement.attachmentUrl} target="_blank" rel="noreferrer" className="block text-sm font-medium text-brand hover:underline">
+                {t("viewAttachmentCta")}
+              </a>
+            ) : (
+              <p className="text-xs text-muted">{t("noAttachmentYet")}</p>
+            )}
+            <p className="mt-1 text-xs text-muted">{t("postingAgreementAttachmentHelp")}</p>
+          </div>
+        )}
+
         <div className="rounded-xl border border-line/60 p-3.5">
           <label className="flex items-center gap-2 text-sm font-medium text-ink">
             <input type="checkbox" checked={wantsPosts} onChange={(e) => setWantsPosts(e.target.checked)} />
@@ -142,8 +156,9 @@ export function PostingAgreementModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">{t("weeklyAmountLabel")}</label>
+            <label className="label">{wantsPosts ? t("amountPerPostLabel") : t("weeklyAmountLabel")}</label>
             <input required type="number" min="0" step="0.01" className="input" value={form.weeklyAmount} onChange={(e) => set("weeklyAmount", e.target.value)} />
+            <p className="mt-1 text-xs text-muted">{wantsPosts ? t("amountPerPostHelp") : t("flatAmountHelp")}</p>
           </div>
           <div>
             <label className="label">{t("currencyLabel")}</label>

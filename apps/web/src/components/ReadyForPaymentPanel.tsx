@@ -43,11 +43,26 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
       ? `/org/${organizationId}/media-hosts/${row.beneficiaryId}`
       : `/org/${organizationId}/influencers/${row.beneficiaryId}`;
 
+  // Grouped by currency rather than assumed to be one — most orgs only ever use TZS, but summing
+  // mixed currencies into one number would be meaningless if that ever isn't true.
+  const totalsByCurrency = new Map<string, number>();
+  for (const row of rows ?? []) totalsByCurrency.set(row.currency, (totalsByCurrency.get(row.currency) ?? 0) + row.amount);
+
   return (
     <div className="card space-y-3">
-      <div>
-        <h2 className="font-display text-lg font-bold text-ink">{t("readyForPaymentTitle")}</h2>
-        <p className="text-xs text-muted">{t("readyForPaymentHint")}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold text-ink">{t("readyForPaymentTitle")}</h2>
+          <p className="text-xs text-muted">{t("readyForPaymentHint")}</p>
+        </div>
+        {totalsByCurrency.size > 0 && (
+          <div className="text-right">
+            <p className="text-xs text-muted">{t("totalPendingPaymentLabel")}</p>
+            {[...totalsByCurrency.entries()].map(([currency, total]) => (
+              <p key={currency} className="nums text-lg font-bold text-brand-700">{currency} {total.toLocaleString()}</p>
+            ))}
+          </div>
+        )}
       </div>
       {(rows?.length ?? 0) === 0 ? (
         <p className="text-sm text-muted">{t("readyForPaymentEmpty")}</p>
@@ -78,7 +93,12 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
                   </td>
                   <td className="nums px-4 py-2.5">{row.actualPostCount}</td>
                   <td className="nums px-4 py-2.5">{row.actualEngagement.toLocaleString()}</td>
-                  <td className="nums px-4 py-2.5 font-semibold text-ink">{row.currency} {row.weeklyAmount.toLocaleString()}</td>
+                  <td className="nums px-4 py-2.5 font-semibold text-ink">
+                    {row.currency} {row.amount.toLocaleString()}
+                    {row.ratePerPost != null && (
+                      <div className="text-xs font-normal text-muted">{row.actualPostCount} × {row.currency} {row.ratePerPost.toLocaleString()}</div>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
                     {canPay && (
                       <button disabled={actingId === row.evaluationId} onClick={() => createTicket(row)} className="btn-primary !py-1.5 text-xs">

@@ -113,6 +113,13 @@ export function canRecordPayment(role: string | undefined | null): boolean {
   return ADMIN_ROLES.includes(role as RoleKey) || role === "FINANCE_OFFICER";
 }
 
+/** Who can set up or edit a posting agreement (target, rate, attachment) and manage its campaigns
+ * — Super Admin and Admin have this exactly like Finance does (same set as canRecordPayment;
+ * named separately so this isn't coupled to payment-recording specifically). */
+export function canManagePostingAgreement(role: string | undefined | null): boolean {
+  return canRecordPayment(role);
+}
+
 /** Who may approve/reject a pending payment — admins by default, but (like canAccess) that
  * default can now be revoked for ORG_ADMIN specifically, and granted to other roles, via the
  * Access control page's matrix. */

@@ -7,7 +7,7 @@ import { CheckCircle2, Eye, Pencil, Plus, Receipt, Trash2, XCircle } from "lucid
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useLang } from "@/lib/i18n";
-import type { Influencer2Folder } from "@/lib/types";
+import type { Influencer2Folder, PostingAgreement } from "@/lib/types";
 
 function FolderModal({
   organizationId,
@@ -119,6 +119,19 @@ export function PostingFoldersPanel({
     queryFn: () => api.get<Influencer2Folder[]>(`/api/v1/organizations/${organizationId}/influencer2/folders?${beneficiaryQuery}`),
   });
 
+  // Needed to compute what a met-target folder is actually worth (rate × actual posts) — see
+  // PostingAgreementsService.computeAmount, mirrored here for display only.
+  const { data: agreements } = useQuery({
+    queryKey: ["posting-agreements", organizationId, mediaHostId, influencerId],
+    queryFn: () => api.get<PostingAgreement[]>(`/api/v1/organizations/${organizationId}/posting-agreements?${beneficiaryQuery}`),
+  });
+  const agreement = agreements?.[0];
+
+  function computeAmount(folder: Influencer2Folder): number | null {
+    if (!agreement || !folder.evaluation) return null;
+    return agreement.postsPerWeek != null ? agreement.weeklyAmount * folder.evaluation.actualPostCount : agreement.weeklyAmount;
+  }
+
   async function evaluateFolder(folder: Influencer2Folder) {
     if (!folder.agreementId) return;
     setBusyId(folder.id);
@@ -190,6 +203,7 @@ export function PostingFoldersPanel({
                 <th className="py-1.5 pr-3">{t("actualPostsLabel")}</th>
                 <th className="py-1.5 pr-3">{t("metricTotalEngagement")}</th>
                 <th className="py-1.5 pr-3">{t("targetMetLabel")}</th>
+                <th className="py-1.5 pr-3">{t("amountLabel")}</th>
                 <th className="py-1.5 pr-3" />
               </tr>
             </thead>
@@ -214,6 +228,9 @@ export function PostingFoldersPanel({
                     ) : (
                       <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
                     )}
+                  </td>
+                  <td className="py-1.5 pr-3 nums">
+                    {computeAmount(f) != null ? `${agreement?.currency} ${computeAmount(f)!.toLocaleString()}` : "—"}
                   </td>
                   <td className="py-1.5 pr-3 text-right">
                     <div className="flex items-center justify-end gap-2">
