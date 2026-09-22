@@ -384,6 +384,19 @@ export class Influencer2CampaignsService {
     return { success: true };
   }
 
+  /** Tags several posts with one agreement week in a single request — the one-at-a-time picker on
+   * the post form works fine for a post added right after it goes up, but posts entered in a
+   * batch (or retagged after the fact) need to be assignable together instead of opened one by
+   * one. Silently ignores any id that isn't a real campaign in this org rather than failing the
+   * whole batch over one bad id. */
+  async bulkAssignWeek(organizationId: string, campaignIds: string[], weekNumber: number) {
+    const result = await this.prisma.influencer2Campaign.updateMany({
+      where: { id: { in: campaignIds }, organizationId },
+      data: { agreementWeekNumber: weekNumber },
+    });
+    return { updated: result.count };
+  }
+
   async setThumbnail(organizationId: string, id: string, thumbnailUrl: string) {
     await this.ensure(organizationId, id);
     return this.prisma.influencer2Campaign.update({ where: { id }, data: { thumbnailUrl } });

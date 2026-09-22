@@ -4,6 +4,7 @@ import type { Influencer2CampaignStatus, Influencer2ContentType, Influencer2Paym
 import { Influencer2CampaignsService } from "./influencer2-campaigns.service";
 import { CreateInfluencer2CampaignDto } from "./dto/create-influencer2-campaign.dto";
 import { UpdateInfluencer2CampaignDto } from "./dto/update-influencer2-campaign.dto";
+import { BulkAssignWeekDto } from "./dto/bulk-assign-week.dto";
 import { AddCampaignPlatformDto } from "./dto/add-campaign-platform.dto";
 import { UpdateCampaignPlatformDto } from "./dto/update-campaign-platform.dto";
 import { SubmitMetricsDto } from "./dto/submit-metrics.dto";
@@ -85,6 +86,22 @@ export class Influencer2CampaignsController {
   ) {
     if (!scope) throw new BadRequestException("scope query param is required");
     return this.campaigns.reportDetails(organizationId, { scope, from: from ? new Date(from) : undefined, to: to ? new Date(to) : undefined });
+  }
+
+  /** Registered before the ":campaignId" routes below so "bulk-week" is never mistaken for a
+   * campaign id. */
+  @Patch("bulk-week")
+  @Roles(...WRITE_ROLES)
+  async bulkAssignWeek(@Param("organizationId") organizationId: string, @Body() dto: BulkAssignWeekDto, @CurrentUser() user: RequestUser) {
+    const result = await this.campaigns.bulkAssignWeek(organizationId, dto.campaignIds, dto.weekNumber);
+    await this.audit.record({
+      organizationId,
+      userId: user.id,
+      action: "influencer2_campaign.bulk_week_assigned",
+      entityType: "influencer2_campaign",
+      metadata: { campaignIds: dto.campaignIds, weekNumber: dto.weekNumber, updated: result.updated },
+    });
+    return result;
   }
 
   @Post()

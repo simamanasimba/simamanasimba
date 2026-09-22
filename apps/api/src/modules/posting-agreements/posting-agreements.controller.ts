@@ -25,6 +25,14 @@ export class PostingAgreementsController {
     return this.agreements.list(organizationId, { mediaHostId, influencerId });
   }
 
+  /** Finance's queue: every completed week across every agreement that met its target(s) and
+   * hasn't been ticketed yet. Registered before the ":agreementId" routes so it's never mistaken
+   * for an agreement id. */
+  @Get("ready-for-payment")
+  listReadyForPayment(@Param("organizationId") organizationId: string, @CurrentUser() user: RequestUser) {
+    return this.agreements.listReadyForPayment(organizationId, user.id);
+  }
+
   @Post()
   async create(@Param("organizationId") organizationId: string, @Body() dto: CreatePostingAgreementDto, @CurrentUser() user: RequestUser) {
     const agreement = await this.agreements.create(organizationId, dto, user.id);

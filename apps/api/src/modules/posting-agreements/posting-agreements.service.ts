@@ -210,6 +210,59 @@ export class PostingAgreementsService {
     });
   }
 
+  /** Finance's own queue: every completed week, across every agreement in the org, that met its
+   * target(s) but hasn't been turned into a payment ticket yet — the whole point of "we pay by
+   * agreement, not by post" only works if Finance can see this without hunting through each host's
+   * or influencer's own page. Auto-evaluates any completed-but-unevaluated week first — safe,
+   * since evaluateWeek() is idempotent and only computes/stores a snapshot from real data; it never
+   * moves money. Only createTicket() does that, and it stays a separate, explicit action Finance
+   * (or an admin) still has to click. */
+  async listReadyForPayment(organizationId: string, userId: string) {
+    const agreements = await this.prisma.postingAgreement.findMany({ where: { organizationId, isActive: true } });
+
+    for (const agreement of agreements) {
+      const weeks = this.computeWeeks(agreement.startDate);
+      const now = Date.now();
+      const existing = await this.prisma.postingAgreementEvaluation.findMany({ where: { agreementId: agreement.id }, select: { weekNumber: true } });
+      const evaluatedWeekNumbers = new Set(existing.map((e) => e.weekNumber));
+      for (const w of weeks) {
+        if (w.weekEnd.getTime() <= now && !evaluatedWeekNumbers.has(w.weekNumber)) {
+          await this.evaluateWeek(organizationId, agreement.id, w.weekNumber, userId);
+        }
+      }
+    }
+
+    const evaluations = await this.prisma.postingAgreementEvaluation.findMany({
+      where: { targetMet: true, paymentId: null, agreement: { organizationId } },
+      include: { agreement: true },
+      orderBy: { weekEnd: "desc" },
+    });
+
+    const hostIds = [...new Set(evaluations.map((e) => e.agreement.mediaHostId).filter((v): v is string => Boolean(v)))];
+    const influencerIds = [...new Set(evaluations.map((e) => e.agreement.influencerId).filter((v): v is string => Boolean(v)))];
+    const [hosts, influencers] = await Promise.all([
+      this.prisma.mediaHost.findMany({ where: { id: { in: hostIds } }, select: { id: true, name: true } }),
+      this.prisma.influencer.findMany({ where: { id: { in: influencerIds } }, select: { id: true, name: true } }),
+    ]);
+    const hostName = new Map<string, string>(hosts.map((h) => [h.id, h.name]));
+    const influencerName = new Map<string, string>(influencers.map((i) => [i.id, i.name]));
+
+    return evaluations.map((e) => ({
+      evaluationId: e.id,
+      agreementId: e.agreementId,
+      weekNumber: e.weekNumber,
+      weekStart: e.weekStart,
+      weekEnd: e.weekEnd,
+      beneficiaryType: e.agreement.mediaHostId ? ("MEDIA_HOST" as const) : ("INFLUENCER" as const),
+      beneficiaryId: e.agreement.mediaHostId ?? e.agreement.influencerId,
+      beneficiaryName: e.agreement.mediaHostId ? (hostName.get(e.agreement.mediaHostId) ?? "—") : (influencerName.get(e.agreement.influencerId!) ?? "—"),
+      weeklyAmount: Number(e.agreement.weeklyAmount),
+      currency: e.agreement.currency,
+      actualPostCount: e.actualPostCount,
+      actualEngagement: e.actualEngagement,
+    }));
+  }
+
   /** Turns a met-target week into a real Payment — always PENDING, exactly like every other
    * payment in this system, so it still goes through the normal approve -> mark-paid workflow.
    * Never automatic: only callable once an admin has looked at an evaluation and chosen to act
