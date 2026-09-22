@@ -17,7 +17,7 @@ import { PostingFoldersPanel } from "@/components/PostingFoldersPanel";
 import { PostingPaymentSummary } from "@/components/PostingPaymentSummary";
 import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
-import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement } from "@/lib/permissions";
+import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement, canPayPostingAgreement } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
 
 /** Same Influencer 2 campaign system as the Influencer pages, scoped to this
@@ -33,6 +33,7 @@ export default function MediaHostDetailPage() {
   const canManage = canManageInfluencer2(myRole);
   const canManagePayments = canRecordPayment(myRole);
   const canManageAgreement = canManagePostingAgreement(myRole);
+  const canPayAgreement = canPayPostingAgreement(myRole);
   const dateRangeFilter = useDateRangeFilter("weekly");
   const { range } = dateRangeFilter;
 
@@ -93,11 +94,11 @@ export default function MediaHostDetailPage() {
         </div>
       </div>
 
-      <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} />
+      <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
 
-      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} />
+      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} />
 
-      <PostingFoldersPanel organizationId={organizationId} mediaHostId={hostId} canManage={canManageAgreement} />
+      <PostingFoldersPanel organizationId={organizationId} mediaHostId={hostId} canManage={canManageAgreement} canPay={canPayAgreement} />
 
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 

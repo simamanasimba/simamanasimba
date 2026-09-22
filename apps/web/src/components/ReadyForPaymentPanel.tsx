@@ -79,10 +79,12 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
                   <td className="nums px-4 py-2.5">{row.actualEngagement.toLocaleString()}</td>
                   <td className="nums px-4 py-2.5 font-semibold text-ink">{row.currency} {row.amount.toLocaleString()}</td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                    {canPay && (
+                    {canPay ? (
                       <button onClick={() => setPayingRow(row)} className="btn-primary !py-1.5 text-xs">
                         <Receipt size={13} /> {t("markAsPaidTitle")}
                       </button>
+                    ) : (
+                      <span className="text-xs text-muted">{t("awaitingFinanceLabel")}</span>
                     )}
                   </td>
                 </tr>

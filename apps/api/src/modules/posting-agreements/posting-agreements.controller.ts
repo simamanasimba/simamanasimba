@@ -119,8 +119,11 @@ export class PostingAgreementsController {
 
   /** The action the UI actually uses: records a met-target week/campaign as paid immediately,
    * with whatever proof (attachment) Finance uploads separately right after via the existing
-   * payments/:paymentId/attachment endpoint. */
+   * payments/:paymentId/attachment endpoint. Finance-only — overrides the controller's broader
+   * class-level roles: an admin (including Super Admin) can set up an agreement and follow its
+   * money, but actually paying it out is exclusively Finance's action. */
   @Post("evaluations/:evaluationId/mark-paid")
+  @Roles("FINANCE_OFFICER")
   async markPaid(
     @Param("organizationId") organizationId: string,
     @Param("evaluationId") evaluationId: string,

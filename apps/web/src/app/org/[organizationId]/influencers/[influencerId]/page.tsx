@@ -17,7 +17,7 @@ import { PostingFoldersPanel } from "@/components/PostingFoldersPanel";
 import { PostingPaymentSummary } from "@/components/PostingPaymentSummary";
 import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
-import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement } from "@/lib/permissions";
+import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement, canPayPostingAgreement } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
 
 /** Campaigns here are Influencer 2's model (one campaign = one piece of
@@ -35,6 +35,7 @@ export default function InfluencerDetailPage() {
   const canManage = canManageInfluencer2(myRole);
   const canManagePayments = canRecordPayment(myRole);
   const canManageAgreement = canManagePostingAgreement(myRole);
+  const canPayAgreement = canPayPostingAgreement(myRole);
   const dateRangeFilter = useDateRangeFilter("weekly");
   const { range } = dateRangeFilter;
 
@@ -95,11 +96,11 @@ export default function InfluencerDetailPage() {
         </div>
       </div>
 
-      <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} />
+      <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} compact={!canPayAgreement} />
 
-      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} />
+      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} />
 
-      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManageAgreement} />
+      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManageAgreement} canPay={canPayAgreement} />
 
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 

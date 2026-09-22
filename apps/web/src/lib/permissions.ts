@@ -115,9 +115,17 @@ export function canRecordPayment(role: string | undefined | null): boolean {
 
 /** Who can set up or edit a posting agreement (target, rate, attachment) and manage its campaigns
  * — Super Admin and Admin have this exactly like Finance does (same set as canRecordPayment;
- * named separately so this isn't coupled to payment-recording specifically). */
+ * named separately so this isn't coupled to payment-recording specifically). Setting up the deal
+ * is a different responsibility from actually paying it out — see canPayPostingAgreement. */
 export function canManagePostingAgreement(role: string | undefined | null): boolean {
   return canRecordPayment(role);
+}
+
+/** Who can actually mark a met-target week/campaign as paid — Finance only. An admin (including
+ * Super Admin) can set up the agreement and follow the money, but paying it out is exclusively
+ * Finance's action, not an admin's. */
+export function canPayPostingAgreement(role: string | undefined | null): boolean {
+  return role === "FINANCE_OFFICER";
 }
 
 /** Who may approve/reject a pending payment — admins by default, but (like canAccess) that

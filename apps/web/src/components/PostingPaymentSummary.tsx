@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
@@ -10,17 +12,21 @@ import type { Influencer2Folder, Payment, PostingAgreement, PostingAgreementWeek
  * still PENDING/PROCESSING) next to everything already PAID. Reads the same week/folder/payment
  * data PostingAgreementCard, PostingFoldersPanel and the payment-history page already show
  * individually — this just adds the totals up in one place instead of making Finance do it by
- * hand. */
+ * hand. `compact` (for a viewer who can follow up but not pay, e.g. Super Admin) collapses this
+ * behind a small toggle instead of showing it prominently at the top the way Finance sees it. */
 export function PostingPaymentSummary({
   organizationId,
   mediaHostId,
   influencerId,
+  compact,
 }: {
   organizationId: string;
   mediaHostId?: string;
   influencerId?: string;
+  compact?: boolean;
 }) {
   const { t } = useLang();
+  const [expanded, setExpanded] = useState(false);
   const beneficiaryQuery = mediaHostId ? `mediaHostId=${mediaHostId}` : `influencerId=${influencerId}`;
 
   const { data: agreements } = useQuery({
@@ -65,8 +71,8 @@ export function PostingPaymentSummary({
 
   if (pendingByCurrency.size === 0 && paidByCurrency.size === 0) return null;
 
-  return (
-    <div className="card grid grid-cols-1 gap-4 sm:grid-cols-2">
+  const totals = (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div>
         <p className="text-xs text-muted">{t("totalPendingPaymentLabel")}</p>
         {pendingByCurrency.size === 0 ? (
@@ -87,6 +93,17 @@ export function PostingPaymentSummary({
           ))
         )}
       </div>
+    </div>
+  );
+
+  if (!compact) return <div className="card">{totals}</div>;
+
+  return (
+    <div className="card">
+      <button type="button" className="flex w-full items-center gap-1.5 text-sm font-medium text-brand" onClick={() => setExpanded((e) => !e)}>
+        {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />} {t("viewPaymentStatusCta")}
+      </button>
+      {expanded && <div className="mt-3">{totals}</div>}
     </div>
   );
 }

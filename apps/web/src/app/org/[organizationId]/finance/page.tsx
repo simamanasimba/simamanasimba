@@ -18,7 +18,7 @@ import { FinanceStatCards } from "@/components/FinanceStatCards";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
-import { canRecordPayment, canApprovePayment } from "@/lib/permissions";
+import { canRecordPayment, canApprovePayment, canPayPostingAgreement } from "@/lib/permissions";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { RequireAccess } from "@/components/RequireAccess";
 
@@ -287,6 +287,7 @@ export default function FinancePage() {
   const { data: perms } = useRolePermissions(organizationId);
   const canPay = canRecordPayment(myRole);
   const canApprove = canApprovePayment(myRole, perms?.matrix);
+  const canPayAgreements = canPayPostingAgreement(myRole);
   const [showRecord, setShowRecord] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
 
@@ -330,7 +331,7 @@ export default function FinancePage() {
 
       {canApprove && <PendingApprovalPanel organizationId={organizationId} />}
 
-      <ReadyForPaymentPanel organizationId={organizationId} canPay={canPay} />
+      <ReadyForPaymentPanel organizationId={organizationId} canPay={canPayAgreements} />
 
       <Link
         href={`/org/${organizationId}/finance/today`}

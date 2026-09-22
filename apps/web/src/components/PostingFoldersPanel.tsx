@@ -97,11 +97,15 @@ export function PostingFoldersPanel({
   mediaHostId,
   influencerId,
   canManage,
+  canPay,
 }: {
   organizationId: string;
   mediaHostId?: string;
   influencerId?: string;
+  /** Create/edit campaigns, evaluate — admins and Finance. */
   canManage: boolean;
+  /** Mark a met-target campaign as paid — Finance only. */
+  canPay: boolean;
 }) {
   const { t } = useLang();
   const queryClient = useQueryClient();
@@ -252,10 +256,12 @@ export function PostingFoldersPanel({
                       )}
                       {f.evaluation?.paymentId ? (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("paymentStatusPaid")}</span>
-                      ) : f.evaluation?.targetMet && canManage ? (
+                      ) : f.evaluation?.targetMet && canPay ? (
                         <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingFolder(f)}>
                           {t("markAsPaidTitle")}
                         </button>
+                      ) : f.evaluation?.targetMet ? (
+                        <span className="text-xs text-muted">{t("awaitingFinanceLabel")}</span>
                       ) : null}
                       {canManage && (
                         <>

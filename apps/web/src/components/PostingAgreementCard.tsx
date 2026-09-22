@@ -28,13 +28,18 @@ export function PostingAgreementCard({
   influencerId,
   beneficiaryName,
   canManage,
+  canPay,
 }: {
   organizationId: string;
   mediaHostId?: string;
   influencerId?: string;
   /** Only needed to label the printed document — falls back to a generic word if omitted. */
   beneficiaryName?: string;
+  /** Set up/edit the agreement, evaluate weeks — admins and Finance. */
   canManage: boolean;
+  /** Mark a met-target week as paid — Finance only, even for an admin who can otherwise manage
+   * this agreement. */
+  canPay: boolean;
 }) {
   const { t } = useLang();
   const queryClient = useQueryClient();
@@ -302,10 +307,12 @@ export function PostingAgreementCard({
                             )}
                             {w.evaluation?.paymentId ? (
                               <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("paymentStatusPaid")}</span>
-                            ) : w.evaluation?.targetMet && canManage ? (
+                            ) : w.evaluation?.targetMet && canPay ? (
                               <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingWeek(w)}>
                                 {t("markAsPaidTitle")}
                               </button>
+                            ) : w.evaluation?.targetMet ? (
+                              <span className="text-xs text-muted">{t("awaitingFinanceLabel")}</span>
                             ) : null}
                           </div>
                         </td>
