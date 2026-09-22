@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Upload, Users } from "lucide-react";
+import { Search, Upload, UserPlus, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
+import { LocationSelect, type LocationValue } from "@/components/LocationSelect";
 import { useLang } from "@/lib/i18n";
-import type { PaginatedMembers } from "@/lib/types";
+import type { Member, PaginatedMembers } from "@/lib/types";
 
-type Tab = "select" | "upload";
+type Tab = "select" | "new" | "upload";
 
 interface BulkResult {
   checkedIn: number;
@@ -34,9 +35,20 @@ export function BulkCheckInModal({ organizationId, eventId, onClose, onDone }: {
 
   const [file, setFile] = useState<File | null>(null);
 
+  const [newForm, setNewForm] = useState({ membershipNumber: "", firstName: "", lastName: "", phone: "", email: "" });
+  const [newLocation, setNewLocation] = useState<LocationValue>({ region: "", district: "", ward: "" });
+  const [newIsLeader, setNewIsLeader] = useState(false);
+  const [addedNames, setAddedNames] = useState<string[]>([]);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newError, setNewError] = useState<string | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BulkResult | null>(null);
+
+  function setNew<K extends keyof typeof newForm>(key: K, value: string) {
+    setNewForm((f) => ({ ...f, [key]: value }));
+  }
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -62,6 +74,38 @@ export function BulkCheckInModal({ organizationId, eventId, onClose, onDone }: {
       setError(err instanceof ApiError ? err.message : t("bulkCheckInFailed"));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /** Creates a brand-new member (full set of fields, matching NewMemberModal) and checks them in
+   * immediately — kept as its own tab rather than folded into "select existing" so an admin can add
+   * several walk-ins who aren't registered yet without leaving the check-in flow, one at a time. */
+  async function addNewMember(e: React.FormEvent) {
+    e.preventDefault();
+    setAddingNew(true);
+    setNewError(null);
+    try {
+      const member = await api.post<Member>(`/api/v1/organizations/${organizationId}/members`, {
+        membershipNumber: newForm.membershipNumber || undefined,
+        firstName: newForm.firstName,
+        lastName: newForm.lastName,
+        phone: newForm.phone || undefined,
+        email: newForm.email || undefined,
+        region: newLocation.region || undefined,
+        district: newLocation.district || undefined,
+        ward: newLocation.ward || undefined,
+        isLeader: newIsLeader,
+      });
+      await api.post(`/api/v1/organizations/${organizationId}/events/${eventId}/attendance/admin-checkin`, { memberId: member.id });
+      setAddedNames((prev) => [...prev, `${member.firstName} ${member.lastName}`]);
+      setNewForm({ membershipNumber: "", firstName: "", lastName: "", phone: "", email: "" });
+      setNewLocation({ region: "", district: "", ward: "" });
+      setNewIsLeader(false);
+      onDone();
+    } catch (err) {
+      setNewError(err instanceof ApiError ? err.message : t("bulkCheckInFailed"));
+    } finally {
+      setAddingNew(false);
     }
   }
 
@@ -125,6 +169,13 @@ export function BulkCheckInModal({ organizationId, eventId, onClose, onDone }: {
             </button>
             <button
               type="button"
+              onClick={() => setTab("new")}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${tab === "new" ? "bg-white text-brand-700 shadow-sm" : "text-muted"}`}
+            >
+              <UserPlus size={14} /> {t("newMemberTab")}
+            </button>
+            <button
+              type="button"
               onClick={() => setTab("upload")}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${tab === "upload" ? "bg-white text-brand-700 shadow-sm" : "text-muted"}`}
             >
@@ -160,6 +211,44 @@ export function BulkCheckInModal({ organizationId, eventId, onClose, onDone }: {
               <div className="flex justify-end gap-2 border-t border-line pt-3">
                 <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>
                 <button type="submit" disabled={submitting || selected.size === 0} className="btn-primary">{submitting ? t("checkingInLabel") : t("checkInCta")}</button>
+              </div>
+            </form>
+          ) : tab === "new" ? (
+            <form onSubmit={addNewMember} className="space-y-3">
+              <div>
+                <label className="label">{t("membershipNumberLabel")}</label>
+                <input className="input font-mono" placeholder={t("membershipNumberOptionalHelp")} value={newForm.membershipNumber} onChange={(e) => setNew("membershipNumber", e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">{t("firstName")}</label>
+                  <input required className="input" value={newForm.firstName} onChange={(e) => setNew("firstName", e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">{t("lastName")}</label>
+                  <input required className="input" value={newForm.lastName} onChange={(e) => setNew("lastName", e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">{t("phone")}</label>
+                  <input className="input" value={newForm.phone} onChange={(e) => setNew("phone", e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">{t("email")}</label>
+                  <input type="email" className="input" value={newForm.email} onChange={(e) => setNew("email", e.target.value)} />
+                </div>
+              </div>
+              <LocationSelect value={newLocation} onChange={setNewLocation} />
+              <label className="flex items-center gap-2 text-sm font-medium text-ink">
+                <input type="checkbox" className="h-4 w-4 rounded border-line" checked={newIsLeader} onChange={(e) => setNewIsLeader(e.target.checked)} />
+                {t("isLeaderLabel")}
+              </label>
+              {addedNames.length > 0 && <p className="text-xs font-medium text-success">{t("bulkNewMembersAddedPrefix")} {addedNames.join(", ")}</p>}
+              {newError && <p className="text-sm text-brand">{newError}</p>}
+              <div className="flex justify-end gap-2 border-t border-line pt-3">
+                <button type="button" onClick={onClose} className="btn-secondary">{t("doneBtn")}</button>
+                <button type="submit" disabled={addingNew} className="btn-primary">{addingNew ? t("checkingInLabel") : t("addAndCheckInCta")}</button>
               </div>
             </form>
           ) : (
