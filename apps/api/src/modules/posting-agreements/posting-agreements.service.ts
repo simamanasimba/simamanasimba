@@ -70,7 +70,10 @@ export class PostingAgreementsService {
       where: { organizationId, mediaHostId: filters.mediaHostId, influencerId: filters.influencerId },
       orderBy: { createdAt: "desc" },
     });
-    return rows.map(toNumericAgreement);
+    // Lets the frontend lock the target/rate fields once true — see update()'s own enforcement,
+    // which this is purely a UI preview of (the real guard is server-side either way).
+    const paidFlags = await Promise.all(rows.map((r) => this.hasBeenPaid(r.id)));
+    return rows.map((r, i) => ({ ...toNumericAgreement(r), hasBeenPaid: paidFlags[i] }));
   }
 
   async create(organizationId: string, dto: CreatePostingAgreementDto, userId: string) {
@@ -93,8 +96,33 @@ export class PostingAgreementsService {
     return toNumericAgreement(row);
   }
 
+  /** Whether this agreement has ever actually paid out — checked against the linked payment's
+   * REAL status, not just whether a paymentId was set (a paymentId alone was never proof money
+   * moved; see the same note on listWeeks). Once true, the deal's own terms are locked — see
+   * update(). */
+  private async hasBeenPaid(agreementId: string): Promise<boolean> {
+    const paid = await this.prisma.postingAgreementEvaluation.findFirst({
+      where: { agreementId, payment: { status: "PAID" } },
+      select: { id: true },
+    });
+    return Boolean(paid);
+  }
+
   async update(organizationId: string, id: string, dto: UpdatePostingAgreementDto) {
     const existing = await this.ensure(organizationId, id);
+
+    const changesTerms =
+      dto.postsPerWeek !== undefined ||
+      dto.engagementMetric !== undefined ||
+      dto.engagementTarget !== undefined ||
+      dto.weeklyAmount !== undefined ||
+      dto.currency !== undefined;
+    if (changesTerms && (await this.hasBeenPaid(id))) {
+      throw new BadRequestException(
+        "This agreement has already paid out at least one campaign/week — its target and rate can no longer be changed, so a paid figure can never be edited after the fact. Deactivate it and set up a new agreement instead.",
+      );
+    }
+
     const merged = {
       mediaHostId: dto.mediaHostId ?? existing.mediaHostId ?? undefined,
       influencerId: dto.influencerId ?? existing.influencerId ?? undefined,
@@ -122,10 +150,23 @@ export class PostingAgreementsService {
     return toNumericAgreement(row);
   }
 
+  /** Deletes the agreement AND every payment ever created from one of its evaluations, including
+   * ones already marked PAID — "clear agreement" is a deliberate, confirmed admin action (see the
+   * frontend's confirm dialog, which spells this out), not something that happens by accident.
+   * Posts themselves are never touched: only the agreement, its evaluations (cascade), and the
+   * payments they produced. */
   async remove(organizationId: string, id: string) {
     await this.ensure(organizationId, id);
-    await this.prisma.postingAgreement.delete({ where: { id } });
-    return { success: true };
+    const evaluations = await this.prisma.postingAgreementEvaluation.findMany({ where: { agreementId: id }, select: { paymentId: true } });
+    const paymentIds = evaluations.map((e) => e.paymentId).filter((v): v is string => Boolean(v));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.postingAgreement.delete({ where: { id } }); // cascades its evaluations
+      if (paymentIds.length > 0) {
+        await tx.payment.deleteMany({ where: { id: { in: paymentIds }, organizationId } });
+      }
+    });
+    return { success: true, paymentsRemoved: paymentIds.length };
   }
 
   /** Attaches a copy of the signed agreement/contract — purely a reference document, never read
@@ -141,7 +182,10 @@ export class PostingAgreementsService {
   async listWeeks(organizationId: string, agreementId: string) {
     const agreement = await this.ensure(organizationId, agreementId);
     const weeks = this.computeWeeks(agreement.startDate);
-    const evaluations = await this.prisma.postingAgreementEvaluation.findMany({ where: { agreementId } });
+    // `payment` included so the frontend can tell "has a paymentId" apart from "is actually PAID"
+    // — a payment can exist and still be PENDING/REJECTED (e.g. old data from before markPaidDirectly
+    // existed), and paymentId alone was never proof of money having moved.
+    const evaluations = await this.prisma.postingAgreementEvaluation.findMany({ where: { agreementId }, include: { payment: { select: { status: true } } } });
     const byWeekNumber = new Map(evaluations.map((e) => [e.weekNumber, e]));
     const now = new Date();
 

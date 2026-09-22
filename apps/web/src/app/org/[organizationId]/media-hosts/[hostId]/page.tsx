@@ -94,12 +94,6 @@ export default function MediaHostDetailPage() {
         </div>
       </div>
 
-      <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
-
-      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} />
-
-      <PostingFoldersPanel organizationId={organizationId} mediaHostId={hostId} canManage={canManageAgreement} canPay={canPayAgreement} />
-
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
       <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
@@ -134,6 +128,12 @@ export default function MediaHostDetailPage() {
         viewAllCampaignsHref={`/org/${organizationId}/media-hosts/${hostId}/campaigns`}
         viewAllPaymentsHref={`/org/${organizationId}/media-hosts/${hostId}/payments`}
       />
+
+      <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
+
+      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} />
+
+      <PostingFoldersPanel organizationId={organizationId} mediaHostId={hostId} canManage={canManageAgreement} canPay={canPayAgreement} />
 
       <div className="card">
         <Collapsible title={t("bankingInfoTitle")} bare>

@@ -96,12 +96,6 @@ export default function InfluencerDetailPage() {
         </div>
       </div>
 
-      <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} compact={!canPayAgreement} />
-
-      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} />
-
-      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManageAgreement} canPay={canPayAgreement} />
-
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
       <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
@@ -136,6 +130,12 @@ export default function InfluencerDetailPage() {
         viewAllCampaignsHref={`/org/${organizationId}/influencers/${influencerId}/campaigns`}
         viewAllPaymentsHref={`/org/${organizationId}/influencers/${influencerId}/payments`}
       />
+
+      <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} compact={!canPayAgreement} />
+
+      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} />
+
+      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManageAgreement} canPay={canPayAgreement} />
 
       <div className="card">
         <Collapsible title={t("bankingInfoTitle")} bare>

@@ -254,8 +254,13 @@ export function PostingFoldersPanel({
                           {t("evaluateThisWeekCta")}
                         </button>
                       )}
-                      {f.evaluation?.paymentId ? (
+                      {f.evaluation?.payment?.status === "PAID" ? (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("paymentStatusPaid")}</span>
+                      ) : f.evaluation?.paymentId ? (
+                        // A payment record exists but isn't PAID (old data from before "Mark as
+                        // paid" always paid immediately) — never re-offer paying it, that would try
+                        // to create a second payment for the same campaign.
+                        <span className="text-xs text-muted">{f.evaluation.payment?.status ?? t("weekPendingEvaluationLabel")}</span>
                       ) : f.evaluation?.targetMet && canPay ? (
                         <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingFolder(f)}>
                           {t("markAsPaidTitle")}

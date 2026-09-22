@@ -27,6 +27,10 @@ export function PostingAgreementModal({
 }) {
   const { t } = useLang();
   const isEdit = Boolean(agreement);
+  // Once any week/campaign under this agreement has actually been paid, its target and rate are
+  // locked (enforced server-side too — this is just so the form shows read-only fields instead of
+  // letting the user hit that error on submit).
+  const locked = Boolean(agreement?.hasBeenPaid);
   const [wantsPosts, setWantsPosts] = useState(agreement ? agreement.postsPerWeek != null : true);
   const [wantsEngagement, setWantsEngagement] = useState(agreement ? agreement.engagementMetric != null : false);
   const [form, setForm] = useState({
@@ -62,17 +66,22 @@ export function PostingAgreementModal({
     setSubmitting(true);
     setError(null);
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         mediaHostId,
         influencerId,
         startDate: form.startDate,
-        postsPerWeek: wantsPosts ? Number(form.postsPerWeek) : null,
-        engagementMetric: wantsEngagement ? form.engagementMetric : null,
-        engagementTarget: wantsEngagement ? Number(form.engagementTarget) : null,
-        weeklyAmount: Number(form.weeklyAmount),
-        currency: form.currency || undefined,
         notes: form.notes || undefined,
       };
+      // Locked fields are simply left out of the request — the backend treats an omitted field as
+      // "not changing it", so a paid agreement's notes/start date can still be edited freely
+      // without ever touching (or re-sending unchanged) its target/rate.
+      if (!locked) {
+        body.postsPerWeek = wantsPosts ? Number(form.postsPerWeek) : null;
+        body.engagementMetric = wantsEngagement ? form.engagementMetric : null;
+        body.engagementTarget = wantsEngagement ? Number(form.engagementTarget) : null;
+        body.weeklyAmount = Number(form.weeklyAmount);
+        body.currency = form.currency || undefined;
+      }
       if (isEdit) {
         await api.patch(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement!.id}`, body);
       } else {
@@ -104,6 +113,8 @@ export function PostingAgreementModal({
           <p className="mt-1 text-xs text-muted">{t("agreementStartDateHelp")}</p>
         </div>
 
+        {locked && <p className="rounded-xl border border-line bg-surface px-3.5 py-2.5 text-xs text-muted">{t("agreementLockedHint")}</p>}
+
         {isEdit && (
           <div>
             <label className="label">{t("postingAgreementAttachmentLabel")}</label>
@@ -120,27 +131,27 @@ export function PostingAgreementModal({
 
         <div className="rounded-xl border border-line/60 p-3.5">
           <label className="flex items-center gap-2 text-sm font-medium text-ink">
-            <input type="checkbox" checked={wantsPosts} onChange={(e) => setWantsPosts(e.target.checked)} />
+            <input type="checkbox" disabled={locked} checked={wantsPosts} onChange={(e) => setWantsPosts(e.target.checked)} />
             {t("targetTypePostCount")}
           </label>
           {wantsPosts && (
             <div className="mt-2">
               <label className="label">{t("postsPerWeekLabel")}</label>
-              <input required type="number" min="1" className="input" value={form.postsPerWeek} onChange={(e) => set("postsPerWeek", e.target.value)} />
+              <input required disabled={locked} type="number" min="1" className={`input ${locked ? "bg-surface text-muted" : ""}`} value={form.postsPerWeek} onChange={(e) => set("postsPerWeek", e.target.value)} />
             </div>
           )}
         </div>
 
         <div className="rounded-xl border border-line/60 p-3.5">
           <label className="flex items-center gap-2 text-sm font-medium text-ink">
-            <input type="checkbox" checked={wantsEngagement} onChange={(e) => setWantsEngagement(e.target.checked)} />
+            <input type="checkbox" disabled={locked} checked={wantsEngagement} onChange={(e) => setWantsEngagement(e.target.checked)} />
             {t("targetTypeEngagement")}
           </label>
           {wantsEngagement && (
             <div className="mt-2 grid grid-cols-2 gap-3">
               <div>
                 <label className="label">{t("agreementEngagementMetricLabel")}</label>
-                <select className="input" value={form.engagementMetric} onChange={(e) => set("engagementMetric", e.target.value as PostingAgreementEngagementMetric)}>
+                <select disabled={locked} className={`input ${locked ? "bg-surface text-muted" : ""}`} value={form.engagementMetric} onChange={(e) => set("engagementMetric", e.target.value as PostingAgreementEngagementMetric)}>
                   {ENGAGEMENT_METRICS.map((m) => (
                     <option key={m} value={m}>{metricLabel[m]}</option>
                   ))}
@@ -148,7 +159,7 @@ export function PostingAgreementModal({
               </div>
               <div>
                 <label className="label">{t("engagementTargetLabel")}</label>
-                <input required type="number" min="1" className="input" value={form.engagementTarget} onChange={(e) => set("engagementTarget", e.target.value)} />
+                <input required disabled={locked} type="number" min="1" className={`input ${locked ? "bg-surface text-muted" : ""}`} value={form.engagementTarget} onChange={(e) => set("engagementTarget", e.target.value)} />
               </div>
             </div>
           )}
@@ -157,12 +168,12 @@ export function PostingAgreementModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">{t("weeklyAmountLabel")}</label>
-            <input required type="number" min="0" step="0.01" className="input" value={form.weeklyAmount} onChange={(e) => set("weeklyAmount", e.target.value)} />
+            <input required disabled={locked} type="number" min="0" step="0.01" className={`input ${locked ? "bg-surface text-muted" : ""}`} value={form.weeklyAmount} onChange={(e) => set("weeklyAmount", e.target.value)} />
             <p className="mt-1 text-xs text-muted">{t("flatAmountHelp")}</p>
           </div>
           <div>
             <label className="label">{t("currencyLabel")}</label>
-            <input className="input" value={form.currency} onChange={(e) => set("currency", e.target.value)} />
+            <input disabled={locked} className={`input ${locked ? "bg-surface text-muted" : ""}`} value={form.currency} onChange={(e) => set("currency", e.target.value)} />
           </div>
         </div>
 

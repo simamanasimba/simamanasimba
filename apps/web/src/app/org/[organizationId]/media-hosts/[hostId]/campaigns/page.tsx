@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2ContentType, Influencer2Folder, MediaHostProfile, PaginatedInfluencer2Campaigns } from "@/lib/types";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
@@ -21,6 +21,23 @@ import { useLang } from "@/lib/i18n";
 const PAGE_SIZE = 25;
 const CONTENT_TYPES: Influencer2ContentType[] = ["VIDEO", "IMAGE", "REEL", "STORY", "ARTICLE", "PODCAST", "AUDIO", "OTHER"];
 const STATUSES: Influencer2CampaignStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"];
+
+type SortKey = "name" | "contentType" | "campaign" | "views" | "engagement" | "status";
+
+/** Clickable header that toggles asc/desc on the current page's rows — sorting only ever applies
+ * to the page you're looking at (data is server-paginated), same as any spreadsheet column sort
+ * within a visible sheet. */
+function SortableHeader({ label, sortKey, active, dir, onClick, align }: { label: string; sortKey: SortKey; active: SortKey; dir: "asc" | "desc"; onClick: (key: SortKey) => void; align?: "right" }) {
+  const isActive = active === sortKey;
+  return (
+    <th className={`px-4 py-2.5 ${align === "right" ? "text-right" : ""}`}>
+      <button type="button" onClick={() => onClick(sortKey)} className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""} hover:text-ink`}>
+        {label}
+        {isActive ? (dir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
+      </button>
+    </th>
+  );
+}
 
 /** All of one media host's Influencer 2 campaigns — reached from the "Total
  * campaigns" card on their profile page. Mirrors the influencer version. */
@@ -39,6 +56,8 @@ export default function MediaHostCampaignsPage() {
   const [folderId, setFolderId] = useState(searchParams.get("folderId") ?? "");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // A list of every post defaults to showing every post — "weekly" as a default here silently
   // hid posts older than 7 days (a genuinely confusing "missing post" experience), unlike the
   // profile page's own stat tiles, where a weekly-by-default *summary* is the actual intent.
@@ -106,6 +125,40 @@ export default function MediaHostCampaignsPage() {
       return next;
     });
   }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  }
+
+  const folderNameById = new Map((folders ?? []).map((f) => [f.id, f.name]));
+
+  const sortedItems = useMemo(() => {
+    const items = data?.items ?? [];
+    const sign = sortDir === "asc" ? 1 : -1;
+    return [...items].sort((a, b) => {
+      switch (sortKey) {
+        case "name":
+          return sign * a.campaign.name.localeCompare(b.campaign.name);
+        case "contentType":
+          return sign * a.campaign.contentType.localeCompare(b.campaign.contentType);
+        case "campaign": {
+          const an = (a.campaign.folderId && folderNameById.get(a.campaign.folderId)) || "";
+          const bn = (b.campaign.folderId && folderNameById.get(b.campaign.folderId)) || "";
+          return sign * an.localeCompare(bn);
+        }
+        case "views":
+          return sign * ((a.totals.totalViews ?? -1) - (b.totals.totalViews ?? -1));
+        case "engagement":
+          return sign * (a.totals.totalEngagement - b.totals.totalEngagement);
+        case "status":
+          return sign * (a.campaign.paymentProgress ?? "UNPAID").localeCompare(b.campaign.paymentProgress ?? "UNPAID");
+        default:
+          return 0;
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, sortKey, sortDir]);
 
   return (
     <RequireAccess area="influencer2">
@@ -192,16 +245,17 @@ export default function MediaHostCampaignsPage() {
                         <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAllOnPage} title={t("selectAllCta")} />
                       </th>
                     )}
-                    <th className="px-4 py-2.5">{t("influencer2CampaignColLabel")}</th>
-                    <th className="px-4 py-2.5">{t("influencer2ContentTypeColLabel")}</th>
+                    <SortableHeader label={t("influencer2CampaignColLabel")} sortKey="name" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHeader label={t("influencer2ContentTypeColLabel")} sortKey="contentType" active={sortKey} dir={sortDir} onClick={toggleSort} />
                     <th className="px-4 py-2.5">{t("influencer2PlatformsColLabel")}</th>
-                    <th className="px-4 py-2.5 text-right">{t("influencer2ViewsColLabel")}</th>
-                    <th className="px-4 py-2.5 text-right">{t("influencer2EngagementColLabel")}</th>
-                    <th className="px-4 py-2.5">{t("statusColLabel")}</th>
+                    <SortableHeader label={t("postFolderLabel")} sortKey="campaign" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHeader label={t("influencer2ViewsColLabel")} sortKey="views" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+                    <SortableHeader label={t("influencer2EngagementColLabel")} sortKey="engagement" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+                    <SortableHeader label={t("statusColLabel")} sortKey="status" active={sortKey} dir={sortDir} onClick={toggleSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {data.items.map(({ campaign, platformKeys, totals }) => (
+                  {sortedItems.map(({ campaign, platformKeys, totals }) => (
                     <tr key={campaign.id} className="hover:bg-brand-50/40">
                       {canManage && (
                         <td className="px-4 py-2.5">
@@ -217,6 +271,7 @@ export default function MediaHostCampaignsPage() {
                           {platformKeys.map((k) => <span key={k} className="badge bg-surface text-muted">{k}</span>)}
                         </div>
                       </td>
+                      <td className="px-4 py-2.5 text-muted">{campaign.folderId ? (folderNameById.get(campaign.folderId) ?? "—") : "—"}</td>
                       <td className="nums px-4 py-2.5 text-right text-muted">{totals.totalViews != null ? totals.totalViews.toLocaleString() : "—"}</td>
                       <td className="nums px-4 py-2.5 text-right font-semibold text-ink">{totals.totalEngagement.toLocaleString()}</td>
                       <td className="px-4 py-2.5">

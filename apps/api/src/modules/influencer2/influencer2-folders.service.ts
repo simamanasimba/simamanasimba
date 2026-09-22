@@ -54,8 +54,13 @@ export class Influencer2FoldersService {
           where: { organizationId, mediaHostId: filters.mediaHostId, influencerId: filters.influencerId, isActive: true },
         })
       : null;
+    // `payment` included so the frontend can tell "has a paymentId" apart from "is actually PAID"
+    // — see the same note on PostingAgreementsService.listWeeks.
     const evaluations = agreement
-      ? await this.prisma.postingAgreementEvaluation.findMany({ where: { agreementId: agreement.id, folderId: { in: folders.map((f) => f.id) } } })
+      ? await this.prisma.postingAgreementEvaluation.findMany({
+          where: { agreementId: agreement.id, folderId: { in: folders.map((f) => f.id) } },
+          include: { payment: { select: { status: true } } },
+        })
       : [];
     const evaluationByFolderId = new Map(evaluations.map((e) => [e.folderId as string, e]));
 

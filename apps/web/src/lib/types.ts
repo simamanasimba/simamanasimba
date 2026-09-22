@@ -722,6 +722,10 @@ export interface PostingAgreement {
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** True once at least one of its weeks/campaigns has actually been paid — its target and rate
+   * are then locked server-side (see PostingAgreementsService.update), so the edit form should
+   * show them as read-only rather than let the user hit that error on submit. */
+  hasBeenPaid?: boolean;
 }
 
 /** One group's (auto-computed week, or user-created folder/"campaign") actual posts/engagement
@@ -744,6 +748,10 @@ export interface PostingAgreementEvaluation {
   engagementTargetMet: boolean | null;
   targetMet: boolean;
   paymentId: string | null;
+  /** The linked payment's own status, when one exists — a paymentId being set is NOT proof the
+   * money actually moved; only `payment?.status === "PAID"` is. Only present on responses from
+   * listWeeks()/Influencer2FoldersService.list(), which include it explicitly. */
+  payment?: { status: "PENDING" | "PROCESSING" | "PAID" | "REJECTED" | "CANCELLED" } | null;
   evaluatedByUserId: string | null;
   createdAt: string;
 }
