@@ -127,6 +127,26 @@ export function PostingFoldersPanel({
   });
   const agreement = agreements?.[0];
 
+  /** Whether a folder's CURRENT totals already meet the agreement's target — computed live from
+   * assessment data, independent of whether it has been formally evaluated yet. Detection must
+   * never wait on a manual "Evaluate" click: a folder with 19 posts against a 4-post target
+   * obviously meets it right now, and the table should say so immediately. Evaluate still exists
+   * to lock those numbers into a permanent record, which is what a payment ticket is created from. */
+  function liveTargetMet(folder: Influencer2Folder): boolean | null {
+    if (!agreement || !folder.assessment) return null;
+    const postOk = agreement.postsPerWeek != null ? folder.assessment.totalPosts >= agreement.postsPerWeek : null;
+    const engagementValue =
+      agreement.engagementMetric === "VIEWS" ? folder.assessment.totalViews
+      : agreement.engagementMetric === "LIKES" ? folder.assessment.totalLikes
+      : agreement.engagementMetric === "COMMENTS" ? folder.assessment.totalComments
+      : agreement.engagementMetric === "SHARES" ? folder.assessment.totalShares
+      : agreement.engagementMetric === "TOTAL_ENGAGEMENT" ? folder.assessment.totalEngagement
+      : null;
+    const engagementOk = agreement.engagementMetric && agreement.engagementTarget != null ? (engagementValue ?? 0) >= agreement.engagementTarget : null;
+    const checks = [postOk, engagementOk].filter((v): v is boolean => v != null);
+    return checks.length > 0 && checks.every(Boolean);
+  }
+
   async function evaluateFolder(folder: Influencer2Folder) {
     if (!folder.agreementId) return;
     setBusyId(folder.id);
@@ -220,12 +240,18 @@ export function PostingFoldersPanel({
                       ) : (
                         <span className="inline-flex items-center gap-1 text-muted"><XCircle size={14} /> {t("targetMissedLabel")}</span>
                       )
+                    ) : liveTargetMet(f) === true ? (
+                      <span className="inline-flex items-center gap-1 text-success" title={t("liveTargetMetHint")}>
+                        <CheckCircle2 size={14} /> {t("targetMetLabel")}
+                      </span>
                     ) : (
                       <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
                     )}
                   </td>
                   <td className="py-1.5 pr-3 nums">
-                    {f.evaluation && agreement ? `${agreement.currency} ${agreement.weeklyAmount.toLocaleString()}` : "—"}
+                    {(f.evaluation ? f.evaluation.targetMet : liveTargetMet(f) === true) && agreement
+                      ? `${agreement.currency} ${agreement.weeklyAmount.toLocaleString()}`
+                      : "—"}
                   </td>
                   <td className="py-1.5 pr-3 text-right">
                     <div className="flex items-center justify-end gap-2">

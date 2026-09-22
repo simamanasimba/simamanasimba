@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Paperclip, Pencil, Printer, Receipt, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Paperclip, Pencil, Printer, Receipt, Trash2, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { PostingAgreementModal } from "@/components/PostingAgreementModal";
@@ -119,6 +119,18 @@ export function PostingAgreementCard({
     }
   }
 
+  async function removeAgreement() {
+    if (!agreement) return;
+    if (!confirm(t("confirmDeleteAgreement"))) return;
+    setError(null);
+    try {
+      await api.delete(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement.id}`);
+      await refetchAgreements();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("failedSaveAgreement"));
+    }
+  }
+
   function onPrint() {
     if (!agreement) return;
     printAgreement({
@@ -199,6 +211,11 @@ export function PostingAgreementCard({
           {canManage && (
             <button className="btn-secondary text-sm" onClick={() => setShowModal(true)}>
               {agreement ? <><Pencil size={14} /> {t("editAgreementCta")}</> : t("setUpAgreementCta")}
+            </button>
+          )}
+          {agreement && canManage && (
+            <button title={t("clearAgreementCta")} className="btn-secondary !p-2" onClick={removeAgreement}>
+              <Trash2 size={14} />
             </button>
           )}
         </div>

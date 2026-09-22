@@ -14,6 +14,7 @@ import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { PostingAgreementCard } from "@/components/PostingAgreementCard";
 import { PostingFoldersPanel } from "@/components/PostingFoldersPanel";
+import { PostingPaymentSummary } from "@/components/PostingPaymentSummary";
 import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement } from "@/lib/permissions";
@@ -91,6 +92,8 @@ export default function MediaHostDetailPage() {
           <button title={t("deleteCta")} className="btn-secondary !p-2" onClick={onDelete}><Trash2 size={14} /></button>
         </div>
       </div>
+
+      <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} />
 
       <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} />
 

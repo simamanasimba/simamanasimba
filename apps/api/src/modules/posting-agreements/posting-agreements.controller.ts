@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { PostingAgreementsService } from "./posting-agreements.service";
 import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
@@ -48,6 +48,17 @@ export class PostingAgreementsController {
     const agreement = await this.agreements.update(organizationId, agreementId, dto);
     await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.updated", entityType: "posting_agreement", entityId: agreementId });
     return agreement;
+  }
+
+  /** Deletes the agreement entirely ("clear agreement") — cascades to its evaluations (a DB-level
+   * onDelete: Cascade), but any Payment already created from one of those evaluations is left
+   * alone; money already tracked stays tracked even once its originating agreement is gone. */
+  @Delete(":agreementId")
+  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
+  async remove(@Param("organizationId") organizationId: string, @Param("agreementId") agreementId: string, @CurrentUser() user: RequestUser) {
+    const result = await this.agreements.remove(organizationId, agreementId);
+    await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.deleted", entityType: "posting_agreement", entityId: agreementId });
+    return result;
   }
 
   @Post(":agreementId/attachment")
