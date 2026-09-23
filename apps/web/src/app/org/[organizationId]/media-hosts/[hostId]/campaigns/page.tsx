@@ -80,6 +80,22 @@ export default function MediaHostCampaignsPage() {
   });
   const selectedFolder = folders?.find((f) => f.id === folderId);
 
+  // Viewing one campaign's posts means the headline figures should be that campaign's own totals
+  // (folderAssessment, the same numbers the campaign table itself shows), not the beneficiary's
+  // overall range-scoped summary — "Posts in range: 73" was every post ever, not the ~5 in this
+  // campaign, which read as a bug even though it was working as coded.
+  const displayStats = selectedFolder?.assessment
+    ? {
+        totalPosts: selectedFolder.assessment.totalPosts,
+        totalViews: selectedFolder.assessment.totalViews,
+        totalLikes: selectedFolder.assessment.totalLikes,
+        engagementPerPost:
+          selectedFolder.assessment.totalPosts > 0
+            ? Math.round((selectedFolder.assessment.totalEngagement / selectedFolder.assessment.totalPosts) * 100) / 100
+            : null,
+      }
+    : summary;
+
   const params = new URLSearchParams({ mediaHostId: hostId, page: String(page), pageSize: String(PAGE_SIZE) });
   if (contentType) params.set("contentType", contentType);
   if (status) params.set("status", status);
@@ -176,13 +192,17 @@ export default function MediaHostCampaignsPage() {
 
         <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
-        <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
+        <p className="text-xs text-muted">
+          {selectedFolder
+            ? <>{t("statsScopedToCampaignLabel")} <span className="font-medium text-ink">{selectedFolder.name}</span></>
+            : <>{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></>}
+        </p>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="card"><p className="text-xs text-muted">{t("totalPostsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{summary?.totalPosts ?? "—"}</p></div>
-          <div className="card"><p className="text-xs text-muted">{t("influencer2TotalViewsLabel")}</p><p className="nums text-lg font-bold text-ink">{summary?.totalViews != null ? summary.totalViews.toLocaleString() : "—"}</p></div>
-          <div className="card"><p className="text-xs text-muted">{t("influencer2TotalLikesLabel")}</p><p className="nums text-lg font-bold text-ink">{summary?.totalLikes != null ? summary.totalLikes.toLocaleString() : "—"}</p></div>
-          <div className="card"><p className="text-xs text-muted">{t("avgEngagementPerPostLabel")}</p><p className="nums text-lg font-bold text-ink">{summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"}</p></div>
+          <div className="card"><p className="text-xs text-muted">{t("totalPostsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{displayStats?.totalPosts ?? "—"}</p></div>
+          <div className="card"><p className="text-xs text-muted">{t("influencer2TotalViewsLabel")}</p><p className="nums text-lg font-bold text-ink">{displayStats?.totalViews != null ? displayStats.totalViews.toLocaleString() : "—"}</p></div>
+          <div className="card"><p className="text-xs text-muted">{t("influencer2TotalLikesLabel")}</p><p className="nums text-lg font-bold text-ink">{displayStats?.totalLikes != null ? displayStats.totalLikes.toLocaleString() : "—"}</p></div>
+          <div className="card"><p className="text-xs text-muted">{t("avgEngagementPerPostLabel")}</p><p className="nums text-lg font-bold text-ink">{displayStats?.engagementPerPost != null ? displayStats.engagementPerPost.toLocaleString() : "—"}</p></div>
         </div>
 
         <h2 className="font-display text-base font-bold text-ink">{t("influencer2IndividualCampaignsTitle")}</h2>

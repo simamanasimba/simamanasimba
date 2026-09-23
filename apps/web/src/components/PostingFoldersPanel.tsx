@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Eye, Pencil, Plus, Receipt, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Pencil, Plus, Receipt, Trash2, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
@@ -108,6 +108,7 @@ export function PostingFoldersPanel({
   canPay: boolean;
 }) {
   const { t } = useLang();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [modalState, setModalState] = useState<"new" | Influencer2Folder | null>(null);
   const [payingFolder, setPayingFolder] = useState<Influencer2Folder | null>(null);
@@ -215,7 +216,11 @@ export function PostingFoldersPanel({
             </thead>
             <tbody>
               {folders.map((f) => (
-                <tr key={f.id} className="border-b border-line/60">
+                <tr
+                  key={f.id}
+                  className="cursor-pointer border-b border-line/60 hover:bg-brand-50/40"
+                  onClick={() => router.push(postsHref(f.id))}
+                >
                   <td className="py-1.5 pr-3 font-medium text-ink">{f.name}</td>
                   <td className="py-1.5 pr-3 text-xs text-muted">
                     {f.startDate && f.endDate ? `${f.startDate.slice(0, 10)} – ${f.endDate.slice(0, 10)}` : t("noDateRangeLabel")}
@@ -244,11 +249,8 @@ export function PostingFoldersPanel({
                       ? `${agreement.currency} ${agreement.weeklyAmount.toLocaleString()}`
                       : "—"}
                   </td>
-                  <td className="py-1.5 pr-3 text-right">
+                  <td className="py-1.5 pr-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">
-                      <Link href={postsHref(f.id)} title={t("viewPostsCta")} className="text-muted hover:text-brand">
-                        <Eye size={13} />
-                      </Link>
                       {f.agreementId && !f.evaluation && canManage && (
                         <button className="btn-secondary !py-1 text-xs" disabled={busyId === f.id} onClick={() => evaluateFolder(f)}>
                           {t("evaluateThisWeekCta")}
