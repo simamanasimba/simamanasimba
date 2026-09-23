@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X, Ban, RotateCcw, Trash2 } from "lucide-react";
+import { Check, X, Ban, RotateCcw, Trash2, Lock } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useLang, type DictKey } from "@/lib/i18n";
@@ -225,9 +225,15 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
               <p className="truncate text-xs text-muted">{u.user.email}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <select className="input w-48" value={u.role} onChange={(e) => updateRole(u.userId, e.target.value)}>
-                {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_KEYS[r])}</option>)}
-              </select>
+              {u.role === "ORG_SUPER_ADMIN" ? (
+                <span className="input flex w-48 items-center gap-1.5 !bg-surface text-muted" title={t("superAdminRoleLockedHint")}>
+                  <Lock size={13} /> {t(ROLE_KEYS[u.role])}
+                </span>
+              ) : (
+                <select className="input w-48" value={u.role} onChange={(e) => updateRole(u.userId, e.target.value)}>
+                  {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_KEYS[r])}</option>)}
+                </select>
+              )}
               <button
                 type="button"
                 onClick={() => toggleSuspend(u.userId, u.status)}

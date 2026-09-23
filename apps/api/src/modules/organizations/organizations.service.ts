@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { hashPassword } from "@event-intel/security";
 import type { OrgMemberStatus, Prisma, RoleKey } from "@event-intel/database";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -123,6 +123,14 @@ export class OrganizationsService {
       where: { organizationId_userId: { organizationId, userId } },
     });
     if (!membership) throw new NotFoundException("Membership not found");
+    // Once a member is Super Admin, that role is read-only — no accidental (or malicious) downgrade
+    // via this endpoint. A previous mistaken downgrade here is exactly what locked an org out of
+    // Access Control entirely, since it's the one role guaranteed a way back in (see
+    // HARD_BASELINE_ROLES). Suspending/reactivating a Super Admin is still allowed; only the role
+    // field itself is frozen once set to ORG_SUPER_ADMIN.
+    if (membership.role === "ORG_SUPER_ADMIN" && data.role && data.role !== "ORG_SUPER_ADMIN") {
+      throw new BadRequestException("Super Admin's role is locked and cannot be changed here");
+    }
     return this.prisma.organizationMember.update({ where: { id: membership.id }, data });
   }
 
