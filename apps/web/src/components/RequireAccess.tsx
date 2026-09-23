@@ -17,6 +17,11 @@ export function RequireAccess({ area, children }: { area: NavKey; children: Reac
   const { t } = useLang();
 
   if (isLoading) return null;
+  // Mirrors RolesGuard's own `if (req.user?.isPlatformOwner) return true` bypass on the backend —
+  // without this, a platform owner's org-role badge (which can be anything, e.g. Finance Officer)
+  // still hid pages the API would actually let them through to, including Access Control itself,
+  // the one door back in when no org role can reach it.
+  if (data?.user.isPlatformOwner) return <>{children}</>;
   const role = data?.organizations.find((o) => o.organizationId === organizationId)?.role;
   if (!canAccess(role, area, perms?.matrix)) {
     return (

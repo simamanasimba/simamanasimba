@@ -144,14 +144,17 @@ export function OrgShell({ organizationId, children }: { organizationId: string;
   // Group items ("people") are never gated directly — they're derived, visible only when at
   // least one child is (checked below), which matters once a child gains access purely through
   // an admin-granted override that doesn't also touch the group itself.
-  const activeNav = membership?.role === "FINANCE_OFFICER" ? NAV_FINANCE : NAV;
-  const visibleNav = activeNav.filter((item) => item.type === "group" || canAccess(membership?.role, item.key as NavKey, perms?.matrix));
+  // A platform owner always gets the full admin nav (including Access Control) regardless of
+  // their org-role badge here — same "superuser, not an org role" bypass as RolesGuard on the
+  // backend and RequireAccess above; NAV_FINANCE deliberately has no Access Control link at all.
+  const activeNav = !data.user.isPlatformOwner && membership?.role === "FINANCE_OFFICER" ? NAV_FINANCE : NAV;
+  const visibleNav = activeNav.filter((item) => item.type === "group" || data.user.isPlatformOwner || canAccess(membership?.role, item.key as NavKey, perms?.matrix));
 
   const navLinks = (onNavigate?: () => void) => (
     <nav className="flex-1 space-y-1 px-3">
       {visibleNav.map((item) => {
         if (item.type === "group") {
-          const visibleChildren = item.children.filter((c) => canAccess(membership?.role, c.key as NavKey, perms?.matrix));
+          const visibleChildren = item.children.filter((c) => data.user.isPlatformOwner || canAccess(membership?.role, c.key as NavKey, perms?.matrix));
           if (visibleChildren.length === 0) return null;
           const groupActive = visibleChildren.some((c) => pathname?.startsWith(`/org/${organizationId}/${c.key}`));
           const GroupIcon = item.icon;
