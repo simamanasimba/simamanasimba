@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { AttendanceService } from "./attendance.service";
-import { CheckInDto, LookupMemberDto, RegisterWalkInDto, SyncBatchDto, ValidateTokenDto } from "./dto/public-attendance.dto";
+import { CheckInDto, CheckPhoneDto, LookupMemberDto, RegisterWalkInDto, SyncBatchDto, ValidateTokenDto } from "./dto/public-attendance.dto";
 import { Public } from "../../common/decorators/public.decorator";
 
 /**
@@ -35,12 +35,17 @@ export class PublicAttendanceController {
 
   @Post("lookup")
   lookup(@Param("eventId") eventId: string, @Body() dto: LookupMemberDto) {
-    return this.attendance.lookupMember(eventId, dto.token, dto.membershipNumber);
+    return this.attendance.lookupMember(eventId, dto.token, dto.phone);
+  }
+
+  @Post("check-phone")
+  checkPhone(@Param("eventId") eventId: string, @Body() dto: CheckPhoneDto) {
+    return this.attendance.checkPhoneInUse(eventId, dto.token, dto.phone);
   }
 
   @Post("check-in")
   checkIn(@Param("eventId") eventId: string, @Body() dto: CheckInDto) {
-    return this.attendance.checkIn(eventId, dto.token, dto.membershipNumber, dto.deviceId, dto.clientRecordId);
+    return this.attendance.checkIn(eventId, dto.token, dto.memberId, dto.deviceId, dto.clientRecordId);
   }
 
   @Post("register")

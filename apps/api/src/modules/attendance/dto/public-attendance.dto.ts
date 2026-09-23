@@ -11,7 +11,15 @@ export class LookupMemberDto {
   token!: string;
 
   @IsString()
-  membershipNumber!: string;
+  phone!: string;
+}
+
+export class CheckPhoneDto {
+  @IsString()
+  token!: string;
+
+  @IsString()
+  phone!: string;
 }
 
 export class CheckInDto {
@@ -19,7 +27,7 @@ export class CheckInDto {
   token!: string;
 
   @IsString()
-  membershipNumber!: string;
+  memberId!: string;
 
   @IsOptional()
   @IsString()
@@ -93,7 +101,7 @@ export class SyncItemDto {
   clientRecordId!: string;
 
   @IsString()
-  membershipNumber!: string;
+  memberId!: string;
 
   @IsString()
   checkedInAt!: string;

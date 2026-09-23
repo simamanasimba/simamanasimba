@@ -41,7 +41,7 @@ export default function AttendPage() {
 
   const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
   const [screen, setScreen] = useState<Screen>("start");
-  const [membershipNumber, setMembershipNumber] = useState("");
+  const [phone, setPhone] = useState("");
   const [lookup, setLookup] = useState<LookupResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,6 +51,7 @@ export default function AttendPage() {
   const [walkInLocation, setWalkInLocation] = useState<LocationValue>({ region: "", district: "", ward: "" });
   const [invalidMessage, setInvalidMessage] = useState<string | null>(null);
   const [registrationResult, setRegistrationResult] = useState<{ registrationId: string; alreadyRegistered: boolean; checkedIn: boolean } | null>(null);
+  const [phoneInUse, setPhoneInUse] = useState(false);
 
   useEffect(() => {
     // navigator.onLine is unavailable during server rendering — read the real
@@ -116,7 +117,7 @@ export default function AttendPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post<LookupResult>(`/api/v1/public/attendance/events/${eventId}/lookup`, { token, membershipNumber });
+      const result = await api.post<LookupResult>(`/api/v1/public/attendance/events/${eventId}/lookup`, { token, phone });
       setLookup(result);
       setScreen(result.found ? "member-found" : "not-found");
     } catch (err) {
@@ -127,11 +128,13 @@ export default function AttendPage() {
   }
 
   async function onConfirm() {
+    if (!lookup?.member) return;
     setBusy(true);
     setError(null);
+    const memberId = lookup.member.id;
     const clientRecordId = crypto.randomUUID();
     if (!navigator.onLine) {
-      const item: QueuedCheckIn = { clientRecordId, membershipNumber, checkedInAt: new Date().toISOString() };
+      const item: QueuedCheckIn = { clientRecordId, memberId, checkedInAt: new Date().toISOString() };
       enqueue(eventId, item);
       setQueueSize(loadQueue(eventId).length);
       setScreen("success");
@@ -139,12 +142,25 @@ export default function AttendPage() {
       return;
     }
     try {
-      await api.post(`/api/v1/public/attendance/events/${eventId}/check-in`, { token, membershipNumber, deviceId, clientRecordId });
+      await api.post(`/api/v1/public/attendance/events/${eventId}/check-in`, { token, memberId, deviceId, clientRecordId });
       setScreen("success");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("checkInFailed"));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onPhoneBlur(value: string) {
+    if (!value.trim()) {
+      setPhoneInUse(false);
+      return;
+    }
+    try {
+      const result = await api.post<{ inUse: boolean }>(`/api/v1/public/attendance/events/${eventId}/check-phone`, { token, phone: value });
+      setPhoneInUse(result.inUse);
+    } catch {
+      // Non-critical — a failed duplicate check just means no warning shows, never blocks registration.
     }
   }
 
@@ -174,11 +190,12 @@ export default function AttendPage() {
   }
 
   function resetForNext() {
-    setMembershipNumber("");
+    setPhone("");
     setLookup(null);
     setError(null);
     setWalkIn({ membershipNumber: "", firstName: "", middleName: "", lastName: "", gender: "", phone: "", email: "", branch: "" });
     setWalkInLocation({ region: "", district: "", ward: "" });
+    setPhoneInUse(false);
     setRegistrationResult(null);
     setScreen("start");
   }
@@ -246,11 +263,12 @@ export default function AttendPage() {
                 <label className="label">{t("registrationNumberLabel")}</label>
                 <input
                   autoFocus
-                  inputMode="text"
+                  type="tel"
+                  inputMode="tel"
                   className="input text-center text-lg tracking-wide"
                   placeholder={t("registrationNumberPlaceholder")}
-                  value={membershipNumber}
-                  onChange={(e) => setMembershipNumber(e.target.value)}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   required
                 />
               </div>
@@ -293,12 +311,12 @@ export default function AttendPage() {
             <div className="mt-8 space-y-5 text-center">
               <p className="text-lg font-semibold text-brand">{t("membershipNotFoundTitle")}</p>
               <p className="text-sm text-muted">
-                {lang === "sw" ? `"${membershipNumber}" haijasajiliwa na shirika hili.` : `"${membershipNumber}" is not registered with this organization.`}
+                {lang === "sw" ? `"${phone}" haijasajiliwa na shirika hili.` : `"${phone}" is not registered with this organization.`}
               </p>
               {eventInfo.event.allowWalkIns && eventInfo.event.allowNewMemberReg ? (
                 <button
                   onClick={() => {
-                    setWalkIn((w) => ({ ...w, membershipNumber }));
+                    setWalkIn((w) => ({ ...w, phone }));
                     setScreen("register");
                   }}
                   className="btn-primary w-full py-3.5 text-base"
@@ -343,7 +361,15 @@ export default function AttendPage() {
               </div>
               <div>
                 <label className="label">{t("phone")}</label>
-                <input required className="input" value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} />
+                <input
+                  required
+                  type="tel"
+                  className="input"
+                  value={walkIn.phone}
+                  onChange={(e) => { setWalkIn((w) => ({ ...w, phone: e.target.value })); setPhoneInUse(false); }}
+                  onBlur={(e) => onPhoneBlur(e.target.value)}
+                />
+                {phoneInUse && <p className="mt-1.5 text-xs text-warning">{t("phoneAlreadyUsedWarning")}</p>}
               </div>
               <div>
                 <label className="label">{t("email")}</label>

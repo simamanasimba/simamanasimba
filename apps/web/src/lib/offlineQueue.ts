@@ -1,6 +1,6 @@
 export interface QueuedCheckIn {
   clientRecordId: string;
-  membershipNumber: string;
+  memberId: string;
   checkedInAt: string;
 }
 

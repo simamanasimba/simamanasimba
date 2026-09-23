@@ -38,10 +38,10 @@ export class AttendanceService {
     return { event };
   }
 
-  /** Accepts either a club membership number or this system's own campaign ID — same Member table either way now. */
-  async lookupMember(eventId: string, token: string, registrationNumber: string) {
+  /** Looks a returning member up by phone — no membership number to remember or carry. */
+  async lookupMember(eventId: string, token: string, phone: string) {
     const { event } = await this.resolveEventByToken(eventId, token);
-    const member = await this.members.findByIdentifier(event.organizationId, registrationNumber);
+    const member = await this.members.findByPhone(event.organizationId, phone);
     if (!member) return { found: false as const };
 
     const existing = await this.prisma.attendanceRecord.findUnique({ where: { eventId_memberId: { eventId, memberId: member.id } } });
@@ -59,6 +59,14 @@ export class AttendanceService {
       alreadyCheckedIn: Boolean(existing),
       checkedInAt: existing?.checkedInAt.toISOString(),
     };
+  }
+
+  /** Warns (never blocks) a new walk-in registration about a possible duplicate — just a boolean,
+   * no details about who else has this number on file. */
+  async checkPhoneInUse(eventId: string, token: string, phone: string) {
+    const { event } = await this.resolveEventByToken(eventId, token);
+    const inUse = await this.members.phoneInUse(event.organizationId, phone);
+    return { inUse };
   }
 
   private async ensureRegistration(eventId: string, memberId: string, source: "WALK_IN" | "ADMIN" = "ADMIN") {
@@ -123,12 +131,14 @@ export class AttendanceService {
     }
   }
 
-  async checkIn(eventId: string, token: string, registrationNumber: string, deviceId?: string, clientRecordId?: string) {
+  async checkIn(eventId: string, token: string, memberId: string, deviceId?: string, clientRecordId?: string) {
     const { event } = await this.resolveEventByToken(eventId, token);
     if (!event.attendanceEnabled) throw new ConflictException("Attendance is not enabled for this event");
 
-    const member = await this.members.findByIdentifier(event.organizationId, registrationNumber);
-    if (!member) throw new NotFoundException("Membership or campaign ID not found");
+    // The frontend already resolved this exact member via the phone lookup step just before —
+    // re-searching by phone here would be ambiguous now that duplicate phones are allowed.
+    const member = await this.prisma.member.findFirst({ where: { id: memberId, organizationId: event.organizationId } });
+    if (!member) throw new NotFoundException("Member not found");
 
     await this.ensureRegistration(eventId, member.id, "WALK_IN");
     const result = await this.recordAttendance({
@@ -322,13 +332,13 @@ export class AttendanceService {
     eventId: string,
     token: string,
     deviceId: string | undefined,
-    items: Array<{ clientRecordId: string; membershipNumber: string; checkedInAt: string }>,
+    items: Array<{ clientRecordId: string; memberId: string; checkedInAt: string }>,
   ) {
     const { event } = await this.resolveEventByToken(eventId, token);
 
     const results: Array<{ clientRecordId: string; status: string; memberId?: string }> = [];
     for (const item of items) {
-      const member = await this.members.findByIdentifier(event.organizationId, item.membershipNumber);
+      const member = await this.prisma.member.findFirst({ where: { id: item.memberId, organizationId: event.organizationId } });
       if (!member) {
         results.push({ clientRecordId: item.clientRecordId, status: "MEMBER_NOT_FOUND" as const });
         continue;

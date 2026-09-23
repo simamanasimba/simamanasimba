@@ -18,7 +18,7 @@ import { FinanceStatCards } from "@/components/FinanceStatCards";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
-import { canRecordPayment, canApprovePayment, canPayPostingAgreement } from "@/lib/permissions";
+import { canApprovePayment, canPayPostingAgreement } from "@/lib/permissions";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { RequireAccess } from "@/components/RequireAccess";
 
@@ -285,7 +285,11 @@ export default function FinancePage() {
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const { data: perms } = useRolePermissions(organizationId);
-  const canPay = canRecordPayment(myRole);
+  // The Finance page is a review surface for everyone else (Super Admin, Admin, Standard User) —
+  // only Finance itself records or marks payments here. canRecordPayment is intentionally not
+  // used for this: it's broader (also gates the separate per-member "Record Payment" button on a
+  // member's own profile, which stays available to admins) and touching it would loosen that too.
+  const canPay = myRole === "FINANCE_OFFICER";
   const canApprove = canApprovePayment(myRole, perms?.matrix);
   const canPayAgreements = canPayPostingAgreement(myRole);
   const [showRecord, setShowRecord] = useState(false);

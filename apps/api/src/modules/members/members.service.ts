@@ -283,6 +283,28 @@ export class MembersService {
     return (await this.findByMembershipNumber(organizationId, trimmed)) ?? (await this.findByCampaignId(organizationId, trimmed));
   }
 
+  /** Matches by phone instead of a membership number the person may not have memorized or carry
+   * on them — narrows via a DB `contains` on the last 9 digits (robust to leading-zero/
+   * country-code formatting differences) then exact-compares normalized digits. If more than one
+   * member shares a phone (allowed — see registerCampaignMember/create's dedupe, which is opt-in
+   * per event), the most recently registered one wins. */
+  async findByPhone(organizationId: string, phone: string) {
+    const normalized = normalizePhone(phone);
+    if (!normalized) return null;
+    const significant = normalized.slice(-9);
+    const candidates = await this.prisma.member.findMany({
+      where: { organizationId, phone: { contains: significant } },
+      orderBy: { registrationDate: "desc" },
+    });
+    return candidates.find((m) => m.phone && normalizePhone(m.phone).endsWith(significant)) ?? null;
+  }
+
+  /** Whether any member already has this phone on file — used to warn (not block) a new
+   * registration about a possible duplicate, without exposing who the other member is. */
+  async phoneInUse(organizationId: string, phone: string): Promise<boolean> {
+    return Boolean(await this.findByPhone(organizationId, phone));
+  }
+
   /**
    * Creates-or-finds a campaign member for the general "become a fan" flow
    * and post-specific "Sajili Kushiriki" — always self-service, always
