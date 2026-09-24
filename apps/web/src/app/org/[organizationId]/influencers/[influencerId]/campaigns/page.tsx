@@ -12,7 +12,6 @@ import { BulkWeekAssignBar } from "@/components/BulkWeekAssignBar";
 import { BulkFolderAssignBar } from "@/components/BulkFolderAssignBar";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
-import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2 } from "@/lib/permissions";
 import { PAYMENT_PROGRESS_LABEL_KEYS, PAYMENT_PROGRESS_BADGE } from "@/lib/paymentProgress";
@@ -23,6 +22,15 @@ const CONTENT_TYPES: Influencer2ContentType[] = ["VIDEO", "IMAGE", "REEL", "STOR
 const STATUSES: Influencer2CampaignStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"];
 
 type SortKey = "name" | "contentType" | "campaign" | "views" | "engagement" | "status";
+type FilterMode = "week" | "monthly" | "allTime" | "custom";
+
+const ALL_TIME_FROM = "2000-01-01T00:00:00.000Z";
+
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
 
 /** Clickable header that toggles asc/desc on the current page's rows — sorting only ever applies
  * to the page you're looking at (data is server-paginated), same as any spreadsheet column sort
@@ -54,25 +62,24 @@ export default function InfluencerCampaignsPage() {
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
   const [folderId, setFolderId] = useState(searchParams.get("folderId") ?? "");
-  const [weekDefinitionId] = useState(searchParams.get("weekDefinitionId") ?? "");
+  const initialWeekId = searchParams.get("weekDefinitionId") ?? "";
+  const [weekDefinitionId, setWeekDefinitionId] = useState(initialWeekId);
+  // "Week" isn't a rolling 7 days here — it's a pick from the org's own centrally-defined weeks
+  // (see Settings' Campaign Weeks), same ones the profile page's Campaigns table breaks down by
+  // and links in from. Landing via that link means a week is already picked, so it opens straight
+  // into "week" mode showing that exact week selected — never "All time" while actually showing a
+  // week-scoped table, which is what a generic always-"All time" range control used to do.
+  const [filterMode, setFilterMode] = useState<FilterMode>(initialWeekId ? "week" : "allTime");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  // A list of every post defaults to showing every post — "weekly" as a default here silently
-  // hid posts older than 7 days (a genuinely confusing "missing post" experience), unlike the
-  // profile page's own stat tiles, where a weekly-by-default *summary* is the actual intent.
-  const dateRangeFilter = useDateRangeFilter("allTime");
-  const { range } = dateRangeFilter;
 
   const { data: profile } = useQuery({
     queryKey: ["influencer-profile", influencerId],
     queryFn: () => api.get<InfluencerProfile>(`/api/v1/organizations/${organizationId}/influencers/${influencerId}`),
-  });
-
-  const { data: summary } = useQuery({
-    queryKey: ["influencer2-summary", influencerId, range.from, range.to],
-    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}&from=${range.from}&to=${range.to}`),
   });
 
   const { data: folders } = useQuery({
@@ -82,13 +89,28 @@ export default function InfluencerCampaignsPage() {
   const selectedFolder = folders?.find((f) => f.id === folderId);
 
   // The centralized replacement for per-beneficiary folders (see PostingWeeksPanel) — a week
-  // definition's own assessment already comes back scoped to this one beneficiary.
+  // definition's own assessment already comes back scoped to this one beneficiary. Fetched
+  // unconditionally now (not just when a week is already picked) so the "Week" mode's own dropdown
+  // has something to list.
   const { data: weekDefinitions } = useQuery({
     queryKey: ["posting-week-definition-rows", organizationId, influencerId],
     queryFn: () => api.get<PostingWeekDefinition[]>(`/api/v1/organizations/${organizationId}/posting-agreements/week-definitions?influencerId=${influencerId}`),
-    enabled: Boolean(weekDefinitionId),
   });
   const selectedWeek = weekDefinitions?.find((w) => w.id === weekDefinitionId);
+
+  const range =
+    filterMode === "week" && selectedWeek
+      ? { from: selectedWeek.startDate, to: selectedWeek.endDate }
+      : filterMode === "monthly"
+        ? { from: isoDaysAgo(30), to: new Date().toISOString() }
+        : filterMode === "custom"
+          ? { from: customFrom ? `${customFrom}T00:00:00.000Z` : isoDaysAgo(7), to: customTo ? `${customTo}T23:59:59.999Z` : new Date().toISOString() }
+          : { from: ALL_TIME_FROM, to: new Date().toISOString() };
+
+  const { data: summary } = useQuery({
+    queryKey: ["influencer2-summary", influencerId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}&from=${range.from}&to=${range.to}`),
+  });
 
   // Viewing one campaign's (or week's) posts means the headline figures should be that scope's
   // own totals, not the beneficiary's overall range-scoped summary — "Posts in range: 73" was
@@ -206,12 +228,43 @@ export default function InfluencerCampaignsPage() {
           )}
         </div>
 
-        <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line/60 bg-card px-3 py-2 shadow-card">
+          <select
+            className="input-auto"
+            value={filterMode}
+            onChange={(e) => {
+              const mode = e.target.value as FilterMode;
+              setFilterMode(mode);
+              if (mode !== "week") setWeekDefinitionId("");
+              setPage(1);
+            }}
+          >
+            <option value="week">{t("dateRangeWeekly")}</option>
+            <option value="monthly">{t("dateRangeMonthly")}</option>
+            <option value="allTime">{t("dateRangeAllTime")}</option>
+            <option value="custom">{t("dateRangeCustom")}</option>
+          </select>
+          {filterMode === "week" && (
+            <select className="input-auto" value={weekDefinitionId} onChange={(e) => { setWeekDefinitionId(e.target.value); setPage(1); }}>
+              <option value="">{t("selectWeekPlaceholder")}</option>
+              {(weekDefinitions ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          )}
+          {filterMode === "custom" && (
+            <>
+              <input type="date" className="input-auto" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+              <span className="text-xs text-muted">{t("dateRangeToLabel")}</span>
+              <input type="date" className="input-auto" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+            </>
+          )}
+        </div>
 
         <p className="text-xs text-muted">
           {selectedFolder || selectedWeek
             ? <>{t("statsScopedToCampaignLabel")} <span className="font-medium text-ink">{(selectedFolder ?? selectedWeek)!.name}</span></>
-            : <>{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></>}
+            : filterMode === "week"
+              ? <>{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{t("selectWeekPlaceholder")}</span></>
+              : <>{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{filterMode === "allTime" ? t("dateRangeAllTime") : `${range.from.slice(0, 10)} – ${range.to.slice(0, 10)}`}</span></>}
         </p>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

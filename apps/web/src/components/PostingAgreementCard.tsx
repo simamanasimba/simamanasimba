@@ -148,9 +148,7 @@ export function PostingAgreementCard({
   const targetLabel = agreement
     ? [
         agreement.postsPerWeek != null ? `${agreement.postsPerWeek} ${t("postsPerWeekLabel").toLowerCase()}` : null,
-        agreement.engagementMetric && agreement.engagementTarget != null
-          ? `${agreement.engagementTarget.toLocaleString()} ${metricLabel[agreement.engagementMetric]}/wk`
-          : null,
+        ...agreement.engagementTargets.map((t2) => `${t2.target.toLocaleString()} ${metricLabel[t2.metric]}/wk`),
       ]
         .filter(Boolean)
         .join(" + ")
@@ -244,7 +242,7 @@ export function PostingAgreementCard({
                     <tr className="border-b border-line text-left text-xs text-muted">
                       <th className="py-1.5 pr-3">{t("weekOfLabel")}</th>
                       {agreement.postsPerWeek != null && <th className="py-1.5 pr-3">{t("actualPostsLabel")}</th>}
-                      {agreement.engagementMetric && <th className="py-1.5 pr-3">{metricLabel[agreement.engagementMetric]}</th>}
+                      {agreement.engagementTargets.map((t2) => <th key={t2.metric} className="py-1.5 pr-3">{metricLabel[t2.metric]}</th>)}
                       <th className="py-1.5 pr-3">{t("targetMetLabel")}</th>
                       <th className="py-1.5 pr-3">{t("amountLabel")}</th>
                       <th className="py-1.5 pr-3" />
@@ -267,16 +265,19 @@ export function PostingAgreementCard({
                             ) : "—"}
                           </td>
                         )}
-                        {agreement.engagementMetric && (
-                          <td className="py-1.5 pr-3">
-                            {w.evaluation ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="nums">{(actualEngagementForMetric(w, agreement.engagementMetric)?.toLocaleString()) ?? "—"}</span>
-                                <CheckPill met={w.evaluation.engagementTargetMet} label="" />
-                              </div>
-                            ) : "—"}
-                          </td>
-                        )}
+                        {agreement.engagementTargets.map((t2) => {
+                          const actual = actualEngagementForMetric(w, t2.metric);
+                          return (
+                            <td key={t2.metric} className="py-1.5 pr-3">
+                              {w.evaluation ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="nums">{actual?.toLocaleString() ?? "—"}</span>
+                                  <CheckPill met={actual != null ? actual >= t2.target : null} label="" />
+                                </div>
+                              ) : "—"}
+                            </td>
+                          );
+                        })}
                         <td className="py-1.5 pr-3">
                           {w.status === "IN_PROGRESS" ? (
                             <span className="text-xs text-muted">{t("weekInProgressLabel")}</span>

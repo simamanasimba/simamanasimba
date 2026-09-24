@@ -1997,8 +1997,16 @@ model PostingAgreement {
   influencerId     String?                            @map("influencer_id")
   startDate        DateTime                           @map("start_date") @db.Date
   postsPerWeek     Int?                               @map("posts_per_week")
+  /// DEPRECATED, superseded by engagementTargets below — kept, unremoved, purely so an existing
+  /// agreement's already-configured single target isn't lost; PostingAgreementsService reads these
+  /// as a one-entry fallback only when engagementTargets is empty, and never writes to them again.
   engagementMetric PostingAgreementEngagementMetric?  @map("engagement_metric")
   engagementTarget Int?                               @map("engagement_target")
+  /// [{ metric: "VIEWS", target: 4000 }, { metric: "LIKES", target: 500 }, ...] — every listed
+  /// metric's target must be met (AND, not OR) for "meets requirements." Replaces the single
+  /// engagementMetric/engagementTarget pair above per explicit request: a deal can require several
+  /// metrics at once (e.g. views AND likes), not just one.
+  engagementTargets Json                              @default("[]") @map("engagement_targets")
   weeklyAmount     Decimal                            @db.Decimal(14, 2) @map("weekly_amount")
   currency         String                             @default("TZS")
   isActive         Boolean                            @default(true) @map("is_active")

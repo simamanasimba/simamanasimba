@@ -43,8 +43,9 @@ export function PostingWeeksPanel({
     queryKey: ["posting-week-definition-rows", organizationId, mediaHostId, influencerId],
     queryFn: () => api.get<PostingWeekDefinition[]>(`/api/v1/organizations/${organizationId}/posting-agreements/week-definitions?${beneficiaryQuery}`),
   });
-  // Most recent week first — same convention as the older auto-computed weekly cycle.
-  const sortedWeeks = useMemo(() => [...(weeks ?? [])].sort((a, b) => b.startDate.localeCompare(a.startDate)), [weeks]);
+  // Week 1 first, going down — reads like the campaign's own timeline, not a reverse-chronological
+  // activity feed (that's what RecentActivityList is for).
+  const sortedWeeks = useMemo(() => [...(weeks ?? [])].sort((a, b) => a.startDate.localeCompare(b.startDate)), [weeks]);
 
   const { data: agreements } = useQuery({
     queryKey: ["posting-agreements", organizationId, mediaHostId, influencerId],
@@ -57,14 +58,20 @@ export function PostingWeeksPanel({
   function liveTargetMet(week: PostingWeekDefinition): boolean | null {
     if (!agreement || !week.assessment) return null;
     const postOk = agreement.postsPerWeek != null ? week.assessment.totalPosts >= agreement.postsPerWeek : null;
-    const engagementValue =
-      agreement.engagementMetric === "VIEWS" ? week.assessment.totalViews
-      : agreement.engagementMetric === "LIKES" ? week.assessment.totalLikes
-      : agreement.engagementMetric === "COMMENTS" ? week.assessment.totalComments
-      : agreement.engagementMetric === "SHARES" ? week.assessment.totalShares
-      : agreement.engagementMetric === "TOTAL_ENGAGEMENT" ? week.assessment.totalEngagement
-      : null;
-    const engagementOk = agreement.engagementMetric && agreement.engagementTarget != null ? (engagementValue ?? 0) >= agreement.engagementTarget : null;
+    // Every listed metric must clear its own target (AND, not OR) — a deal can require several at
+    // once (e.g. views AND likes).
+    const engagementOk =
+      agreement.engagementTargets.length === 0
+        ? null
+        : agreement.engagementTargets.every((t) => {
+            const value =
+              t.metric === "VIEWS" ? week.assessment!.totalViews
+              : t.metric === "LIKES" ? week.assessment!.totalLikes
+              : t.metric === "COMMENTS" ? week.assessment!.totalComments
+              : t.metric === "SHARES" ? week.assessment!.totalShares
+              : week.assessment!.totalEngagement;
+            return (value ?? 0) >= t.target;
+          });
     const checks = [postOk, engagementOk].filter((v): v is boolean => v != null);
     return checks.length > 0 && checks.every(Boolean);
   }
@@ -109,6 +116,7 @@ export function PostingWeeksPanel({
                 <th className="py-1.5 pr-3">{t("folderNameLabel")}</th>
                 <th className="py-1.5 pr-3">{t("folderDateRangeColLabel")}</th>
                 <th className="py-1.5 pr-3">{t("actualPostsLabel")}</th>
+                <th className="py-1.5 pr-3">{t("influencer2TotalViewsLabel")}</th>
                 <th className="py-1.5 pr-3">{t("metricTotalEngagement")}</th>
                 <th className="py-1.5 pr-3">{t("targetMetLabel")}</th>
                 <th className="py-1.5 pr-3">{t("amountLabel")}</th>
@@ -125,6 +133,7 @@ export function PostingWeeksPanel({
                   <td className="py-1.5 pr-3 font-medium text-ink">{w.name}</td>
                   <td className="py-1.5 pr-3 text-xs text-muted">{w.startDate.slice(0, 10)} – {w.endDate.slice(0, 10)}</td>
                   <td className="py-1.5 pr-3 nums">{w.assessment?.totalPosts ?? 0}</td>
+                  <td className="py-1.5 pr-3 nums">{w.assessment?.totalViews != null ? w.assessment.totalViews.toLocaleString() : "—"}</td>
                   <td className="py-1.5 pr-3 nums">{(w.assessment?.totalEngagement ?? 0).toLocaleString()}</td>
                   <td className="py-1.5 pr-3">
                     {!w.agreementId ? (

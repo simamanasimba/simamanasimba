@@ -1,5 +1,15 @@
-import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { Type } from "class-transformer";
+import { ArrayMaxSize, IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from "class-validator";
 import { PostingAgreementEngagementMetric } from "@event-intel/database";
+
+export class EngagementTargetDto {
+  @IsEnum(PostingAgreementEngagementMetric)
+  metric!: PostingAgreementEngagementMetric;
+
+  @IsInt()
+  @Min(1)
+  target!: number;
+}
 
 export class CreatePostingAgreementDto {
   @IsOptional()
@@ -15,21 +25,22 @@ export class CreatePostingAgreementDto {
   @IsDateString()
   startDate!: string;
 
-  /** At least one of postsPerWeek or (engagementMetric + engagementTarget) is required — both can
-   * be set together, in which case a week only meets requirements when it passes both. */
+  /** At least one of postsPerWeek or engagementTargets is required — both can be set together, in
+   * which case a week only meets requirements once every configured check passes. */
   @IsOptional()
   @IsInt()
   @Min(1)
   postsPerWeek?: number;
 
+  /** One entry per metric that must be met (views AND likes AND ..., never OR) — e.g. "4000 views
+   * and 500 likes," not a single either/or pick. One entry per metric; the service rejects
+   * duplicates. */
   @IsOptional()
-  @IsEnum(PostingAgreementEngagementMetric)
-  engagementMetric?: PostingAgreementEngagementMetric;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  engagementTarget?: number;
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => EngagementTargetDto)
+  engagementTargets?: EngagementTargetDto[];
 
   @IsNumber()
   @Min(0)

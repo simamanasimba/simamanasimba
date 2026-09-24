@@ -19,8 +19,37 @@ export interface WeekWindow {
 
 export type WeekStatus = "IN_PROGRESS" | "PENDING_EVALUATION" | "EVALUATED";
 
-function toNumericAgreement<T extends { weeklyAmount: Prisma.Decimal }>(agreement: T) {
-  return { ...agreement, weeklyAmount: Number(agreement.weeklyAmount) };
+export interface EngagementTargetEntry {
+  metric: PostingAgreementEngagementMetric;
+  target: number;
+}
+
+const VALID_METRICS: PostingAgreementEngagementMetric[] = ["VIEWS", "LIKES", "COMMENTS", "SHARES", "TOTAL_ENGAGEMENT"];
+
+/** Reads an agreement's engagement targets as a typed list, tolerant of both shapes: the current
+ * JSON array, and (when that's empty) the older single engagementMetric/engagementTarget pair —
+ * see the schema doc comment on PostingAgreement.engagementMetric for why the old columns are
+ * still read instead of dropped. */
+function normalizeEngagementTargets(agreement: {
+  engagementTargets?: Prisma.JsonValue;
+  engagementMetric: PostingAgreementEngagementMetric | null;
+  engagementTarget: number | null;
+}): EngagementTargetEntry[] {
+  if (Array.isArray(agreement.engagementTargets)) {
+    const parsed = (agreement.engagementTargets as unknown[])
+      .filter((e): e is Record<string, unknown> => typeof e === "object" && e !== null)
+      .map((e) => ({ metric: e.metric as PostingAgreementEngagementMetric, target: Number(e.target) }))
+      .filter((e) => VALID_METRICS.includes(e.metric) && Number.isFinite(e.target) && e.target > 0);
+    if (parsed.length > 0) return parsed;
+  }
+  if (agreement.engagementMetric && agreement.engagementTarget != null) {
+    return [{ metric: agreement.engagementMetric, target: agreement.engagementTarget }];
+  }
+  return [];
+}
+
+function toNumericAgreement<T extends { weeklyAmount: Prisma.Decimal; engagementTargets?: Prisma.JsonValue; engagementMetric: PostingAgreementEngagementMetric | null; engagementTarget: number | null }>(agreement: T) {
+  return { ...agreement, weeklyAmount: Number(agreement.weeklyAmount), engagementTargets: normalizeEngagementTargets(agreement) };
 }
 
 @Injectable()
@@ -32,15 +61,17 @@ export class PostingAgreementsService {
     private readonly weekDefinitions: PostingWeekDefinitionsService,
   ) {}
 
-  private validateTarget(dto: { mediaHostId?: string; influencerId?: string; postsPerWeek?: number; engagementMetric?: string; engagementTarget?: number }) {
+  private validateTarget(dto: { mediaHostId?: string; influencerId?: string; postsPerWeek?: number; engagementTargets?: EngagementTargetEntry[] }) {
     if (Boolean(dto.mediaHostId) === Boolean(dto.influencerId)) {
       throw new BadRequestException("An agreement belongs to exactly one media host or one influencer");
     }
-    if (!dto.postsPerWeek && !(dto.engagementMetric && dto.engagementTarget)) {
-      throw new BadRequestException("Set a weekly posts target, an engagement target, or both");
+    const targets = dto.engagementTargets ?? [];
+    if (!dto.postsPerWeek && targets.length === 0) {
+      throw new BadRequestException("Set a weekly posts target, at least one engagement target, or both");
     }
-    if ((dto.engagementMetric && !dto.engagementTarget) || (!dto.engagementMetric && dto.engagementTarget)) {
-      throw new BadRequestException("engagementMetric and engagementTarget must be set together");
+    const metrics = targets.map((t) => t.metric);
+    if (new Set(metrics).size !== metrics.length) {
+      throw new BadRequestException("Each metric can only be targeted once per agreement");
     }
   }
 
@@ -87,8 +118,7 @@ export class PostingAgreementsService {
         influencerId: dto.influencerId,
         startDate: new Date(`${dto.startDate}T00:00:00.000Z`),
         postsPerWeek: dto.postsPerWeek,
-        engagementMetric: dto.engagementMetric,
-        engagementTarget: dto.engagementTarget,
+        engagementTargets: (dto.engagementTargets ?? []) as unknown as Prisma.InputJsonValue,
         weeklyAmount: dto.weeklyAmount,
         currency: dto.currency ?? "TZS",
         notes: dto.notes,
@@ -115,8 +145,7 @@ export class PostingAgreementsService {
 
     const changesTerms =
       dto.postsPerWeek !== undefined ||
-      dto.engagementMetric !== undefined ||
-      dto.engagementTarget !== undefined ||
+      dto.engagementTargets !== undefined ||
       dto.weeklyAmount !== undefined ||
       dto.currency !== undefined;
     if (changesTerms && (await this.hasBeenPaid(id))) {
@@ -129,20 +158,23 @@ export class PostingAgreementsService {
       mediaHostId: dto.mediaHostId ?? existing.mediaHostId ?? undefined,
       influencerId: dto.influencerId ?? existing.influencerId ?? undefined,
       postsPerWeek: dto.postsPerWeek !== undefined ? dto.postsPerWeek : (existing.postsPerWeek ?? undefined),
-      engagementMetric: dto.engagementMetric !== undefined ? dto.engagementMetric : (existing.engagementMetric ?? undefined),
-      engagementTarget: dto.engagementTarget !== undefined ? dto.engagementTarget : (existing.engagementTarget ?? undefined),
+      engagementTargets: dto.engagementTargets !== undefined ? dto.engagementTargets : normalizeEngagementTargets(existing),
     };
     this.validateTarget(merged);
     const row = await this.prisma.postingAgreement.update({
       where: { id },
       data: {
         startDate: dto.startDate ? new Date(`${dto.startDate}T00:00:00.000Z`) : undefined,
-        // Explicit nulls (not just `undefined`) when a dto field is present-but-absent after
+        // Explicit null (not just undefined) when the dto field is present-but-absent after
         // merging — otherwise Prisma would leave a stale target from before this edit in place
-        // (e.g. clearing the engagement target by omitting it from the update).
+        // (e.g. clearing the post-count target by omitting it from the update).
         postsPerWeek: dto.postsPerWeek !== undefined ? (dto.postsPerWeek ?? null) : undefined,
-        engagementMetric: dto.engagementMetric !== undefined ? (dto.engagementMetric ?? null) : undefined,
-        engagementTarget: dto.engagementTarget !== undefined ? (dto.engagementTarget ?? null) : undefined,
+        engagementTargets: dto.engagementTargets !== undefined ? (dto.engagementTargets as unknown as Prisma.InputJsonValue) : undefined,
+        // Once engagementTargets is explicitly saved, the deprecated single-value columns are
+        // cleared so normalizeEngagementTargets' legacy fallback never resurrects a stale value
+        // this edit was meant to replace or remove.
+        engagementMetric: dto.engagementTargets !== undefined ? null : undefined,
+        engagementTarget: dto.engagementTargets !== undefined ? null : undefined,
         weeklyAmount: dto.weeklyAmount,
         currency: dto.currency,
         notes: dto.notes,
@@ -255,6 +287,17 @@ export class PostingAgreementsService {
     }
   }
 
+  /** Every configured metric must clear its own target (AND, not OR) — null when there are none
+   * configured at all, same "not applicable" meaning postTargetMet/engagementTargetMet already use
+   * elsewhere. */
+  private engagementTargetsMet(
+    summary: { totalViews: number | null; totalLikes: number | null; totalComments: number | null; totalShares: number | null; totalEngagement: number },
+    targets: EngagementTargetEntry[],
+  ): boolean | null {
+    if (targets.length === 0) return null;
+    return targets.every((t) => this.pickEngagementValue(summary, t.metric) >= t.target);
+  }
+
   /** What a met-target evaluation is worth: always the flat agreed amount, exactly once the
    * minimum target is met — it does NOT scale up when the actual count exceeds the target (3
    * posts required, 5 delivered still pays the same agreed amount, never 5×). The agreed amount is
@@ -290,10 +333,7 @@ export class PostingAgreementsService {
     });
 
     const postTargetMet = agreement.postsPerWeek != null ? summary.totalPosts >= agreement.postsPerWeek : null;
-    const engagementTargetMet =
-      agreement.engagementMetric && agreement.engagementTarget != null
-        ? this.pickEngagementValue(summary, agreement.engagementMetric) >= agreement.engagementTarget
-        : null;
+    const engagementTargetMet = this.engagementTargetsMet(summary, normalizeEngagementTargets(agreement));
     const checks = [postTargetMet, engagementTargetMet].filter((v): v is boolean => v != null);
     const targetMet = checks.length > 0 && checks.every((v) => v === true);
 
@@ -343,10 +383,7 @@ export class PostingAgreementsService {
     });
 
     const postTargetMet = agreement.postsPerWeek != null ? summary.totalPosts >= agreement.postsPerWeek : null;
-    const engagementTargetMet =
-      agreement.engagementMetric && agreement.engagementTarget != null
-        ? this.pickEngagementValue(summary, agreement.engagementMetric) >= agreement.engagementTarget
-        : null;
+    const engagementTargetMet = this.engagementTargetsMet(summary, normalizeEngagementTargets(agreement));
     const checks = [postTargetMet, engagementTargetMet].filter((v): v is boolean => v != null);
     const targetMet = checks.length > 0 && checks.every((v) => v === true);
 
@@ -391,10 +428,7 @@ export class PostingAgreementsService {
     });
 
     const postTargetMet = agreement.postsPerWeek != null ? summary.totalPosts >= agreement.postsPerWeek : null;
-    const engagementTargetMet =
-      agreement.engagementMetric && agreement.engagementTarget != null
-        ? this.pickEngagementValue(summary, agreement.engagementMetric) >= agreement.engagementTarget
-        : null;
+    const engagementTargetMet = this.engagementTargetsMet(summary, normalizeEngagementTargets(agreement));
     const checks = [postTargetMet, engagementTargetMet].filter((v): v is boolean => v != null);
     const targetMet = checks.length > 0 && checks.every((v) => v === true);
 
@@ -535,12 +569,9 @@ export class PostingAgreementsService {
     if (agreement.postsPerWeek != null) {
       notesParts.push(`${evaluation.actualPostCount} post(s) vs target of ${agreement.postsPerWeek}`);
     }
-    if (agreement.engagementMetric && agreement.engagementTarget != null) {
-      const actual = this.pickEngagementValue(
-        { totalViews: evaluation.actualViews, totalLikes: evaluation.actualLikes, totalComments: evaluation.actualComments, totalShares: evaluation.actualShares, totalEngagement: evaluation.actualEngagement },
-        agreement.engagementMetric,
-      );
-      notesParts.push(`${actual} ${agreement.engagementMetric} vs target of ${agreement.engagementTarget}`);
+    const actualSummary = { totalViews: evaluation.actualViews, totalLikes: evaluation.actualLikes, totalComments: evaluation.actualComments, totalShares: evaluation.actualShares, totalEngagement: evaluation.actualEngagement };
+    for (const t of normalizeEngagementTargets(agreement)) {
+      notesParts.push(`${this.pickEngagementValue(actualSummary, t.metric)} ${t.metric} vs target of ${t.target}`);
     }
 
     return { evaluation, agreement, beneficiaryType, groupLabel, amount, notes: notesParts.join("; ") };

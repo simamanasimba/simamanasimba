@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useLang } from "@/lib/i18n";
 import type { PostingAgreement, PostingAgreementEngagementMetric } from "@/lib/types";
 
 const ENGAGEMENT_METRICS: PostingAgreementEngagementMetric[] = ["VIEWS", "LIKES", "COMMENTS", "SHARES", "TOTAL_ENGAGEMENT"];
+
+interface EngagementTargetRow {
+  metric: PostingAgreementEngagementMetric;
+  target: string;
+}
 
 /** A week can require a posts target, an engagement target, or both at once — each has its own
  * on/off checkbox rather than an either/or select, since the two aren't mutually exclusive. */
@@ -32,18 +38,37 @@ export function PostingAgreementModal({
   // letting the user hit that error on submit).
   const locked = Boolean(agreement?.hasBeenPaid);
   const [wantsPosts, setWantsPosts] = useState(agreement ? agreement.postsPerWeek != null : true);
-  const [wantsEngagement, setWantsEngagement] = useState(agreement ? agreement.engagementMetric != null : false);
+  const [wantsEngagement, setWantsEngagement] = useState(agreement ? agreement.engagementTargets.length > 0 : false);
+  // A deal can require several metrics at once now (e.g. "4000 views AND 500 likes") — one row per
+  // metric, not a single either/or pick.
+  const [engagementTargets, setEngagementTargets] = useState<EngagementTargetRow[]>(
+    agreement?.engagementTargets.length
+      ? agreement.engagementTargets.map((t) => ({ metric: t.metric, target: String(t.target) }))
+      : [{ metric: "VIEWS", target: "" }],
+  );
   const [form, setForm] = useState({
     startDate: agreement?.startDate.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
     postsPerWeek: agreement?.postsPerWeek != null ? String(agreement.postsPerWeek) : "",
-    engagementMetric: (agreement?.engagementMetric ?? "VIEWS") as PostingAgreementEngagementMetric,
-    engagementTarget: agreement?.engagementTarget != null ? String(agreement.engagementTarget) : "",
     weeklyAmount: agreement?.weeklyAmount != null ? String(agreement.weeklyAmount) : "",
     currency: agreement?.currency ?? "TZS",
     notes: agreement?.notes ?? "",
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function addEngagementTargetRow() {
+    const used = new Set(engagementTargets.map((r) => r.metric));
+    const nextMetric = ENGAGEMENT_METRICS.find((m) => !used.has(m)) ?? ENGAGEMENT_METRICS[0];
+    setEngagementTargets((rows) => [...rows, { metric: nextMetric, target: "" }]);
+  }
+
+  function removeEngagementTargetRow(index: number) {
+    setEngagementTargets((rows) => rows.filter((_, i) => i !== index));
+  }
+
+  function updateEngagementTargetRow(index: number, patch: Partial<EngagementTargetRow>) {
+    setEngagementTargets((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
 
   const metricLabel: Record<PostingAgreementEngagementMetric, string> = {
     VIEWS: t("metricViews"),
@@ -63,6 +88,10 @@ export function PostingAgreementModal({
       setError(t("agreementNeedsTargetError"));
       return;
     }
+    if (wantsEngagement && engagementTargets.some((r) => !r.target)) {
+      setError(t("engagementTargetMissingValueError"));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -77,8 +106,7 @@ export function PostingAgreementModal({
       // without ever touching (or re-sending unchanged) its target/rate.
       if (!locked) {
         body.postsPerWeek = wantsPosts ? Number(form.postsPerWeek) : null;
-        body.engagementMetric = wantsEngagement ? form.engagementMetric : null;
-        body.engagementTarget = wantsEngagement ? Number(form.engagementTarget) : null;
+        body.engagementTargets = wantsEngagement ? engagementTargets.map((r) => ({ metric: r.metric, target: Number(r.target) })) : [];
         body.weeklyAmount = Number(form.weeklyAmount);
         body.currency = form.currency || undefined;
       }
@@ -148,19 +176,50 @@ export function PostingAgreementModal({
             {t("targetTypeEngagement")}
           </label>
           {wantsEngagement && (
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">{t("agreementEngagementMetricLabel")}</label>
-                <select disabled={locked} className={`input ${locked ? "bg-surface text-muted" : ""}`} value={form.engagementMetric} onChange={(e) => set("engagementMetric", e.target.value as PostingAgreementEngagementMetric)}>
-                  {ENGAGEMENT_METRICS.map((m) => (
-                    <option key={m} value={m}>{metricLabel[m]}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">{t("engagementTargetLabel")}</label>
-                <input required disabled={locked} type="number" min="1" className={`input ${locked ? "bg-surface text-muted" : ""}`} value={form.engagementTarget} onChange={(e) => set("engagementTarget", e.target.value)} />
-              </div>
+            <div className="mt-2 space-y-2">
+              <p className="text-xs text-muted">{t("engagementMultiTargetHelp")}</p>
+              {engagementTargets.map((row, i) => {
+                const usedByOthers = new Set(engagementTargets.filter((_, j) => j !== i).map((r) => r.metric));
+                return (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                    <div>
+                      {i === 0 && <label className="label">{t("agreementEngagementMetricLabel")}</label>}
+                      <select
+                        disabled={locked}
+                        className={`input ${locked ? "bg-surface text-muted" : ""}`}
+                        value={row.metric}
+                        onChange={(e) => updateEngagementTargetRow(i, { metric: e.target.value as PostingAgreementEngagementMetric })}
+                      >
+                        {ENGAGEMENT_METRICS.map((m) => (
+                          <option key={m} value={m} disabled={usedByOthers.has(m)}>{metricLabel[m]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      {i === 0 && <label className="label">{t("engagementTargetLabel")}</label>}
+                      <input
+                        required
+                        disabled={locked}
+                        type="number"
+                        min="1"
+                        className={`input ${locked ? "bg-surface text-muted" : ""}`}
+                        value={row.target}
+                        onChange={(e) => updateEngagementTargetRow(i, { target: e.target.value })}
+                      />
+                    </div>
+                    {!locked && engagementTargets.length > 1 && (
+                      <button type="button" title={t("deleteCta")} className="btn-secondary !p-2" onClick={() => removeEngagementTargetRow(i)}>
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {!locked && engagementTargets.length < ENGAGEMENT_METRICS.length && (
+                <button type="button" className="btn-secondary text-xs" onClick={addEngagementTargetRow}>
+                  <Plus size={13} /> {t("addEngagementMetricCta")}
+                </button>
+              )}
             </div>
           )}
         </div>

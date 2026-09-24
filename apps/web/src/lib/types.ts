@@ -697,6 +697,11 @@ export interface Influencer2CampaignDetail {
 
 export type PostingAgreementEngagementMetric = "VIEWS" | "LIKES" | "COMMENTS" | "SHARES" | "TOTAL_ENGAGEMENT";
 
+export interface EngagementTargetEntry {
+  metric: PostingAgreementEngagementMetric;
+  target: number;
+}
+
 /** A media host/influencer's standing deal — general configuration only. `startDate` is a
  * reference date (when it was agreed) and plays no part in counting anything; counting happens
  * per campaign (Influencer2Folder). `weeklyAmount` is the FLAT agreed amount paid once the
@@ -704,7 +709,8 @@ export type PostingAgreementEngagementMetric = "VIEWS" | "LIKES" | "COMMENTS" | 
  * a minimum, not a per-unit rate); Finance can still pay a different amount when actually marking
  * a ticket paid (Payment.paidAmount + a required variance note), but the agreement itself is
  * always one fixed figure. `attachmentUrl` is an optional copy of the signed contract, for
- * reference only. */
+ * reference only. `engagementTargets` can list more than one metric at once (e.g. views AND
+ * likes) — every listed metric's target must be met, not just one of them. */
 export interface PostingAgreement {
   id: string;
   organizationId: string;
@@ -712,8 +718,7 @@ export interface PostingAgreement {
   influencerId: string | null;
   startDate: string;
   postsPerWeek: number | null;
-  engagementMetric: PostingAgreementEngagementMetric | null;
-  engagementTarget: number | null;
+  engagementTargets: EngagementTargetEntry[];
   weeklyAmount: number;
   currency: string;
   isActive: boolean;

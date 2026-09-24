@@ -142,14 +142,20 @@ export function PostingFoldersPanel({
   function liveTargetMet(folder: Influencer2Folder): boolean | null {
     if (!agreement || !folder.assessment) return null;
     const postOk = agreement.postsPerWeek != null ? folder.assessment.totalPosts >= agreement.postsPerWeek : null;
-    const engagementValue =
-      agreement.engagementMetric === "VIEWS" ? folder.assessment.totalViews
-      : agreement.engagementMetric === "LIKES" ? folder.assessment.totalLikes
-      : agreement.engagementMetric === "COMMENTS" ? folder.assessment.totalComments
-      : agreement.engagementMetric === "SHARES" ? folder.assessment.totalShares
-      : agreement.engagementMetric === "TOTAL_ENGAGEMENT" ? folder.assessment.totalEngagement
-      : null;
-    const engagementOk = agreement.engagementMetric && agreement.engagementTarget != null ? (engagementValue ?? 0) >= agreement.engagementTarget : null;
+    // Every listed metric must clear its own target (AND, not OR) — a deal can require several at
+    // once (e.g. views AND likes).
+    const engagementOk =
+      agreement.engagementTargets.length === 0
+        ? null
+        : agreement.engagementTargets.every((t) => {
+            const value =
+              t.metric === "VIEWS" ? folder.assessment!.totalViews
+              : t.metric === "LIKES" ? folder.assessment!.totalLikes
+              : t.metric === "COMMENTS" ? folder.assessment!.totalComments
+              : t.metric === "SHARES" ? folder.assessment!.totalShares
+              : folder.assessment!.totalEngagement;
+            return (value ?? 0) >= t.target;
+          });
     const checks = [postOk, engagementOk].filter((v): v is boolean => v != null);
     return checks.length > 0 && checks.every(Boolean);
   }
