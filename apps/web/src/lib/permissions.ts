@@ -1,4 +1,4 @@
-export type RoleKey = "ORG_SUPER_ADMIN" | "ORG_ADMIN" | "FINANCE_OFFICER" | "STANDARD_USER";
+export type RoleKey = "ORG_SUPER_ADMIN" | "ORG_ADMIN" | "FINANCE_OFFICER" | "STANDARD_USER" | "GUEST_USER";
 
 export type NavKey =
   | "dashboard"
@@ -22,8 +22,10 @@ export type NavKey =
  * additive OrgRolePermission overrides. */
 const NAV_ACCESS: Record<NavKey, RoleKey[]> = {
   // Finance's own dashboard IS the Payments page ("finance" below) now — no separate Dashboard
-  // link for them, matching dashboard/page.tsx's redirect for that role.
-  dashboard: ["ORG_SUPER_ADMIN", "ORG_ADMIN", "STANDARD_USER"],
+  // link for them, matching dashboard/page.tsx's redirect for that role. GUEST_USER gets the same
+  // minimal default as STANDARD_USER everywhere (mirrors permissions.constants.ts's ALL_ROLES
+  // comment) — its own defining trait is the active-window check, not area access.
+  dashboard: ["ORG_SUPER_ADMIN", "ORG_ADMIN", "STANDARD_USER", "GUEST_USER"],
   // "people" is the sidebar group container — visible if any child below it is. Members are
   // event-attendee data and unrelated to Finance's job, so FINANCE_OFFICER is deliberately left
   // out of "members" while still included in "influencers"/"media-hosts" (who they pay).

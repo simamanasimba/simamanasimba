@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X, Ban, RotateCcw, Trash2, Lock } from "lucide-react";
+import { Check, X, Ban, RotateCcw, Trash2, Lock, Clock } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { useLang, type DictKey } from "@/lib/i18n";
 import { RequireAccess } from "@/components/RequireAccess";
@@ -16,17 +17,78 @@ interface OrgUser {
   userId: string;
   role: string;
   status: string;
+  activeFrom: string | null;
+  activeUntil: string | null;
   user: { email: string; firstName: string; lastName: string };
 }
 
-const ROLES = ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER", "STANDARD_USER"];
+const ROLES = ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER", "STANDARD_USER", "GUEST_USER"];
 
 const ROLE_KEYS: Record<string, DictKey> = {
   ORG_SUPER_ADMIN: "roleOrgSuperAdmin",
   ORG_ADMIN: "roleOrgAdmin",
   FINANCE_OFFICER: "roleFinanceOfficer",
   STANDARD_USER: "roleStandardUser",
+  GUEST_USER: "roleGuestUser",
 };
+
+/** A guest's date/time window — either end left blank means unbounded on that side. Opened right
+ * after picking "Guest User" from the role dropdown, and re-openable any time after via the clock
+ * icon, since a one-time/specific-purpose account's window is exactly the point of the role. */
+function GuestWindowModal({
+  organizationId,
+  targetUser,
+  onClose,
+  onDone,
+}: {
+  organizationId: string;
+  targetUser: OrgUser;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { t } = useLang();
+  const { showToast } = useToast();
+  const [activeFrom, setActiveFrom] = useState(targetUser.activeFrom?.slice(0, 16) ?? "");
+  const [activeUntil, setActiveUntil] = useState(targetUser.activeUntil?.slice(0, 16) ?? "");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api.patch(`/api/v1/organizations/${organizationId}/users/${targetUser.userId}`, {
+        activeFrom: activeFrom || undefined,
+        activeUntil: activeUntil || undefined,
+      });
+      showToast("success", t("roleUpdated"));
+      onDone();
+    } catch (err) {
+      showToast("error", err instanceof ApiError ? err.message : t("failedUpdateRole"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={t("guestWindowTitle")} onClose={onClose}>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <p className="text-xs text-muted">{t("guestWindowHelp")}</p>
+        <div>
+          <label className="label">{t("guestActiveFromLabel")}</label>
+          <input type="datetime-local" className="input" value={activeFrom} onChange={(e) => setActiveFrom(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">{t("guestActiveUntilLabel")}</label>
+          <input type="datetime-local" className="input" value={activeUntil} onChange={(e) => setActiveUntil(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2 border-t border-line pt-3">
+          <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>
+          <button type="submit" disabled={submitting} className="btn-primary">{submitting ? t("saving") : t("save")}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 // The editable rows — each backed by a live GET .../role-permissions area. Kept separate from
 // "record-payment", which has its own fixed rule (see recordPaymentFixedNote) and isn't part of
@@ -145,7 +207,8 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const isSuperAdmin = myRole === "ORG_SUPER_ADMIN";
-  const [invite, setInvite] = useState({ email: "", firstName: "", lastName: "", role: "STANDARD_USER" });
+  const [invite, setInvite] = useState({ email: "", firstName: "", lastName: "", role: "STANDARD_USER", activeFrom: "", activeUntil: "" });
+  const [editingWindowFor, setEditingWindowFor] = useState<OrgUser | null>(null);
 
   const { data: users, refetch } = useQuery({
     queryKey: ["org-users", organizationId],
@@ -155,8 +218,17 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const result = await api.post<{ temporaryPassword?: string }>(`/api/v1/organizations/${organizationId}/users/invite`, invite);
-      setInvite({ email: "", firstName: "", lastName: "", role: "STANDARD_USER" });
+      const payload = {
+        email: invite.email,
+        firstName: invite.firstName,
+        lastName: invite.lastName,
+        role: invite.role,
+        // Only sent for GUEST_USER — an empty string fails the backend's date-string validation
+        // for every other role, where these fields are meaningless anyway.
+        ...(invite.role === "GUEST_USER" ? { activeFrom: invite.activeFrom || undefined, activeUntil: invite.activeUntil || undefined } : {}),
+      };
+      const result = await api.post<{ temporaryPassword?: string }>(`/api/v1/organizations/${organizationId}/users/invite`, payload);
+      setInvite({ email: "", firstName: "", lastName: "", role: "STANDARD_USER", activeFrom: "", activeUntil: "" });
       refetch();
       showToast(
         "success",
@@ -212,6 +284,19 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
           {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_KEYS[r])}</option>)}
         </select>
         <button type="submit" className="btn-primary">{t("invite")}</button>
+        {invite.role === "GUEST_USER" && (
+          <div className="col-span-full grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div>
+              <label className="label">{t("guestActiveFromLabel")}</label>
+              <input type="datetime-local" className="input" value={invite.activeFrom} onChange={(e) => setInvite((f) => ({ ...f, activeFrom: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">{t("guestActiveUntilLabel")}</label>
+              <input type="datetime-local" className="input" value={invite.activeUntil} onChange={(e) => setInvite((f) => ({ ...f, activeUntil: e.target.value }))} />
+            </div>
+            <p className="col-span-full text-xs text-muted">{t("guestWindowHelp")}</p>
+          </div>
+        )}
       </form>
 
       <ul className="max-h-96 divide-y divide-line overflow-y-auto">
@@ -223,6 +308,13 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
                 {u.status === "SUSPENDED" && <span className="badge shrink-0 bg-brand-50 text-brand-700">{t("suspendedLabel")}</span>}
               </div>
               <p className="truncate text-xs text-muted">{u.user.email}</p>
+              {u.role === "GUEST_USER" && (
+                <p className="truncate text-xs text-muted">
+                  {u.activeFrom ? new Date(u.activeFrom).toLocaleString() : t("guestUnboundedLabel")}
+                  {" – "}
+                  {u.activeUntil ? new Date(u.activeUntil).toLocaleString() : t("guestUnboundedLabel")}
+                </p>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {u.role === "ORG_SUPER_ADMIN" ? (
@@ -230,9 +322,22 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
                   <Lock size={13} /> {t(ROLE_KEYS[u.role])}
                 </span>
               ) : (
-                <select className="input w-48" value={u.role} onChange={(e) => updateRole(u.userId, e.target.value)}>
+                <select
+                  className="input w-48"
+                  value={u.role}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    updateRole(u.userId, newRole);
+                    if (newRole === "GUEST_USER") setEditingWindowFor({ ...u, role: newRole });
+                  }}
+                >
                   {ROLES.map((r) => <option key={r} value={r}>{t(ROLE_KEYS[r])}</option>)}
                 </select>
+              )}
+              {u.role === "GUEST_USER" && (
+                <button type="button" onClick={() => setEditingWindowFor(u)} title={t("editGuestWindowCta")} className="text-muted hover:text-brand">
+                  <Clock size={13} />
+                </button>
               )}
               <button
                 type="button"
@@ -256,6 +361,15 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
           </li>
         ))}
       </ul>
+
+      {editingWindowFor && (
+        <GuestWindowModal
+          organizationId={organizationId}
+          targetUser={editingWindowFor}
+          onClose={() => setEditingWindowFor(null)}
+          onDone={() => { setEditingWindowFor(null); refetch(); }}
+        />
+      )}
     </div>
   );
 }

@@ -149,9 +149,19 @@ export class AuthService {
   }
 
   async getMemberships(userId: string) {
-    return this.prisma.organizationMember.findMany({
+    const memberships = await this.prisma.organizationMember.findMany({
       where: { userId, status: "ACTIVE" },
       include: { organization: true },
+    });
+    // A guest outside their active window shouldn't see the org listed at all — same "blocked
+    // entirely" posture OrgMembershipGuard enforces per-request, just applied here too so the
+    // org-switcher doesn't show something they'd immediately get a 403 clicking into.
+    const now = new Date();
+    return memberships.filter((m) => {
+      if (m.role !== "GUEST_USER") return true;
+      if (m.activeFrom && now < m.activeFrom) return false;
+      if (m.activeUntil && now > m.activeUntil) return false;
+      return true;
     });
   }
 

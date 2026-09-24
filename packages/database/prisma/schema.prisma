@@ -160,6 +160,12 @@ enum RoleKey {
   ORG_ADMIN
   FINANCE_OFFICER
   STANDARD_USER
+  /// A time-boxed account for a specific purpose — same minimal default permissions as
+  /// STANDARD_USER, but OrganizationMember.activeFrom/activeUntil additionally gate whether it can
+  /// reach the organization at all right now (see OrgMembershipGuard). Outside that window, access
+  /// is blocked the same way a SUSPENDED member's is — login itself still works, but every
+  /// org-scoped request is refused.
+  GUEST_USER
 }
 
 model OrganizationMember {
@@ -170,6 +176,11 @@ model OrganizationMember {
   status         OrgMemberStatus @default(ACTIVE)
   invitedAt      DateTime? @map("invited_at")
   joinedAt       DateTime  @default(now()) @map("joined_at")
+  /// Only meaningful for role GUEST_USER — the date/time range this member can actually reach the
+  /// organization in (see OrgMembershipGuard). Null on either end means unbounded on that side.
+  /// Ignored for every other role.
+  activeFrom     DateTime? @map("active_from")
+  activeUntil    DateTime? @map("active_until")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

@@ -68,7 +68,7 @@ export class OrganizationsService {
     });
   }
 
-  async inviteUser(organizationId: string, input: { email: string; firstName: string; lastName: string; role: RoleKey }) {
+  async inviteUser(organizationId: string, input: { email: string; firstName: string; lastName: string; role: RoleKey; activeFrom?: string; activeUntil?: string }) {
     const org = await this.getById(organizationId);
     let user = await this.prisma.user.findUnique({ where: { email: input.email } });
 
@@ -98,13 +98,15 @@ export class OrganizationsService {
       throw new ConflictException("This user is already a member of the organization");
     }
 
+    const activeFrom = input.activeFrom ? new Date(input.activeFrom) : undefined;
+    const activeUntil = input.activeUntil ? new Date(input.activeUntil) : undefined;
     const membership = existingMembership
       ? await this.prisma.organizationMember.update({
           where: { id: existingMembership.id },
-          data: { role: input.role, status: "ACTIVE" },
+          data: { role: input.role, status: "ACTIVE", activeFrom, activeUntil },
         })
       : await this.prisma.organizationMember.create({
-          data: { organizationId, userId: user.id, role: input.role },
+          data: { organizationId, userId: user.id, role: input.role, activeFrom, activeUntil },
         });
 
     await this.email.send({
@@ -118,7 +120,7 @@ export class OrganizationsService {
     return { ...membership, temporaryPassword };
   }
 
-  async updateMember(organizationId: string, userId: string, data: { role?: RoleKey; status?: OrgMemberStatus }) {
+  async updateMember(organizationId: string, userId: string, data: { role?: RoleKey; status?: OrgMemberStatus; activeFrom?: string; activeUntil?: string }) {
     const membership = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
     });
@@ -131,7 +133,15 @@ export class OrganizationsService {
     if (membership.role === "ORG_SUPER_ADMIN" && data.role && data.role !== "ORG_SUPER_ADMIN") {
       throw new BadRequestException("Super Admin's role is locked and cannot be changed here");
     }
-    return this.prisma.organizationMember.update({ where: { id: membership.id }, data });
+    return this.prisma.organizationMember.update({
+      where: { id: membership.id },
+      data: {
+        role: data.role,
+        status: data.status,
+        activeFrom: data.activeFrom !== undefined ? (data.activeFrom ? new Date(data.activeFrom) : null) : undefined,
+        activeUntil: data.activeUntil !== undefined ? (data.activeUntil ? new Date(data.activeUntil) : null) : undefined,
+      },
+    });
   }
 
   async removeMember(organizationId: string, userId: string) {

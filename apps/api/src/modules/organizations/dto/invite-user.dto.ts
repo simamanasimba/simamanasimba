@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsString } from "class-validator";
+import { IsDateString, IsEmail, IsEnum, IsOptional, IsString } from "class-validator";
 import { RoleKey } from "@event-intel/database";
 
 export class InviteUserDto {
@@ -13,4 +13,13 @@ export class InviteUserDto {
 
   @IsEnum(RoleKey)
   role!: RoleKey;
+
+  /** Only meaningful for role GUEST_USER — see OrgMembershipGuard. */
+  @IsOptional()
+  @IsDateString()
+  activeFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  activeUntil?: string;
 }

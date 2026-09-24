@@ -35,6 +35,15 @@ export class OrgMembershipGuard implements CanActivate {
       throw new ForbiddenException("You do not have access to this organization");
     }
 
+    // A guest's window is checked here, not at login — same as SUSPENDED above, the account can
+    // still authenticate, but every request scoped to this organization is refused outside it.
+    if (membership.role === "GUEST_USER") {
+      const now = new Date();
+      if ((membership.activeFrom && now < membership.activeFrom) || (membership.activeUntil && now > membership.activeUntil)) {
+        throw new ForbiddenException("This guest account is not active right now");
+      }
+    }
+
     req.orgMember = { organizationId, role: membership.role };
     return true;
   }

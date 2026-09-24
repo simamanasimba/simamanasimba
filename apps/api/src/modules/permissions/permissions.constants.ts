@@ -1,8 +1,11 @@
 import type { RoleKey } from "@event-intel/database";
 
 /** All assignable org roles (PLATFORM_OWNER is a separate cross-org superuser flag, not
- * something an organization assigns to its own members). */
-export const ALL_ROLES: RoleKey[] = ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER", "STANDARD_USER"];
+ * something an organization assigns to its own members). GUEST_USER gets the exact same minimal
+ * defaults as STANDARD_USER everywhere below (it's simply never added to any area's list, same as
+ * STANDARD_USER isn't, except "dashboard"'s filter-based inclusion) — its own defining trait,
+ * the active-window check, lives on OrganizationMember/OrgMembershipGuard instead, not here. */
+export const ALL_ROLES: RoleKey[] = ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER", "STANDARD_USER", "GUEST_USER"];
 
 export const AREAS = [
   "dashboard",
