@@ -20,11 +20,12 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { canManageInfluencer2, canApprovePayment } from "@/lib/permissions";
 import { PAYMENT_PROGRESS_LABEL_KEYS, PAYMENT_PROGRESS_BADGE } from "@/lib/paymentProgress";
 import { useLang } from "@/lib/i18n";
+import { timeAgo } from "@/lib/timeAgo";
 
 export default function Influencer2DetailPage() {
   const { organizationId, campaignId } = useParams<{ organizationId: string; campaignId: string }>();
   const router = useRouter();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { showToast } = useToast();
   const { data: me } = useAuth();
   const { data: perms } = useRolePermissions(organizationId);
@@ -91,7 +92,7 @@ export default function Influencer2DetailPage() {
               {campaign.contentType}
               {campaign.description ? ` · ${campaign.description}` : ""}
             </p>
-            <p className="mt-0.5 text-xs text-muted">{t("lastEditedLabel")}: {new Date(campaign.updatedAt).toLocaleString()}</p>
+            <p className="mt-0.5 text-xs text-muted" title={new Date(campaign.updatedAt).toLocaleString()}>{t("lastEditedLabel")}: {timeAgo(campaign.updatedAt, lang)}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {influencer && (
                 <Link href={`/org/${organizationId}/influencers/${influencer.id}`} className="badge bg-brand-50 text-brand-700 hover:underline">{influencer.name}</Link>

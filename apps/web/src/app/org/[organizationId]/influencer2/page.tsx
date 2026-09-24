@@ -18,6 +18,7 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { canManageInfluencer2, canApprovePayment } from "@/lib/permissions";
 import { PAYMENT_PROGRESS_LABEL_KEYS, PAYMENT_PROGRESS_BADGE } from "@/lib/paymentProgress";
 import { useLang } from "@/lib/i18n";
+import { timeAgo } from "@/lib/timeAgo";
 
 const PAGE_SIZE = 25;
 const CONTENT_TYPES: Influencer2ContentType[] = ["VIDEO", "IMAGE", "REEL", "STORY", "ARTICLE", "PODCAST", "AUDIO", "OTHER"];
@@ -25,7 +26,7 @@ const STATUSES: Influencer2CampaignStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "COM
 
 export default function Influencer2ListPage() {
   const { organizationId } = useParams<{ organizationId: string }>();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { showToast } = useToast();
   const { data: me } = useAuth();
   const { data: perms } = useRolePermissions(organizationId);
@@ -169,7 +170,7 @@ export default function Influencer2ListPage() {
                             {t(PAYMENT_PROGRESS_LABEL_KEYS[campaign.paymentProgress ?? "UNPAID"])}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted">{new Date(campaign.updatedAt).toLocaleString()}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted" title={new Date(campaign.updatedAt).toLocaleString()}>{timeAgo(campaign.updatedAt, lang)}</td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right">
                           {canApprove && isUnpaid && (campaign.influencerId || campaign.mediaHostId) && (
                             <button

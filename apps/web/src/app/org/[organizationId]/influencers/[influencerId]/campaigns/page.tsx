@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2 } from "@/lib/permissions";
 import { PAYMENT_PROGRESS_LABEL_KEYS, PAYMENT_PROGRESS_BADGE } from "@/lib/paymentProgress";
 import { useLang } from "@/lib/i18n";
+import { timeAgo } from "@/lib/timeAgo";
 
 const PAGE_SIZE = 25;
 const CONTENT_TYPES: Influencer2ContentType[] = ["VIDEO", "IMAGE", "REEL", "STORY", "ARTICLE", "PODCAST", "AUDIO", "OTHER"];
@@ -53,7 +54,7 @@ function SortableHeader({ label, sortKey, active, dir, onClick, align }: { label
 export default function InfluencerCampaignsPage() {
   const { organizationId, influencerId } = useParams<{ organizationId: string; influencerId: string }>();
   const searchParams = useSearchParams();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const canManage = canManageInfluencer2(myRole);
@@ -394,7 +395,7 @@ export default function InfluencerCampaignsPage() {
                           {t(PAYMENT_PROGRESS_LABEL_KEYS[campaign.paymentProgress ?? "UNPAID"])}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted">{new Date(campaign.updatedAt).toLocaleString()}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted" title={new Date(campaign.updatedAt).toLocaleString()}>{timeAgo(campaign.updatedAt, lang)}</td>
                     </tr>
                   ))}
                 </tbody>

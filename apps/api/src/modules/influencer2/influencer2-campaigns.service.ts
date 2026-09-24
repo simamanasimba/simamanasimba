@@ -33,6 +33,20 @@ interface PlatformSummary {
 
 const dateOrUndefined = (v?: string) => (v ? new Date(v) : undefined);
 
+// The frontend's "All time" preset sends a real (if very old) `from` — 2000-01-01 — rather than
+// omitting the date filter outright, so its label can still show an exact range. Treating that as
+// a genuine bound means every query still has to evaluate the OR-based published-date condition
+// (publishedAt in range OR (publishedAt null AND createdAt in range)) against every candidate row,
+// which MySQL can't use a single index for — real, measurable cost for a filter that can never
+// actually exclude anything, since nothing in this app predates this threshold. Any `from` at or
+// before it is treated as "no filter at all", which IS an existing fast path everywhere this is
+// checked (an omitted from/to already skips the filter) — this just recognizes "All time" as the
+// same case instead of a a technically-bounded-but-universally-matching one.
+const UNBOUNDED_FROM_THRESHOLD = new Date("2015-01-01T00:00:00.000Z");
+function isEffectivelyBounded(from?: Date, to?: Date): boolean {
+  return Boolean(from && to && from.getTime() > UNBOUNDED_FROM_THRESHOLD.getTime());
+}
+
 /** rateTzs/totalTzs are Prisma Decimal — same documented conversion applied everywhere else in
  * this codebase (MediaEngagement.rateTzs/totalTzs), otherwise they'd serialize as JSON strings and
  * silently break frontend arithmetic. */
@@ -312,11 +326,11 @@ export class Influencer2CampaignsService {
       // required together correctly.
       const platformConditions: Prisma.Influencer2CampaignPlatformWhereInput[] = [];
       if (filters.platformKey) platformConditions.push({ platform: { key: filters.platformKey } });
-      if (filters.from && filters.to) {
+      if (isEffectivelyBounded(filters.from, filters.to)) {
         platformConditions.push({
           OR: [
-            { publishedAt: { gte: filters.from, lte: filters.to } },
-            { publishedAt: null, createdAt: { gte: filters.from, lte: filters.to } },
+            { publishedAt: { gte: filters.from!, lte: filters.to! } },
+            { publishedAt: null, createdAt: { gte: filters.from!, lte: filters.to! } },
           ],
         });
       }
@@ -546,7 +560,7 @@ export class Influencer2CampaignsService {
     // "numbers that happened to be typed in during this window" (collectedAt), which is a
     // different, less useful question and was silently hiding real posts/engagement whenever data
     // entry lagged behind the actual publish date.
-    const hasRange = Boolean(filter.from && filter.to);
+    const hasRange = isEffectivelyBounded(filter.from, filter.to);
     const publishedFilter = hasRange ? this.publishedDateFilter(filter.from!, filter.to!) : {};
     const campaignWhere: Prisma.Influencer2CampaignWhereInput = { organizationId, ...beneficiary, ...publishedFilter };
 
@@ -661,7 +675,7 @@ export class Influencer2CampaignsService {
 
   async reportDetails(organizationId: string, filter: { scope: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS"; from?: Date; to?: Date }) {
     const beneficiary = filter.scope === "ALL_MEDIA_HOSTS" ? { mediaHostId: { not: null } } : { influencerId: { not: null } };
-    const rangeFilter = filter.from && filter.to ? this.publishedDateFilter(filter.from, filter.to) : {};
+    const rangeFilter = isEffectivelyBounded(filter.from, filter.to) ? this.publishedDateFilter(filter.from!, filter.to!) : {};
     const campaignWhere: Prisma.Influencer2CampaignWhereInput = { organizationId, ...beneficiary, ...rangeFilter };
 
     const [campaigns, mediaTypeGroups, platformGroups] = await Promise.all([
