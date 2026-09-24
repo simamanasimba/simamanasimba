@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import type { FinanceDashboard } from "@/lib/types";
 import { RequireAccess } from "@/components/RequireAccess";
 import { LoadingWord } from "@/components/LoadingWord";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { escapeCsv, downloadCsv } from "@/lib/csv";
 import { useLang, type DictKey } from "@/lib/i18n";
 
@@ -59,6 +60,10 @@ export default function SpendDetailPage() {
   const sorted = useMemo(() => [...rows].sort((a, b) => b.amount - a.amount), [rows]);
   const total = rows.reduce((sum, r) => sum + r.amount, 0);
 
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+  const filtered = q ? sorted.filter((r) => r.name.toLowerCase().includes(q)) : sorted;
+
   function hrefFor(id: string): string {
     switch (category) {
       case "media":
@@ -102,6 +107,13 @@ export default function SpendDetailPage() {
         ) : sorted.length === 0 ? (
           <p className="card text-muted">{t("noSpendYet")}</p>
         ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+              <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+            </div>
+            {filtered.length === 0 ? (
+              <p className="card text-muted">{t("noSearchResults")}</p>
+            ) : (
           <div className="card overflow-hidden p-0">
             <table className="w-full text-sm">
               <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
@@ -111,7 +123,7 @@ export default function SpendDetailPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {sorted.map((r) => (
+                {filtered.map((r) => (
                   <tr key={r.id} className="hover:bg-brand-50/40">
                     <td className="px-4 py-2.5">
                       <Link href={hrefFor(r.id)} className="font-medium text-brand hover:underline">{r.name}</Link>
@@ -122,6 +134,8 @@ export default function SpendDetailPage() {
               </tbody>
             </table>
           </div>
+            )}
+          </>
         )}
       </div>
     </RequireAccess>

@@ -8,6 +8,7 @@ import { useLang } from "@/lib/i18n";
 import { PostingAgreementModal } from "@/components/PostingAgreementModal";
 import { WeekPostsModal } from "@/components/WeekPostsModal";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { printAgreement } from "@/lib/printAgreement";
 import type { PostingAgreement, PostingAgreementEngagementMetric, PostingAgreementWeek } from "@/lib/types";
 
@@ -47,6 +48,7 @@ export function PostingAgreementCard({
   const [viewingWeek, setViewingWeek] = useState<PostingAgreementWeek | null>(null);
   const [payingWeek, setPayingWeek] = useState<PostingAgreementWeek | null>(null);
   const [busyWeek, setBusyWeek] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -232,10 +234,26 @@ export function PostingAgreementCard({
           {error && <p className="text-sm text-brand">{error}</p>}
 
           <div>
-            <h4 className="mb-2 text-sm font-semibold text-ink">{t("weeklyEvaluationsTitle")}</h4>
-            {(!weeks || weeks.length === 0) ? (
-              <p className="text-sm text-muted">{t("noEvaluationsYet")}</p>
-            ) : (
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-ink">{t("weeklyEvaluationsTitle")}</h4>
+              {weeks && weeks.length > 0 && (
+                <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+              )}
+            </div>
+            {(() => {
+              const q = search.trim().toLowerCase();
+              const filteredWeeks = weeks
+                ? q
+                  ? weeks.filter((w) => `${t("weekLabel")} ${w.weekNumber}`.toLowerCase().includes(q))
+                  : weeks
+                : [];
+              if (!weeks || weeks.length === 0) {
+                return <p className="text-sm text-muted">{t("noEvaluationsYet")}</p>;
+              }
+              if (filteredWeeks.length === 0) {
+                return <p className="text-sm text-muted">{t("noSearchResults")}</p>;
+              }
+              return (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -249,7 +267,7 @@ export function PostingAgreementCard({
                     </tr>
                   </thead>
                   <tbody>
-                    {weeks.map((w) => (
+                    {filteredWeeks.map((w) => (
                       <tr key={w.weekNumber} className="border-b border-line/60">
                         <td className="py-1.5 pr-3">
                           <span className="nums font-medium text-ink">{t("weekLabel")} {w.weekNumber}</span>
@@ -331,7 +349,8 @@ export function PostingAgreementCard({
                   </tbody>
                 </table>
               </div>
-            )}
+              );
+            })()}
           </div>
         </>
       )}

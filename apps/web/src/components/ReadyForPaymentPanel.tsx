@@ -7,6 +7,7 @@ import { Receipt } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import type { PostingAgreementReadyForPayment } from "@/lib/types";
 
 /** Finance's own queue, pulled straight from every agreement in the org rather than requiring a
@@ -16,6 +17,7 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [payingRow, setPayingRow] = useState<PostingAgreementReadyForPayment | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: rows } = useQuery({
     queryKey: ["posting-agreements", organizationId, "ready-for-payment"],
@@ -31,6 +33,11 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
   // mixed currencies into one number would be meaningless if that ever isn't true.
   const totalsByCurrency = new Map<string, number>();
   for (const row of rows ?? []) totalsByCurrency.set(row.currency, (totalsByCurrency.get(row.currency) ?? 0) + row.amount);
+
+  const q = search.trim().toLowerCase();
+  const filteredRows = q
+    ? (rows ?? []).filter((row) => [row.beneficiaryName, row.groupLabel].some((f) => (f ?? "").toLowerCase().includes(q)))
+    : (rows ?? []);
 
   return (
     <div className="card space-y-3">
@@ -48,8 +55,13 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
           </div>
         )}
       </div>
+      {(rows?.length ?? 0) > 0 && (
+        <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+      )}
       {(rows?.length ?? 0) === 0 ? (
         <p className="text-sm text-muted">{t("readyForPaymentEmpty")}</p>
+      ) : filteredRows.length === 0 ? (
+        <p className="text-sm text-muted">{t("noSearchResults")}</p>
       ) : (
         <div className="max-h-[420px] overflow-y-auto rounded-xl border border-line">
           <table className="w-full text-sm">
@@ -64,7 +76,7 @@ export function ReadyForPaymentPanel({ organizationId, canPay }: { organizationI
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {(rows ?? []).map((row) => (
+              {filteredRows.map((row) => (
                 <tr key={row.evaluationId}>
                   <td className="px-4 py-2.5 font-medium text-ink">
                     <Link href={beneficiaryHref(row)} className="hover:underline">{row.beneficiaryName}</Link>

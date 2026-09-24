@@ -10,6 +10,7 @@ import type { Payment } from "@/lib/types";
 import { PAYMENT_STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE } from "@/lib/paymentStatusDisplay";
 import { PaymentDetailModal } from "@/components/PaymentDetailModal";
 import { RequireAccess } from "@/components/RequireAccess";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useLang } from "@/lib/i18n";
 
 /** Reached by clicking the "Today's payments" card on the Finance dashboard — the full detail
@@ -27,6 +28,16 @@ export default function TodaysPaymentsPage() {
   const today = new Date().toISOString().slice(0, 10);
   const todaysPayments = useMemo(() => (payments ?? []).filter((p) => p.paymentDate.slice(0, 10) === today), [payments, today]);
   const todaysTotal = todaysPayments.reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
+
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+  const filteredPayments = q
+    ? todaysPayments.filter((p) =>
+        [p.mediaHost?.name, p.influencer?.name, p.method, p.bankTransactionRef, p.mobileMoneyTransactionId, p.referenceNumber].some((f) =>
+          (f ?? "").toLowerCase().includes(q),
+        ),
+      )
+    : todaysPayments;
 
   return (
     <RequireAccess area="finance">
@@ -49,6 +60,13 @@ export default function TodaysPaymentsPage() {
         {todaysPayments.length === 0 ? (
           <p className="card text-muted">{t("noPaymentsToday")}</p>
         ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+              <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+            </div>
+            {filteredPayments.length === 0 ? (
+              <p className="card text-muted">{t("noSearchResults")}</p>
+            ) : (
           <div className="card overflow-hidden p-0">
             <div className="max-h-[560px] overflow-auto">
               <table className="w-full text-sm">
@@ -62,7 +80,7 @@ export default function TodaysPaymentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {todaysPayments.map((p) => (
+                  {filteredPayments.map((p) => (
                     <tr key={p.id} onClick={() => setViewing(p)} className="cursor-pointer hover:bg-brand-50/40">
                       <td className="px-4 py-2.5 font-medium text-ink">{p.mediaHost?.name ?? p.influencer?.name ?? "—"}</td>
                       <td className="px-4 py-2.5 text-muted">{p.method ?? "—"}</td>
@@ -77,6 +95,8 @@ export default function TodaysPaymentsPage() {
               </table>
             </div>
           </div>
+            )}
+          </>
         )}
 
         {viewing && <PaymentDetailModal organizationId={organizationId} payment={viewing} onClose={() => setViewing(null)} />}

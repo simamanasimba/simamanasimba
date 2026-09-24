@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import type { Payment, MediaHost, Influencer, PaginatedMembers } from "@/lib/types";
 import { escapeCsv, downloadCsv } from "@/lib/csv";
 import { useLang } from "@/lib/i18n";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { PAYMENT_STATUS_LABEL_KEYS as STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE as STATUS_BADGE } from "@/lib/paymentStatusDisplay";
 import { paymentBeneficiaryName } from "@/lib/paymentProgress";
 
@@ -46,6 +47,7 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterPersonId, setFilterPersonId] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
 
   const { data: payments } = useQuery({
     queryKey: ["payments", organizationId],
@@ -67,7 +69,7 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
     setSelected(new Set());
   }
 
-  const filteredPayments = useMemo(() => {
+  const dateAndPersonFiltered = useMemo(() => {
     return (payments ?? []).filter((p) => {
       if (p.beneficiaryType !== tab) return false;
       const date = p.paymentDate.slice(0, 10);
@@ -81,6 +83,16 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
       return true;
     });
   }, [payments, tab, filterDateFrom, filterDateTo, filterPersonId]);
+
+  const filteredPayments = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return dateAndPersonFiltered;
+    return dateAndPersonFiltered.filter((p) =>
+      [paymentBeneficiaryName(p), p.method, p.bankTransactionRef ?? p.mobileMoneyTransactionId ?? p.referenceNumber, p.status].some((f) =>
+        (f ?? "").toLowerCase().includes(q),
+      ),
+    );
+  }, [dateAndPersonFiltered, search]);
 
   const filteredTotal = filteredPayments.reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
   const allSelected = filteredPayments.length > 0 && filteredPayments.every((p) => selected.has(p.id));
@@ -128,6 +140,9 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
       </div>
 
       <div className="card space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <div>
             <label className="label">{t("filterByDateLabel")}</label>
@@ -170,8 +185,10 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
       </div>
 
       <div className="card overflow-hidden p-0">
-        {filteredPayments.length === 0 ? (
+        {dateAndPersonFiltered.length === 0 ? (
           <p className="p-5 text-muted">{t("noPaymentHistoryYet")}</p>
+        ) : filteredPayments.length === 0 ? (
+          <p className="p-5 text-muted">{t("noSearchResults")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -8,6 +9,7 @@ import { api } from "@/lib/api";
 import type { Payment } from "@/lib/types";
 import { RequireAccess } from "@/components/RequireAccess";
 import { LoadingWord } from "@/components/LoadingWord";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { escapeCsv, downloadCsv } from "@/lib/csv";
 import { useLang } from "@/lib/i18n";
 
@@ -22,10 +24,16 @@ export default function ConditionalPaymentsPage() {
     queryKey: ["conditional-payments", organizationId],
     queryFn: () => api.get<Payment[]>(`/api/v1/organizations/${organizationId}/payments/conditional`),
   });
+  const [search, setSearch] = useState("");
 
   function beneficiaryName(p: Payment): string {
     return p.mediaHost?.name ?? p.influencer?.name ?? "—";
   }
+
+  const q = search.trim().toLowerCase();
+  const filteredPayments = q
+    ? (payments ?? []).filter((p) => [beneficiaryName(p), p.conditionalReason, p.createdByName].some((f) => (f ?? "").toLowerCase().includes(q)))
+    : (payments ?? []);
 
   function beneficiaryHref(p: Payment): string {
     if (p.mediaHostId) return `/org/${organizationId}/media-hosts/${p.mediaHostId}/payments`;
@@ -67,6 +75,13 @@ export default function ConditionalPaymentsPage() {
         ) : payments.length === 0 ? (
           <p className="card text-muted">{t("conditionalPaymentsEmpty")}</p>
         ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+              <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+            </div>
+            {filteredPayments.length === 0 ? (
+              <p className="card text-muted">{t("noSearchResults")}</p>
+            ) : (
           <div className="card overflow-hidden p-0">
             <table className="w-full text-sm">
               <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
@@ -79,7 +94,7 @@ export default function ConditionalPaymentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {payments.map((p) => (
+                {filteredPayments.map((p) => (
                   <tr key={p.id} className="hover:bg-brand-50/40">
                     <td className="px-4 py-2.5">
                       <Link href={beneficiaryHref(p)} className="font-medium text-brand hover:underline">{beneficiaryName(p)}</Link>
@@ -93,6 +108,8 @@ export default function ConditionalPaymentsPage() {
               </tbody>
             </table>
           </div>
+            )}
+          </>
         )}
       </div>
     </RequireAccess>

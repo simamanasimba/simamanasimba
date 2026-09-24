@@ -8,6 +8,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Influencer, Payment } from "@/lib/types";
 import { InfluencerModal } from "@/components/InfluencerModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -30,6 +31,7 @@ export default function InfluencersPage() {
   const isFinance = myRole === "FINANCE_OFFICER";
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<Influencer | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data, refetch } = useQuery({
     queryKey: ["influencers", organizationId],
@@ -40,6 +42,11 @@ export default function InfluencersPage() {
     queryFn: () => api.get<Payment[]>(`/api/v1/organizations/${organizationId}/payments`),
     enabled: isFinance,
   });
+
+  const q = search.trim().toLowerCase();
+  const filteredData = q
+    ? (data ?? []).filter((i) => [i.name, i.type, i.socialHandle, i.phone, i.email].some((f) => (f ?? "").toLowerCase().includes(q)))
+    : (data ?? []);
 
   async function onDelete(influencer: Influencer) {
     if (!confirm(`${t("deleteCta")} "${influencer.name}"?`)) return;
@@ -65,6 +72,10 @@ export default function InfluencersPage() {
             <Plus size={15} /> {t("addInfluencer")}
           </button>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
       </div>
 
       <div className="card hidden overflow-hidden p-0 sm:block">
@@ -94,7 +105,7 @@ export default function InfluencersPage() {
               )}
             </thead>
             <tbody className="divide-y divide-line">
-              {(data ?? []).map((i) => {
+              {filteredData.map((i) => {
                 if (isFinance) {
                   const totals = financeTotals(payments ?? [], i.id);
                   return (
@@ -134,9 +145,11 @@ export default function InfluencersPage() {
                   </tr>
                 );
               })}
-              {data?.length === 0 && (
+              {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan={isFinance ? 6 : 8} className="px-4 py-6 text-center text-muted">{t("noInfluencersFound")}</td>
+                  <td colSpan={isFinance ? 6 : 8} className="px-4 py-6 text-center text-muted">
+                    {(data?.length ?? 0) === 0 ? t("noInfluencersFound") : t("noSearchResults")}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -145,8 +158,10 @@ export default function InfluencersPage() {
       </div>
 
       <div className="space-y-2.5 sm:hidden">
-        {data?.length === 0 && <p className="card text-center text-muted">{t("noInfluencersFound")}</p>}
-        {(data ?? []).map((i) => {
+        {filteredData.length === 0 && (
+          <p className="card text-center text-muted">{(data?.length ?? 0) === 0 ? t("noInfluencersFound") : t("noSearchResults")}</p>
+        )}
+        {filteredData.map((i) => {
           if (isFinance) {
             const totals = financeTotals(payments ?? [], i.id);
             return (

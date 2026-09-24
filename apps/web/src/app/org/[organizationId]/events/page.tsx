@@ -8,6 +8,7 @@ import { Plus, MapPin, CalendarDays, User, Users, LayoutGrid, List as ListIcon, 
 import { api, ApiError } from "@/lib/api";
 import type { EventRecord } from "@/lib/types";
 import { Modal } from "@/components/Modal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 
@@ -120,6 +121,7 @@ export default function EventsPage() {
   const [to, setTo] = useState("");
   const [view, setView] = useState<"cards" | "list">("cards");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [listSearch, setListSearch] = useState("");
 
   const { data: eventTypes } = useQuery({
     queryKey: ["event-types", organizationId],
@@ -136,6 +138,11 @@ export default function EventsPage() {
       return api.get<EventRecord[]>(`/api/v1/organizations/${organizationId}/events?${params}`);
     },
   });
+
+  const listQ = listSearch.trim().toLowerCase();
+  const filteredListEvents = listQ
+    ? (data ?? []).filter((e) => [e.name, e.location, e.createdBy ? `${e.createdBy.firstName} ${e.createdBy.lastName}` : null].some((f) => (f ?? "").toLowerCase().includes(listQ)))
+    : (data ?? []);
 
   function onCreated(event: CreatedEvent) {
     setShowNew(false);
@@ -241,7 +248,11 @@ export default function EventsPage() {
           </div>
         </div>
       ) : (
-        <div className="card max-h-[640px] overflow-y-auto p-0">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <TableSearchInput value={listSearch} onChange={setListSearch} placeholder={t("searchGenericPlaceholder")} />
+          </div>
+          <div className="card max-h-[640px] overflow-y-auto p-0">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-surface text-left text-xs text-muted">
               <tr>
@@ -256,7 +267,7 @@ export default function EventsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line/60">
-              {(data ?? []).map((e) => (
+              {filteredListEvents.map((e) => (
                 <tr key={e.id} className="cursor-pointer hover:bg-surface" onClick={() => router.push(`/org/${organizationId}/events/${e.id}`)}>
                   <td className="px-4 py-2 font-semibold text-ink">{e.name}</td>
                   <td className="px-4 py-2 text-muted">{e.eventType ?? "—"}</td>
@@ -278,13 +289,16 @@ export default function EventsPage() {
                   </td>
                 </tr>
               ))}
-              {data?.length === 0 && (
+              {filteredListEvents.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-muted">{t("noEventsMatch")}</td>
+                  <td colSpan={8} className="px-4 py-6 text-center text-muted">
+                    {(data?.length ?? 0) === 0 ? t("noEventsMatch") : t("noSearchResults")}
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

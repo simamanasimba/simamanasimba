@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Receipt, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useLang } from "@/lib/i18n";
 import type { PostingAgreement, PostingWeekDefinition } from "@/lib/types";
 
@@ -32,6 +33,7 @@ export function PostingWeeksPanel({
   const [payingWeek, setPayingWeek] = useState<PostingWeekDefinition | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const beneficiaryQuery = mediaHostId ? `mediaHostId=${mediaHostId}` : `influencerId=${influencerId}`;
   const postsHref = (weekDefinitionId: string) =>
@@ -46,6 +48,8 @@ export function PostingWeeksPanel({
   // Week 1 first, going down — reads like the campaign's own timeline, not a reverse-chronological
   // activity feed (that's what RecentActivityList is for).
   const sortedWeeks = useMemo(() => [...(weeks ?? [])].sort((a, b) => a.startDate.localeCompare(b.startDate)), [weeks]);
+  const q = search.trim().toLowerCase();
+  const filteredWeeks = q ? sortedWeeks.filter((w) => (w.name ?? "").toLowerCase().includes(q)) : sortedWeeks;
 
   const { data: agreements } = useQuery({
     queryKey: ["posting-agreements", organizationId, mediaHostId, influencerId],
@@ -99,15 +103,22 @@ export function PostingWeeksPanel({
 
   return (
     <div className="card space-y-4">
-      <div>
-        <h3 className="font-semibold text-ink">{t("foldersPanelTitle")}</h3>
-        <p className="text-sm text-muted">{t("campaignWeeksPanelSubtitle")}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-ink">{t("foldersPanelTitle")}</h3>
+          <p className="text-sm text-muted">{t("campaignWeeksPanelSubtitle")}</p>
+        </div>
+        {weeks && weeks.length > 0 && (
+          <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+        )}
       </div>
 
       {error && <p className="text-sm text-brand">{error}</p>}
 
       {(!weeks || weeks.length === 0) ? (
         <p className="text-sm text-muted">{t("noCampaignWeeksYet")}</p>
+      ) : filteredWeeks.length === 0 ? (
+        <p className="text-sm text-muted">{t("noSearchResults")}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -124,7 +135,7 @@ export function PostingWeeksPanel({
               </tr>
             </thead>
             <tbody>
-              {sortedWeeks.map((w) => (
+              {filteredWeeks.map((w) => (
                 <tr
                   key={w.id}
                   className="cursor-pointer border-b border-line/60 hover:bg-brand-50/40"

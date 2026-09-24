@@ -48,6 +48,7 @@ export class Influencer2CampaignsController {
     @Query("folderId") folderId?: string,
     @Query("folderStart") folderStart?: string,
     @Query("folderEnd") folderEnd?: string,
+    @Query("search") search?: string,
   ) {
     return this.campaigns.list(
       organizationId,
@@ -64,6 +65,7 @@ export class Influencer2CampaignsController {
         folderId,
         folderStart: folderStart ? new Date(folderStart) : undefined,
         folderEnd: folderEnd ? new Date(folderEnd) : undefined,
+        search,
       },
       Number(page) || 1,
       Number(pageSize) || 25,

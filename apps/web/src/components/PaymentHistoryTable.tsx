@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLang } from "@/lib/i18n";
 import { PAYMENT_STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE } from "@/lib/paymentStatusDisplay";
 import { PaymentDetailModal } from "@/components/PaymentDetailModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import type { Payment } from "@/lib/types";
 
 /** Shared between the media-host/influencer profile pages' Finance-facing inline view and their
@@ -13,12 +14,30 @@ import type { Payment } from "@/lib/types";
 export function PaymentHistoryTable({ organizationId, payments }: { organizationId: string; payments: Payment[] }) {
   const { t } = useLang();
   const [viewing, setViewing] = useState<Payment | null>(null);
+  const [search, setSearch] = useState("");
+
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? payments.filter((p) =>
+        [p.method, p.bankTransactionRef ?? p.mobileMoneyTransactionId ?? p.referenceNumber, p.status, new Date(p.paymentDate).toLocaleDateString()].some((f) =>
+          (f ?? "").toLowerCase().includes(q),
+        ),
+      )
+    : payments;
+
   return (
     <div className="card overflow-hidden p-0">
       <h2 className="px-5 pt-5 text-sm font-semibold uppercase tracking-wide text-muted">{t("paymentHistoryTitle")}</h2>
       {payments.length === 0 ? (
         <p className="px-5 py-6 text-muted">{t("noPaymentHistoryYet")}</p>
       ) : (
+        <>
+          <div className="px-5 pt-3">
+            <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+          </div>
+          {filtered.length === 0 ? (
+            <p className="px-5 py-6 text-muted">{t("noSearchResults")}</p>
+          ) : (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
@@ -31,7 +50,7 @@ export function PaymentHistoryTable({ organizationId, payments }: { organization
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {payments.map((p) => (
+              {filtered.map((p) => (
                 <tr key={p.id} onClick={() => setViewing(p)} className="cursor-pointer hover:bg-brand-50/40">
                   <td className="px-5 py-2.5 font-medium text-ink">{new Date(p.paymentDate).toLocaleDateString()}</td>
                   <td className="nums px-5 py-2.5">{p.currency} {p.amount.toLocaleString()}</td>
@@ -45,6 +64,8 @@ export function PaymentHistoryTable({ organizationId, payments }: { organization
             </tbody>
           </table>
         </div>
+          )}
+        </>
       )}
 
       {viewing && (

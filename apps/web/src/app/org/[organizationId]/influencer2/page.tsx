@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import type { Influencer, Influencer2CampaignListItem, Influencer2CampaignStatus, Influencer2ContentType, Influencer2Platform, PaginatedInfluencer2Campaigns } from "@/lib/types";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { ApprovePaymentModal } from "@/components/ApprovePaymentModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
 import { useToast } from "@/components/Toast";
@@ -38,6 +39,7 @@ export default function Influencer2ListPage() {
   const [platformKey, setPlatformKey] = useState("");
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
+  const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [approvingItem, setApprovingItem] = useState<Influencer2CampaignListItem | null>(null);
 
@@ -55,9 +57,10 @@ export default function Influencer2ListPage() {
   if (platformKey) params.set("platformKey", platformKey);
   if (contentType) params.set("contentType", contentType);
   if (status) params.set("status", status);
+  if (search) params.set("search", search);
 
   const { data } = useQuery({
-    queryKey: ["influencer2-campaigns", organizationId, influencerId, platformKey, contentType, status, page],
+    queryKey: ["influencer2-campaigns", organizationId, influencerId, platformKey, contentType, status, search, page],
     queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?${params.toString()}`),
   });
 
@@ -82,7 +85,16 @@ export default function Influencer2ListPage() {
           )}
         </div>
 
-        <div className="card grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="card grid grid-cols-1 gap-3 sm:grid-cols-5">
+          <div>
+            <label className="label">{t("searchGenericPlaceholder")}</label>
+            <TableSearchInput
+              value={search}
+              onChange={(v) => { setSearch(v); setPage(1); }}
+              placeholder={t("searchGenericPlaceholder")}
+              className="w-full sm:max-w-none"
+            />
+          </div>
           <div>
             <label className="label">{t("influencer2FilterInfluencer")}</label>
             <select className="input" value={influencerId} onChange={(e) => { setInfluencerId(e.target.value); setPage(1); }}>

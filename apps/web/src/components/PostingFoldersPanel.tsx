@@ -7,6 +7,7 @@ import { CheckCircle2, Pencil, Plus, Receipt, Trash2, XCircle } from "lucide-rea
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useLang } from "@/lib/i18n";
 import type { Influencer2Folder, PostingAgreement } from "@/lib/types";
 
@@ -114,6 +115,7 @@ export function PostingFoldersPanel({
   const [payingFolder, setPayingFolder] = useState<Influencer2Folder | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const beneficiaryQuery = mediaHostId ? `mediaHostId=${mediaHostId}` : `influencerId=${influencerId}`;
   const postsHref = (folderId: string) =>
@@ -205,18 +207,34 @@ export function PostingFoldersPanel({
           <h3 className="font-semibold text-ink">{t("foldersPanelTitle")}</h3>
           <p className="text-sm text-muted">{t("foldersPanelSubtitle")}</p>
         </div>
-        {canManage && (
-          <button className="btn-secondary text-sm" onClick={() => setModalState("new")}>
-            <Plus size={14} /> {t("newFolderCta")}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {folders && folders.length > 0 && (
+            <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+          )}
+          {canManage && (
+            <button className="btn-secondary text-sm" onClick={() => setModalState("new")}>
+              <Plus size={14} /> {t("newFolderCta")}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <p className="text-sm text-brand">{error}</p>}
 
-      {(!folders || folders.length === 0) ? (
-        <p className="text-sm text-muted">{t("noFoldersYet")}</p>
-      ) : (
+      {(() => {
+        const q = search.trim().toLowerCase();
+        const filteredFolders = folders
+          ? q
+            ? folders.filter((f) => (f.name ?? "").toLowerCase().includes(q))
+            : folders
+          : [];
+        if (!folders || folders.length === 0) {
+          return <p className="text-sm text-muted">{t("noFoldersYet")}</p>;
+        }
+        if (filteredFolders.length === 0) {
+          return <p className="text-sm text-muted">{t("noSearchResults")}</p>;
+        }
+        return (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -231,7 +249,7 @@ export function PostingFoldersPanel({
               </tr>
             </thead>
             <tbody>
-              {folders.map((f) => (
+              {filteredFolders.map((f) => (
                 <tr
                   key={f.id}
                   className="cursor-pointer border-b border-line/60 hover:bg-brand-50/40"
@@ -313,7 +331,8 @@ export function PostingFoldersPanel({
             </tbody>
           </table>
         </div>
-      )}
+        );
+      })()}
 
       {modalState && (
         <FolderModal

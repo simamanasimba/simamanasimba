@@ -8,6 +8,7 @@ import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import type { Payment } from "@/lib/types";
 import { paymentBeneficiaryName } from "@/lib/paymentProgress";
 
@@ -61,11 +62,19 @@ export function PendingApprovalPanel({ organizationId }: { organizationId: strin
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [actingId, setActingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: pending } = useQuery({
     queryKey: ["payments", organizationId, "PENDING"],
     queryFn: () => api.get<Payment[]>(`/api/v1/organizations/${organizationId}/payments?status=PENDING`),
   });
+
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? (pending ?? []).filter((p) =>
+        [paymentBeneficiaryName(p), p.createdByName].some((f) => (f ?? "").toLowerCase().includes(q)),
+      )
+    : (pending ?? []);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["payments", organizationId] });
@@ -109,6 +118,11 @@ export function PendingApprovalPanel({ organizationId }: { organizationId: strin
       {(pending?.length ?? 0) === 0 ? (
         <p className="text-sm text-muted">{t("noPendingApprovalPayments")}</p>
       ) : (
+        <>
+          <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted">{t("noSearchResults")}</p>
+          ) : (
         <div className="max-h-[420px] overflow-y-auto rounded-xl border border-line">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-surface text-left text-xs uppercase tracking-wide text-muted">
@@ -121,7 +135,7 @@ export function PendingApprovalPanel({ organizationId }: { organizationId: strin
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {(pending ?? []).map((p) => {
+              {filtered.map((p) => {
                 const href = showPageHref(p);
                 return (
                 <tr key={p.id}>
@@ -159,6 +173,8 @@ export function PendingApprovalPanel({ organizationId }: { organizationId: strin
             </tbody>
           </table>
         </div>
+          )}
+        </>
       )}
     </div>
   );

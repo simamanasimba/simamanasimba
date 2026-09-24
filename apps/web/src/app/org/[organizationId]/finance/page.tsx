@@ -15,6 +15,7 @@ import { ProcessingPaymentsPanel } from "@/components/ProcessingPaymentsPanel";
 import { Collapsible } from "@/components/Collapsible";
 import { ExpenseModal } from "@/components/ExpenseModal";
 import { FinanceStatCards } from "@/components/FinanceStatCards";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
@@ -211,11 +212,17 @@ function ExpenseSection({ organizationId, category, title, help }: { organizatio
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: expenses } = useQuery({
     queryKey: ["expenses", organizationId, category],
     queryFn: () => api.get<Expense[]>(`/api/v1/organizations/${organizationId}/expenses?category=${category}`),
   });
+
+  const q = search.trim().toLowerCase();
+  const filteredExpenses = q
+    ? (expenses ?? []).filter((e) => [e.item, e.concernedParty].some((f) => (f ?? "").toLowerCase().includes(q)))
+    : (expenses ?? []);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["expenses", organizationId, category] });
@@ -225,11 +232,14 @@ function ExpenseSection({ organizationId, category, title, help }: { organizatio
   return (
     <div className="card">
       <Collapsible title={title} subtitle={help} bare>
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
           <button className="btn-primary text-sm" onClick={() => setShowAdd(true)}><Plus size={15} /> {t("addExpenseCta")}</button>
         </div>
         {!expenses || expenses.length === 0 ? (
           <p className="text-sm text-muted">{t("noExpensesYet")}</p>
+        ) : filteredExpenses.length === 0 ? (
+          <p className="text-sm text-muted">{t("noSearchResults")}</p>
         ) : (
           <div className="max-h-[22rem] overflow-auto rounded-xl border border-line">
             <table className="w-full text-sm">
@@ -245,7 +255,7 @@ function ExpenseSection({ organizationId, category, title, help }: { organizatio
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {expenses.map((e) => (
+                {filteredExpenses.map((e) => (
                   <tr key={e.id} className="hover:bg-brand-50/40">
                     <td className="max-w-[200px] truncate px-4 py-2.5 font-medium text-ink">{e.item}</td>
                     <td className="nums px-4 py-2.5 text-muted">{e.quantity}</td>

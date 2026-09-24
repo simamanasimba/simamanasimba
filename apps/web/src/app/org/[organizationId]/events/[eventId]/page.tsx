@@ -13,6 +13,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { LoadingWord } from "@/components/LoadingWord";
 import { Modal } from "@/components/Modal";
 import { BulkCheckInModal } from "@/components/BulkCheckInModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
 
@@ -223,6 +224,7 @@ export default function EventDetailPage() {
   const [downloadingQrPdf, setDownloadingQrPdf] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [checkInSearch, setCheckInSearch] = useState("");
+  const [attendanceSearch, setAttendanceSearch] = useState("");
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -370,6 +372,11 @@ export default function EventDetailPage() {
 
   if (!data) return <LoadingWord />;
   const { event, stats } = data;
+
+  const attendanceQ = attendanceSearch.trim().toLowerCase();
+  const filteredAttendance = attendanceQ
+    ? (attendance ?? []).filter((a) => [`${a.member.firstName} ${a.member.lastName}`, a.member.phone, a.member.region].some((f) => (f ?? "").toLowerCase().includes(attendanceQ)))
+    : (attendance ?? []);
 
   return (
     <div className="space-y-6">
@@ -589,6 +596,9 @@ export default function EventDetailPage() {
             <Download size={12} /> {t("exportPdf")}
           </button>
         </div>
+        <div className="flex flex-wrap items-center gap-3 px-5 pt-3">
+          <TableSearchInput value={attendanceSearch} onChange={setAttendanceSearch} placeholder={t("searchGenericPlaceholder")} />
+        </div>
         <div className="mt-3 max-h-96 overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-surface text-left text-xs uppercase tracking-wide text-muted">
@@ -601,7 +611,7 @@ export default function EventDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {(attendance ?? []).map((a) => (
+              {filteredAttendance.map((a) => (
                 <tr key={a.id} className="hover:bg-brand-50/40">
                   <td className="px-5 py-2.5">
                     <Link href={`/org/${organizationId}/members/${a.member.id}`} className="text-ink hover:text-brand-700">
@@ -618,9 +628,11 @@ export default function EventDetailPage() {
                   <td className="px-5 py-2.5 text-muted">{new Date(a.checkedInAt).toLocaleString()}</td>
                 </tr>
               ))}
-              {(!attendance || attendance.length === 0) && (
+              {filteredAttendance.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-6 text-center text-muted">{t("noCheckInsYet")}</td>
+                  <td colSpan={5} className="px-5 py-6 text-center text-muted">
+                    {(!attendance || attendance.length === 0) ? t("noCheckInsYet") : t("noSearchResults")}
+                  </td>
                 </tr>
               )}
             </tbody>

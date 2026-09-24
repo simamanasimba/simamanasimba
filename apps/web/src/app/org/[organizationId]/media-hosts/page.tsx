@@ -8,6 +8,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { MediaHost, Payment } from "@/lib/types";
 import { MediaHostModal } from "@/components/MediaHostModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -30,6 +31,7 @@ export default function MediaHostsPage() {
   const isFinance = myRole === "FINANCE_OFFICER";
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<MediaHost | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: allHosts, refetch } = useQuery({
     queryKey: ["media-hosts", organizationId],
@@ -47,6 +49,11 @@ export default function MediaHostsPage() {
   // they may still need to pay one of those older hosts.
   const data = isFinance ? allHosts : allHosts?.filter((h) => h.mediaOutletId);
   const uniqueMediaCount = new Set((data ?? []).filter((h) => h.mediaOutletId).map((h) => h.mediaOutletId)).size;
+
+  const q = search.trim().toLowerCase();
+  const filteredData = q
+    ? (data ?? []).filter((h) => [h.name, h.mediaOutlet?.name, h.channelName, h.programName].some((f) => (f ?? "").toLowerCase().includes(q)))
+    : (data ?? []);
 
   async function onDelete(host: MediaHost) {
     if (!confirm(`${t("deleteCta")} "${host.name}"?`)) return;
@@ -72,6 +79,10 @@ export default function MediaHostsPage() {
             <Plus size={15} /> {t("addMediaHost")}
           </button>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
       </div>
 
       <div className="card hidden overflow-hidden p-0 sm:block">
@@ -100,7 +111,7 @@ export default function MediaHostsPage() {
               )}
             </thead>
             <tbody className="divide-y divide-line">
-              {(data ?? []).map((h) => {
+              {filteredData.map((h) => {
                 if (isFinance) {
                   const totals = financeTotals(payments ?? [], h.id);
                   return (
@@ -139,9 +150,11 @@ export default function MediaHostsPage() {
                   </tr>
                 );
               })}
-              {data?.length === 0 && (
+              {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan={isFinance ? 6 : 7} className="px-4 py-6 text-center text-muted">{t("noMediaHostsFound")}</td>
+                  <td colSpan={isFinance ? 6 : 7} className="px-4 py-6 text-center text-muted">
+                    {(data?.length ?? 0) === 0 ? t("noMediaHostsFound") : t("noSearchResults")}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -150,8 +163,10 @@ export default function MediaHostsPage() {
       </div>
 
       <div className="space-y-2.5 sm:hidden">
-        {data?.length === 0 && <p className="card text-center text-muted">{t("noMediaHostsFound")}</p>}
-        {(data ?? []).map((h) => {
+        {filteredData.length === 0 && (
+          <p className="card text-center text-muted">{(data?.length ?? 0) === 0 ? t("noMediaHostsFound") : t("noSearchResults")}</p>
+        )}
+        {filteredData.map((h) => {
           if (isFinance) {
             const totals = financeTotals(payments ?? [], h.id);
             return (

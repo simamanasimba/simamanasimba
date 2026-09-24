@@ -266,11 +266,18 @@ export class Influencer2CampaignsService {
       folderId?: string;
       folderStart?: Date;
       folderEnd?: Date;
+      search?: string;
     },
     page: number,
     pageSize: number,
   ) {
     const where: Prisma.Influencer2CampaignWhereInput = { organizationId };
+    if (filters.search?.trim()) {
+      // No `mode: "insensitive"` — that's Postgres-only in Prisma; MySQL's default collation is
+      // already case-insensitive, same reasoning as members.service.ts's own free-text search.
+      const search = filters.search.trim();
+      where.OR = [{ name: { contains: search } }, { code: { contains: search } }];
+    }
     if (filters.influencerId) where.influencerId = filters.influencerId;
     if (filters.mediaHostId) where.mediaHostId = filters.mediaHostId;
     if (filters.contentType) where.contentType = filters.contentType;

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, Printer, Settings2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { CampaignWeeksModal } from "@/components/CampaignWeeksModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { useLang, type DictKey } from "@/lib/i18n";
 import type { PerformanceDirection, PerformanceMetric, PerformanceReport } from "@/lib/types";
 
@@ -40,35 +41,43 @@ function MetricRow({ label, metric, showPast }: { label: string; metric: Perform
 
 function RegionTable({ title, rows, metric }: { title: string; rows: Array<{ region: string; members: PerformanceMetric; leaders: PerformanceMetric }>; metric: "members" | "leaders" }) {
   const { t } = useLang();
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+  const filtered = q ? rows.filter((r) => r.region.toLowerCase().includes(q)) : rows;
   return (
     <div className="card overflow-hidden p-0">
-      <div className="px-5 pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
         <h2 className="font-display text-base font-bold text-ink">{title}</h2>
+        <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
-            <tr>
-              <th className="px-5 py-2.5">{t("regionColLabel")}</th>
-              <th className="px-2 py-2.5 text-right">{t("currentValueLabel")}</th>
-              <th className="px-2 py-2.5 text-right">%</th>
-              <th className="px-5 py-2.5 text-right"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {rows.map((r) => {
-              const m = r[metric];
-              return (
-                <tr key={r.region}>
-                  <td className="px-5 py-2.5 font-medium text-ink">{r.region}</td>
-                  <td className="nums px-2 py-2.5 text-right text-ink">{m.current.toLocaleString()}</td>
-                  <td className="nums px-2 py-2.5 text-right font-semibold text-ink">{m.pctOfTarget != null ? `${m.pctOfTarget}%` : "—"}</td>
-                  <td className="px-5 py-2.5 text-right"><DirectionBadge direction={m.direction} /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {filtered.length === 0 && q ? (
+          <p className="px-5 py-6 text-sm text-muted">{t("noSearchResults")}</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <th className="px-5 py-2.5">{t("regionColLabel")}</th>
+                <th className="px-2 py-2.5 text-right">{t("currentValueLabel")}</th>
+                <th className="px-2 py-2.5 text-right">%</th>
+                <th className="px-5 py-2.5 text-right"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {filtered.map((r) => {
+                const m = r[metric];
+                return (
+                  <tr key={r.region}>
+                    <td className="px-5 py-2.5 font-medium text-ink">{r.region}</td>
+                    <td className="nums px-2 py-2.5 text-right text-ink">{m.current.toLocaleString()}</td>
+                    <td className="nums px-2 py-2.5 text-right font-semibold text-ink">{m.pctOfTarget != null ? `${m.pctOfTarget}%` : "—"}</td>
+                    <td className="px-5 py-2.5 text-right"><DirectionBadge direction={m.direction} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { MarkPaidModal } from "@/components/MarkPaidModal";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import type { Payment } from "@/lib/types";
 import { paymentBeneficiaryName } from "@/lib/paymentProgress";
 
@@ -26,11 +27,19 @@ export function ProcessingPaymentsPanel({ organizationId }: { organizationId: st
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [marking, setMarking] = useState<Payment | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: processing } = useQuery({
     queryKey: ["payments", organizationId, "PROCESSING"],
     queryFn: () => api.get<Payment[]>(`/api/v1/organizations/${organizationId}/payments?status=PROCESSING`),
   });
+
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? (processing ?? []).filter((p) =>
+        [paymentBeneficiaryName(p), p.approvedByName].some((f) => (f ?? "").toLowerCase().includes(q)),
+      )
+    : (processing ?? []);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["payments", organizationId] });
@@ -46,6 +55,11 @@ export function ProcessingPaymentsPanel({ organizationId }: { organizationId: st
       {(processing?.length ?? 0) === 0 ? (
         <p className="text-sm text-muted">{t("noProcessingPayments")}</p>
       ) : (
+        <>
+          <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted">{t("noSearchResults")}</p>
+          ) : (
         <div className="flex-1 overflow-y-auto rounded-xl border border-line">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-surface text-left text-xs uppercase tracking-wide text-muted">
@@ -57,7 +71,7 @@ export function ProcessingPaymentsPanel({ organizationId }: { organizationId: st
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {(processing ?? []).map((p) => {
+              {filtered.map((p) => {
                 const href = showPageHref(p);
                 return (
                   <tr key={p.id} onClick={() => setMarking(p)} className="cursor-pointer hover:bg-brand-50/40">
@@ -83,6 +97,8 @@ export function ProcessingPaymentsPanel({ organizationId }: { organizationId: st
             </tbody>
           </table>
         </div>
+          )}
+        </>
       )}
 
       {marking && (

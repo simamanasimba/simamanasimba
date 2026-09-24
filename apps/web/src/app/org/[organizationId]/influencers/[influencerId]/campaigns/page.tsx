@@ -10,6 +10,7 @@ import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { BulkWeekAssignBar } from "@/components/BulkWeekAssignBar";
 import { BulkFolderAssignBar } from "@/components/BulkFolderAssignBar";
+import { TableSearchInput } from "@/components/TableSearchInput";
 import { LoadingWord } from "@/components/LoadingWord";
 import { RequireAccess } from "@/components/RequireAccess";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,6 +62,7 @@ export default function InfluencerCampaignsPage() {
   const [page, setPage] = useState(1);
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
+  const [search, setSearch] = useState("");
   const [folderId, setFolderId] = useState(searchParams.get("folderId") ?? "");
   const initialWeekId = searchParams.get("weekDefinitionId") ?? "";
   const [weekDefinitionId, setWeekDefinitionId] = useState(initialWeekId);
@@ -143,6 +145,7 @@ export default function InfluencerCampaignsPage() {
   const params = new URLSearchParams({ influencerId, page: String(page), pageSize: String(PAGE_SIZE) });
   if (contentType) params.set("contentType", contentType);
   if (status) params.set("status", status);
+  if (search) params.set("search", search);
   if (folderId) {
     // Viewing one campaign's posts overrides the date-range filter entirely — a campaign is its
     // own scope, not narrowed further by whatever range happens to be selected above.
@@ -160,7 +163,7 @@ export default function InfluencerCampaignsPage() {
   }
 
   const { data } = useQuery({
-    queryKey: ["influencer2-campaigns", organizationId, influencerId, contentType, status, folderId, weekDefinitionId, page, range.from, range.to],
+    queryKey: ["influencer2-campaigns", organizationId, influencerId, contentType, status, search, folderId, weekDefinitionId, page, range.from, range.to],
     queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?${params.toString()}`),
   });
 
@@ -287,7 +290,16 @@ export default function InfluencerCampaignsPage() {
 
         <h2 className="font-display text-base font-bold text-ink">{t("influencer2IndividualCampaignsTitle")}</h2>
 
-        <div className="card grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="card grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div>
+            <label className="label">{t("searchGenericPlaceholder")}</label>
+            <TableSearchInput
+              value={search}
+              onChange={(v) => { setSearch(v); setPage(1); }}
+              placeholder={t("searchGenericPlaceholder")}
+              className="w-full sm:max-w-none"
+            />
+          </div>
           <div>
             <label className="label">{t("influencer2FilterContentType")}</label>
             <select className="input" value={contentType} onChange={(e) => { setContentType(e.target.value as Influencer2ContentType | ""); setPage(1); }}>
