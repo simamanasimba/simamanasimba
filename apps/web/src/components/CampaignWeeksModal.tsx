@@ -75,8 +75,9 @@ function WeekDefinitionModal({
 /** Org-wide "Campaign Weeks" — set once here ("Week 1": Aug 18–28), automatically applied to every
  * media host's and influencer's own weekly Campaigns table, replacing each of them getting a
  * manually-dated Influencer2Folder created for the same week over and over. See the Prisma schema
- * doc comment on PostingWeekDefinition. */
-export function CampaignWeeksCard({ organizationId }: { organizationId: string }) {
+ * doc comment on PostingWeekDefinition. Lives only on the Campaign Tracker page (Overall System
+ * Performance), opened as a popup from there — not a Settings page section, per explicit request. */
+export function CampaignWeeksModal({ organizationId, onClose }: { organizationId: string; onClose: () => void }) {
   const { t } = useLang();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -107,35 +108,34 @@ export function CampaignWeeksCard({ organizationId }: { organizationId: string }
   }
 
   return (
-    <div className="card space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{t("campaignWeeksTitle")}</h2>
-          <p className="mt-1 max-w-md text-xs text-muted">{t("campaignWeeksHelp")}</p>
+    <Modal title={t("campaignWeeksTitle")} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="max-w-md text-xs text-muted">{t("campaignWeeksHelp")}</p>
+          <button className="btn-secondary shrink-0 text-sm" onClick={() => setModalState("new")}>
+            <Plus size={14} /> {t("newCampaignWeekCta")}
+          </button>
         </div>
-        <button className="btn-secondary text-sm" onClick={() => setModalState("new")}>
-          <Plus size={14} /> {t("newCampaignWeekCta")}
-        </button>
-      </div>
 
-      {(!weeks || weeks.length === 0) ? (
-        <p className="text-sm text-muted">{t("noCampaignWeeksYet")}</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {weeks.map((w) => (
-            <li key={w.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-              <div>
-                <p className="font-medium text-ink">{w.name}</p>
-                <p className="text-xs text-muted">{w.startDate.slice(0, 10)} – {w.endDate.slice(0, 10)}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button title={t("edit")} className="text-muted hover:text-brand" onClick={() => setModalState(w)}><Pencil size={13} /></button>
-                <button title={t("deleteCta")} className="text-muted hover:text-brand" disabled={busyId === w.id} onClick={() => removeWeek(w)}><Trash2 size={13} /></button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+        {(!weeks || weeks.length === 0) ? (
+          <p className="text-sm text-muted">{t("noCampaignWeeksYet")}</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {weeks.map((w) => (
+              <li key={w.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div>
+                  <p className="font-medium text-ink">{w.name}</p>
+                  <p className="text-xs text-muted">{w.startDate.slice(0, 10)} – {w.endDate.slice(0, 10)}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button title={t("edit")} className="text-muted hover:text-brand" onClick={() => setModalState(w)}><Pencil size={13} /></button>
+                  <button title={t("deleteCta")} className="text-muted hover:text-brand" disabled={busyId === w.id} onClick={() => removeWeek(w)}><Trash2 size={13} /></button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {modalState && (
         <WeekDefinitionModal
@@ -145,6 +145,6 @@ export function CampaignWeeksCard({ organizationId }: { organizationId: string }
           onDone={() => { setModalState(null); refreshEverywhere(); }}
         />
       )}
-    </div>
+    </Modal>
   );
 }

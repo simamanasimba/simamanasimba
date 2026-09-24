@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -98,6 +98,16 @@ export default function MediaHostCampaignsPage() {
   });
   const selectedWeek = weekDefinitions?.find((w) => w.id === weekDefinitionId);
 
+  // Landing on "Week" mode with nothing picked yet defaults to the earliest defined week (Week
+  // 01), not an empty "Select a week…" placeholder — same as how a fresh weekly view always used
+  // to show *some* window rather than nothing.
+  useEffect(() => {
+    if (filterMode === "week" && !weekDefinitionId && weekDefinitions && weekDefinitions.length > 0) {
+      const earliest = [...weekDefinitions].sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+      setWeekDefinitionId(earliest.id);
+    }
+  }, [filterMode, weekDefinitionId, weekDefinitions]);
+
   const range =
     filterMode === "week" && selectedWeek
       ? { from: selectedWeek.startDate, to: selectedWeek.endDate }
@@ -116,6 +126,7 @@ export default function MediaHostCampaignsPage() {
   // own totals, not the beneficiary's overall range-scoped summary — "Posts in range: 73" was
   // every post ever, not the ~5 in this campaign, which read as a bug even though it was working
   // as coded.
+  const scopeName = (selectedFolder ?? selectedWeek)?.name ?? null;
   const scopedAssessment = selectedFolder?.assessment ?? selectedWeek?.assessment;
   const displayStats = scopedAssessment
     ? {
@@ -260,15 +271,15 @@ export default function MediaHostCampaignsPage() {
         </div>
 
         <p className="text-xs text-muted">
-          {selectedFolder || selectedWeek
-            ? <>{t("statsScopedToCampaignLabel")} <span className="font-medium text-ink">{(selectedFolder ?? selectedWeek)!.name}</span></>
+          {scopeName
+            ? <>{t("statsScopedToCampaignLabel")} <span className="font-medium text-ink">{scopeName}</span></>
             : filterMode === "week"
               ? <>{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{t("selectWeekPlaceholder")}</span></>
               : <>{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{filterMode === "allTime" ? t("dateRangeAllTime") : `${range.from.slice(0, 10)} – ${range.to.slice(0, 10)}`}</span></>}
         </p>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="card"><p className="text-xs text-muted">{t("totalPostsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{displayStats?.totalPosts ?? "—"}</p></div>
+          <div className="card"><p className="text-xs text-muted">{scopeName ? `${t("totalPostsForPrefix")} "${scopeName}"` : t("totalPostsLabel")}</p><p className="nums text-lg font-bold text-brand-700">{displayStats?.totalPosts ?? "—"}</p></div>
           <div className="card"><p className="text-xs text-muted">{t("influencer2TotalViewsLabel")}</p><p className="nums text-lg font-bold text-ink">{displayStats?.totalViews != null ? displayStats.totalViews.toLocaleString() : "—"}</p></div>
           <div className="card"><p className="text-xs text-muted">{t("influencer2TotalLikesLabel")}</p><p className="nums text-lg font-bold text-ink">{displayStats?.totalLikes != null ? displayStats.totalLikes.toLocaleString() : "—"}</p></div>
           <div className="card"><p className="text-xs text-muted">{t("avgEngagementPerPostLabel")}</p><p className="nums text-lg font-bold text-ink">{displayStats?.engagementPerPost != null ? displayStats.engagementPerPost.toLocaleString() : "—"}</p></div>

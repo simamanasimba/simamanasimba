@@ -304,7 +304,7 @@ export default function FinancePage() {
 
   const today = new Date().toISOString().slice(0, 10);
   const todaysPayments = useMemo(() => (payments ?? []).filter((p) => p.paymentDate.slice(0, 10) === today), [payments, today]);
-  const todaysTotal = todaysPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const todaysTotal = todaysPayments.reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
 
   function refreshAll() {
     queryClient.invalidateQueries({ queryKey: ["finance-dashboard", organizationId] });

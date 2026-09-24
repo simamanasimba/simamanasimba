@@ -227,60 +227,74 @@ export class PaymentsService {
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [today, week, month, total, pendingCount, paymentCount, byCampaign, byMediaHost, byInfluencer, byMember, memberPayments, meetingBudgets, expensesByCategory] = await Promise.all([
-      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfToday } }, _sum: { amount: true } }),
-      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfWeek } }, _sum: { amount: true } }),
-      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", paymentDate: { gte: startOfMonth } }, _sum: { amount: true } }),
-      // Every PAID payment regardless of beneficiary type — media + influencer + member(leader)
-      // spend, each counted here exactly once (not also re-added per-category below).
-      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID" }, _sum: { amount: true } }),
+    const [paidPayments, pendingCount, paymentCount, meetingBudgets, expensesByCategory, campaigns, mediaHosts, influencers, members] = await Promise.all([
+      // Raw rows, not a DB-side SUM — a payment's actually-disbursed paidAmount can legitimately
+      // differ from its agreed `amount` (Finance can record paying a different figure, with a
+      // required variance note), and every "spend" figure below must reflect what was actually
+      // paid, not just what was originally agreed. Prisma's aggregate/groupBy can only sum one
+      // raw column, so this computes every total in JS instead, once, from the same row set.
+      this.prisma.payment.findMany({
+        where: { organizationId, status: "PAID" },
+        select: { amount: true, paidAmount: true, paymentDate: true, beneficiaryType: true, campaignId: true, mediaHostId: true, influencerId: true, memberId: true },
+      }),
       this.prisma.payment.count({ where: { organizationId, status: { in: ["PENDING", "PROCESSING"] } } }),
       this.prisma.payment.count({ where: { organizationId } }),
-      this.prisma.payment.groupBy({ by: ["campaignId"], where: { organizationId, status: "PAID", campaignId: { not: null } }, _sum: { amount: true } }),
-      this.prisma.payment.groupBy({ by: ["mediaHostId"], where: { organizationId, status: "PAID", mediaHostId: { not: null } }, _sum: { amount: true } }),
-      this.prisma.payment.groupBy({ by: ["influencerId"], where: { organizationId, status: "PAID", influencerId: { not: null } }, _sum: { amount: true } }),
-      this.prisma.payment.groupBy({ by: ["memberId"], where: { organizationId, status: "PAID", memberId: { not: null } }, _sum: { amount: true } }),
-      this.prisma.payment.aggregate({ where: { organizationId, status: "PAID", beneficiaryType: "MEMBER" }, _sum: { amount: true } }),
       // Meeting budgets are planned/allocated costs, not payments — there's no separate "meeting
       // expense" record, so the budget figure itself is the closest thing to a cost for a meeting.
-      this.prisma.event.aggregate({ where: { organizationId, budget: { not: null } }, _sum: { budget: true } }),
+      // Fetched per-event (not aggregated) so the Meeting spend tile can drill down the same way
+      // Media/Influencer/Member spend already do.
+      this.prisma.event.findMany({ where: { organizationId, budget: { not: null } }, select: { id: true, name: true, budget: true } }),
       this.prisma.expense.groupBy({ by: ["category"], where: { organizationId }, _sum: { totalCost: true } }),
-    ]);
-
-    const operationalSpend = Number(expensesByCategory.find((r) => r.category === "OPERATIONAL")?._sum.totalCost ?? 0);
-    const administrativeSpend = Number(expensesByCategory.find((r) => r.category === "ADMINISTRATIVE")?._sum.totalCost ?? 0);
-    const meetingSpend = Number(meetingBudgets._sum.budget ?? 0);
-
-    const [campaigns, mediaHosts, influencers, members] = await Promise.all([
       this.prisma.mediaCampaign.findMany({ where: { organizationId }, select: { id: true, name: true } }),
       this.prisma.mediaHost.findMany({ where: { organizationId }, select: { id: true, name: true } }),
       this.prisma.influencer.findMany({ where: { organizationId }, select: { id: true, name: true } }),
       this.prisma.member.findMany({ where: { organizationId }, select: { id: true, firstName: true, lastName: true } }),
     ]);
+
+    const operationalSpend = Number(expensesByCategory.find((r) => r.category === "OPERATIONAL")?._sum.totalCost ?? 0);
+    const administrativeSpend = Number(expensesByCategory.find((r) => r.category === "ADMINISTRATIVE")?._sum.totalCost ?? 0);
+    const spendByEvent = meetingBudgets.map((e) => ({ eventId: e.id, name: e.name, amount: Number(e.budget) }));
+    const meetingSpend = spendByEvent.reduce((sum, e) => sum + e.amount, 0);
+
     const campaignName = new Map(campaigns.map((c) => [c.id, c.name]));
     const hostName = new Map(mediaHosts.map((h) => [h.id, h.name]));
     const influencerName = new Map(influencers.map((i) => [i.id, i.name]));
     const memberName = new Map(members.map((m) => [m.id, `${m.firstName} ${m.lastName}`]));
 
+    const spent = (p: { amount: Prisma.Decimal; paidAmount: Prisma.Decimal | null }) => Number(p.paidAmount ?? p.amount);
+    const sumSince = (from: Date) => paidPayments.filter((p) => p.paymentDate >= from).reduce((sum, p) => sum + spent(p), 0);
+    const totalPaid = paidPayments.reduce((sum, p) => sum + spent(p), 0);
+
+    function groupSpend<K extends string>(keyOf: (p: (typeof paidPayments)[number]) => K | null, nameOf: (key: K) => string) {
+      const totals = new Map<K, number>();
+      for (const p of paidPayments) {
+        const key = keyOf(p);
+        if (key == null) continue;
+        totals.set(key, (totals.get(key) ?? 0) + spent(p));
+      }
+      return [...totals.entries()].map(([id, amount]) => ({ id, name: nameOf(id), amount }));
+    }
+
     return {
-      todaySpend: Number(today._sum.amount ?? 0),
-      weekSpend: Number(week._sum.amount ?? 0),
-      monthSpend: Number(month._sum.amount ?? 0),
-      // Every category counted exactly once: `total` already covers media + influencer +
-      // member(leader) payments together (a blanket PAID-payments sum, no beneficiaryType
-      // filter), plus operational/administrative expenses and the meeting budget total — none of
-      // these overlap, unlike the old memberSpendBreakdown which used to fold media/influencer
-      // payment costs back into "member spend" too, on top of their own separate tiles.
-      totalSpend: Number(total._sum.amount ?? 0) + operationalSpend + administrativeSpend + meetingSpend,
+      todaySpend: sumSince(startOfToday),
+      weekSpend: sumSince(startOfWeek),
+      monthSpend: sumSince(startOfMonth),
+      // Every category counted exactly once: `totalPaid` already covers media + influencer +
+      // member(leader) payments together (every PAID payment, no beneficiaryType filter), plus
+      // operational/administrative expenses and the meeting budget total — none of these overlap,
+      // unlike the old memberSpendBreakdown which used to fold media/influencer payment costs
+      // back into "member spend" too, on top of their own separate tiles.
+      totalSpend: totalPaid + operationalSpend + administrativeSpend + meetingSpend,
       paymentCount,
       pendingCount,
-      spendByCampaign: byCampaign.map((r) => ({ campaignId: r.campaignId, name: campaignName.get(r.campaignId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
-      spendByMediaHost: byMediaHost.map((r) => ({ mediaHostId: r.mediaHostId, name: hostName.get(r.mediaHostId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
-      spendByInfluencer: byInfluencer.map((r) => ({ influencerId: r.influencerId, name: influencerName.get(r.influencerId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
-      spendByMember: byMember.map((r) => ({ memberId: r.memberId, name: memberName.get(r.memberId!) ?? "—", amount: Number(r._sum.amount ?? 0) })),
+      spendByCampaign: groupSpend((p) => p.campaignId, (id) => campaignName.get(id) ?? "—").map((r) => ({ campaignId: r.id, name: r.name, amount: r.amount })),
+      spendByMediaHost: groupSpend((p) => p.mediaHostId, (id) => hostName.get(id) ?? "—").map((r) => ({ mediaHostId: r.id, name: r.name, amount: r.amount })),
+      spendByInfluencer: groupSpend((p) => p.influencerId, (id) => influencerName.get(id) ?? "—").map((r) => ({ influencerId: r.id, name: r.name, amount: r.amount })),
+      spendByMember: groupSpend((p) => p.memberId, (id) => memberName.get(id) ?? "—").map((r) => ({ memberId: r.id, name: r.name, amount: r.amount })),
+      spendByEvent,
       // Member ("leader") payments — just that, no longer folded together with meeting budgets or
       // media/influencer costs (those already have their own tiles).
-      leaderSpend: Number(memberPayments._sum.amount ?? 0),
+      leaderSpend: paidPayments.filter((p) => p.beneficiaryType === "MEMBER").reduce((sum, p) => sum + spent(p), 0),
       // The allocated budget total across every event with one set — the closest available figure
       // to "meeting cost" without a per-event expense record to sum instead. Its own tile now,
       // separate from member/leader payments.

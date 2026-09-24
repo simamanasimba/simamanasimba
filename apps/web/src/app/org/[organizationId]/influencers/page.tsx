@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 function financeTotals(payments: Payment[], influencerId: string) {
   const own = payments.filter((p) => p.influencerId === influencerId);
   const pendingPayments = own.filter((p) => p.status === "PENDING");
-  const totalPaid = own.filter((p) => p.status === "PAID").reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalPaid = own.filter((p) => p.status === "PAID").reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
   return {
     pendingCount: pendingPayments.length,
     pendingAmount: pendingPayments.reduce((sum, p) => sum + Number(p.amount), 0),

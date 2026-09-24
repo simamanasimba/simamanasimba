@@ -188,7 +188,7 @@ export function DateRangeFilterControl(props: ReturnType<typeof useDateRangeFilt
         )}
       </div>
 
-      {savedViews != null && savedViews.length > 0 && (
+      {preset === "custom" && savedViews != null && savedViews.length > 0 && (
         <div className="flex items-center gap-1.5 border-l border-line/60 pl-3">
           <Bookmark size={14} className="shrink-0 text-muted" />
           <select className="input-auto" value={selectedViewId} onChange={(e) => onSelectSavedView(e.target.value)}>

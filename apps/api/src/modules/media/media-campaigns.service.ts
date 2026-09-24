@@ -19,8 +19,9 @@ export class MediaCampaignsService {
     });
     return Promise.all(
       campaigns.map(async (c) => {
-        const paid = await this.prisma.payment.aggregate({ where: { campaignId: c.id, status: "PAID" }, _sum: { amount: true } });
-        return { ...c, budget: c.budget != null ? Number(c.budget) : null, totalPaid: Number(paid._sum.amount ?? 0) };
+        const paid = await this.prisma.payment.findMany({ where: { campaignId: c.id, status: "PAID" }, select: { amount: true, paidAmount: true } });
+        const totalPaid = paid.reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
+        return { ...c, budget: c.budget != null ? Number(c.budget) : null, totalPaid };
       }),
     );
   }
@@ -173,10 +174,10 @@ export class MediaCampaignsService {
   async getFinancialSummary(organizationId: string, campaignId: string) {
     const campaign = await this.ensure(organizationId, campaignId);
     const [paid, count] = await Promise.all([
-      this.prisma.payment.aggregate({ where: { campaignId, status: "PAID" }, _sum: { amount: true } }),
+      this.prisma.payment.findMany({ where: { campaignId, status: "PAID" }, select: { amount: true, paidAmount: true } }),
       this.prisma.payment.count({ where: { campaignId } }),
     ]);
-    const totalPaid = Number(paid._sum.amount ?? 0);
+    const totalPaid = paid.reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
     const budget = campaign.budget != null ? Number(campaign.budget) : null;
     return {
       budget,

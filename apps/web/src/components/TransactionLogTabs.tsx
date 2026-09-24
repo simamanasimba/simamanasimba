@@ -82,7 +82,7 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
     });
   }, [payments, tab, filterDateFrom, filterDateTo, filterPersonId]);
 
-  const filteredTotal = filteredPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const filteredTotal = filteredPayments.reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
   const allSelected = filteredPayments.length > 0 && filteredPayments.every((p) => selected.has(p.id));
 
   function toggleAll() {

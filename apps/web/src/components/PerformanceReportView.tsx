@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, Printer, Settings2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { CampaignWeeksModal } from "@/components/CampaignWeeksModal";
 import { useLang, type DictKey } from "@/lib/i18n";
 import type { PerformanceDirection, PerformanceMetric, PerformanceReport } from "@/lib/types";
 
@@ -83,6 +83,7 @@ export function PerformanceReportView({ organizationId, onConfigureTargets }: { 
   const [monthsBack, setMonthsBack] = useState<string>("weekly");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [showCampaignWeeks, setShowCampaignWeeks] = useState(false);
   const isCustom = monthsBack === "custom";
   const customReady = isCustom && customStart && customEnd;
 
@@ -142,9 +143,9 @@ export function PerformanceReportView({ organizationId, onConfigureTargets }: { 
           <button type="button" onClick={onConfigureTargets} className="btn-secondary no-print" title={t("configureTargetsOptionLabel")}>
             <Settings2 size={14} /> {t("configureTargetsOptionLabel")}
           </button>
-          <Link href={`/org/${organizationId}/settings#campaign-weeks`} className="btn-secondary no-print" title={t("campaignWeeksTitle")}>
+          <button type="button" onClick={() => setShowCampaignWeeks(true)} className="btn-secondary no-print" title={t("campaignWeeksTitle")}>
             <CalendarRange size={14} /> {t("campaignWeeksTitle")}
-          </Link>
+          </button>
           <button type="button" onClick={onPrint} className="btn-secondary no-print" title={t("printReportCta")}>
             <Printer size={14} /> {t("printReportCta")}
           </button>
@@ -185,6 +186,8 @@ export function PerformanceReportView({ organizationId, onConfigureTargets }: { 
         <RegionTable title={t("membersByRegion")} rows={data.byRegion} metric="members" />
         <RegionTable title={t("leadersByRegion")} rows={data.byRegion} metric="leaders" />
       </div>
+
+      {showCampaignWeeks && <CampaignWeeksModal organizationId={organizationId} onClose={() => setShowCampaignWeeks(false)} />}
     </div>
   );
 }
