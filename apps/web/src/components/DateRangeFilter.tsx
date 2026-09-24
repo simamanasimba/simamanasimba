@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bookmark, BookmarkPlus, Save, Copy, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useLang } from "@/lib/i18n";
-import type { DashboardSavedView } from "@/lib/types";
+import type { DashboardSavedView, PostingWeekDefinition } from "@/lib/types";
 
 export type DateRangePreset = "weekly" | "monthly" | "allTime" | "custom";
 
@@ -33,24 +33,51 @@ export function formatRangeLabel(range: { from: string; to: string }, allTimeLab
   return `${from.toLocaleDateString(undefined, opts)} – ${to.toLocaleDateString(undefined, opts)}`;
 }
 
-/** Weekly = rolling last 7 days, monthly = rolling last 30 days — both end "now" so the
- * dashboard reads live rather than snapping to a fixed calendar week/month boundary. */
-export function useDateRangeFilter(defaultPreset: DateRangePreset = "weekly") {
+/** "Weekly" isn't a rolling 7 days — it's a pick from the org's own centrally-defined Campaign
+ * Weeks (set up once under Settings), same ones the media/influencer Campaigns tables break down
+ * by. Monthly = rolling last 30 days, ending "now" so the dashboard reads live rather than
+ * snapping to a fixed calendar boundary. `organizationId` is optional purely so existing call
+ * sites that genuinely have none in scope don't break — without it, "weekly" falls back to the
+ * old rolling-7-days behavior since there's nothing to fetch weeks with. */
+export function useDateRangeFilter(defaultPreset: DateRangePreset = "weekly", organizationId?: string) {
   const [preset, setPreset] = useState<DateRangePreset>(defaultPreset);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [selectedViewId, setSelectedViewId] = useState("");
+  const [weekDefinitionId, setWeekDefinitionId] = useState("");
+
+  const { data: weekDefinitionsRaw } = useQuery({
+    queryKey: ["posting-week-definitions", organizationId],
+    queryFn: () => api.get<PostingWeekDefinition[]>(`/api/v1/organizations/${organizationId}/posting-week-definitions`),
+    enabled: Boolean(organizationId),
+  });
+  const weekDefinitions = useMemo(
+    () => [...(weekDefinitionsRaw ?? [])].sort((a, b) => a.startDate.localeCompare(b.startDate)),
+    [weekDefinitionsRaw],
+  );
+  const selectedWeek = weekDefinitions.find((w) => w.id === weekDefinitionId) ?? null;
+
+  // Landing on "weekly" with nothing picked yet defaults to the earliest defined week (Week 01),
+  // not an empty "Select a week…" placeholder.
+  useEffect(() => {
+    if (preset === "weekly" && !weekDefinitionId && weekDefinitions.length > 0) {
+      setWeekDefinitionId(weekDefinitions[0].id);
+    }
+  }, [preset, weekDefinitionId, weekDefinitions]);
 
   const range = useMemo(() => {
     const to = new Date().toISOString();
-    if (preset === "weekly") return { from: isoDaysAgo(7), to };
+    if (preset === "weekly") {
+      if (selectedWeek) return { from: selectedWeek.startDate, to: selectedWeek.endDate };
+      return { from: isoDaysAgo(7), to };
+    }
     if (preset === "monthly") return { from: isoDaysAgo(30), to };
     if (preset === "allTime") return { from: EPOCH, to };
     return {
       from: customFrom ? new Date(`${customFrom}T00:00:00`).toISOString() : isoDaysAgo(7),
       to: customTo ? new Date(`${customTo}T23:59:59`).toISOString() : to,
     };
-  }, [preset, customFrom, customTo]);
+  }, [preset, customFrom, customTo, selectedWeek]);
 
   /** Jump straight to a saved view's exact dates — same "YYYY-MM-DD, interpreted as local
    * midnight" path as typing them in, just fed from fromDate/toDate's UTC-midnight-anchored
@@ -62,14 +89,42 @@ export function useDateRangeFilter(defaultPreset: DateRangePreset = "weekly") {
     setSelectedViewId(view.id);
   }
 
-  return { preset, setPreset, customFrom, setCustomFrom, customTo, setCustomTo, range, applySavedView, selectedViewId, setSelectedViewId };
+  return {
+    preset,
+    setPreset,
+    customFrom,
+    setCustomFrom,
+    customTo,
+    setCustomTo,
+    range,
+    applySavedView,
+    selectedViewId,
+    setSelectedViewId,
+    weekDefinitions,
+    weekDefinitionId,
+    setWeekDefinitionId,
+  };
 }
 
 export function DateRangeFilterControl(props: ReturnType<typeof useDateRangeFilter> & { organizationId: string }) {
   const { t } = useLang();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const { organizationId, preset, setPreset, customFrom, setCustomFrom, customTo, setCustomTo, applySavedView, selectedViewId, setSelectedViewId } = props;
+  const {
+    organizationId,
+    preset,
+    setPreset,
+    customFrom,
+    setCustomFrom,
+    customTo,
+    setCustomTo,
+    applySavedView,
+    selectedViewId,
+    setSelectedViewId,
+    weekDefinitions,
+    weekDefinitionId,
+    setWeekDefinitionId,
+  } = props;
   const [saving, setSaving] = useState(false);
 
   const { data: savedViews } = useQuery({
@@ -147,6 +202,12 @@ export function DateRangeFilterControl(props: ReturnType<typeof useDateRangeFilt
           <option value="allTime">{t("dateRangeAllTime")}</option>
           <option value="custom">{t("dateRangeCustom")}</option>
         </select>
+        {preset === "weekly" && (
+          <select className="input-auto" value={weekDefinitionId} onChange={(e) => setWeekDefinitionId(e.target.value)}>
+            <option value="">{t("selectWeekPlaceholder")}</option>
+            {weekDefinitions.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        )}
         {preset === "custom" && (
           <>
             <input type="date" className="input-auto" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />

@@ -125,7 +125,7 @@ export default function MembersPage() {
   const [pageSize, setPageSize] = useState(25);
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const dateRangeFilter = useDateRangeFilter("weekly");
+  const dateRangeFilter = useDateRangeFilter("weekly", organizationId);
   const { range } = dateRangeFilter;
 
   const filterParams = {

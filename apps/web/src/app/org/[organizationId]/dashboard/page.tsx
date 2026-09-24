@@ -21,6 +21,8 @@ import { isOrgAdmin } from "@/lib/permissions";
 import type { EventRecord, FinanceDashboard, RegionTarget } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 
+type DashboardView = "general" | "members" | "media" | "influencers";
+
 interface MembershipSummary {
   total: number;
   active: number;
@@ -90,7 +92,8 @@ export default function DashboardPage() {
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const [showEditTargets, setShowEditTargets] = useState(false);
-  const dateRangeFilter = useDateRangeFilter("weekly");
+  const [view, setView] = useState<DashboardView>("members");
+  const dateRangeFilter = useDateRangeFilter("weekly", organizationId);
 
   // The Finance role's "dashboard" IS the Payments page now — there's no separate stripped-down
   // dashboard view for them anymore, per explicit request. Redirect rather than branch-render, so
@@ -175,27 +178,13 @@ export default function DashboardPage() {
 
   if (myRole === "FINANCE_OFFICER") return null;
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-extrabold text-ink">{t("navDashboard")}</h1>
-      </div>
-
-      <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
-
-      {/* Members, Media, and Influencer statistics together on one page — a stat here always
-          redirects into that category's own dashboard (Members/Media Hosts/Influencers) rather
-          than opening an in-page report, so "click a number, land where the detail actually
-          lives" is consistent across all three, the same way the Members stat tiles below already
-          worked before Media/Influencer joined them here. */}
-      <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navMediaEngagementView")}</h2>
-      <MediaEngagementOverview organizationId={organizationId} range={dateRangeFilter.range} />
-
-      <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navInfluencersView")}</h2>
-      <CollectiveCampaignSummary organizationId={organizationId} scope="ALL_INFLUENCERS" range={dateRangeFilter.range} />
-
-      <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navWanachamaEngagement")}</h2>
-
+  // Each category's own section, reused both under its own exclusive dropdown option and inside
+  // "General" (which shows all three at once, under their own headings so it's clear which is
+  // which) — written once so the two places can never quietly drift apart.
+  const mediaSection = <MediaEngagementOverview organizationId={organizationId} range={dateRangeFilter.range} />;
+  const influencerSection = <CollectiveCampaignSummary organizationId={organizationId} scope="ALL_INFLUENCERS" range={dateRangeFilter.range} />;
+  const membersSection = (
+    <>
       {/* Compact stat tiles instead of the bigger StatCards — leaves more room for the charts
           below without pushing the page past one screen. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -375,6 +364,48 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-extrabold text-ink">{t("navDashboard")}</h1>
+        <div>
+          <label className="label">{t("dashboardViewLabel")}</label>
+          <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>
+            <option value="general">{t("navGeneralDashboard")}</option>
+            <option value="members">{t("navWanachamaEngagement")}</option>
+            <option value="media">{t("navMediaEngagementView")}</option>
+            <option value="influencers">{t("navInfluencersView")}</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Own row, below the title/selector — its width changes on its own (custom date inputs,
+          the saved-views list appearing/disappearing) used to sit in the same wrapping flex row as
+          the view selector, so those width changes shoved the selector around mid-interaction.
+          Keeping it on a separate row means neither can ever move the other. */}
+      <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
+
+      {/* "General" shows all three sections together, each under its own heading so it's clear
+          which is which — the three single-category options below are unchanged from before,
+          still their own exclusive full-page view with no heading needed. Every stat tile in every
+          section redirects into that category's own dashboard on click (Media -> /media-hosts,
+          Influencer -> /influencers, Members -> /members) rather than opening an in-page report. */}
+      {view === "general" && (
+        <>
+          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navMediaEngagementView")}</h2>
+          {mediaSection}
+          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navInfluencersView")}</h2>
+          {influencerSection}
+          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navWanachamaEngagement")}</h2>
+          {membersSection}
+        </>
+      )}
+      {view === "media" && mediaSection}
+      {view === "influencers" && influencerSection}
+      {view === "members" && membersSection}
 
       {showEditTargets && (
         <EditRegionTargetsModal

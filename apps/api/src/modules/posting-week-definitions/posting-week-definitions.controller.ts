@@ -22,7 +22,12 @@ export class PostingWeekDefinitionsController {
     private readonly audit: AuditService,
   ) {}
 
+  // Open to any org member (overrides the class-level admin/finance-only roles for this one
+  // route) — the shared date-range filter now reads this list on general-audience pages
+  // (Dashboard, Members) so "weekly" can offer these week names to whoever can already see that
+  // page, not just admins. Just names/dates, nothing sensitive.
   @Get()
+  @Roles()
   list(@Param("organizationId") organizationId: string) {
     return this.weeks.list(organizationId);
   }
