@@ -154,6 +154,16 @@ export function PostingFoldersPanel({
     return checks.length > 0 && checks.every(Boolean);
   }
 
+  /** How many more posts this folder needs to hit the agreement's post-count target — null once
+   * met (or when there's no post-count target to begin with), so a missed/pending week always
+   * shows exactly what's left instead of just a flat "missed" badge. */
+  function postsRemaining(folder: Influencer2Folder): number | null {
+    if (!agreement?.postsPerWeek) return null;
+    const have = folder.assessment?.totalPosts ?? 0;
+    const remaining = agreement.postsPerWeek - have;
+    return remaining > 0 ? remaining : null;
+  }
+
   async function evaluateFolder(folder: Influencer2Folder) {
     if (!folder.agreementId) return;
     setBusyId(folder.id);
@@ -234,14 +244,24 @@ export function PostingFoldersPanel({
                       f.evaluation.targetMet ? (
                         <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 size={14} /> {t("targetMetLabel")}</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-muted"><XCircle size={14} /> {t("targetMissedLabel")}</span>
+                        <div>
+                          <span className="inline-flex items-center gap-1 text-muted"><XCircle size={14} /> {t("targetMissedLabel")}</span>
+                          {postsRemaining(f) != null && (
+                            <p className="mt-0.5 text-xs text-muted">{postsRemaining(f)} {t("postsNeededSuffix")}</p>
+                          )}
+                        </div>
                       )
                     ) : liveTargetMet(f) === true ? (
                       <span className="inline-flex items-center gap-1 text-success" title={t("liveTargetMetHint")}>
                         <CheckCircle2 size={14} /> {t("targetMetLabel")}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
+                      <div>
+                        <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
+                        {postsRemaining(f) != null && (
+                          <p className="mt-0.5 text-xs text-muted">{postsRemaining(f)} {t("postsNeededSuffix")}</p>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="py-1.5 pr-3 nums">

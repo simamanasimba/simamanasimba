@@ -15,7 +15,6 @@ import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal"
 import { PostingAgreementCard } from "@/components/PostingAgreementCard";
 import { PostingFoldersPanel } from "@/components/PostingFoldersPanel";
 import { PostingPaymentSummary } from "@/components/PostingPaymentSummary";
-import { DateRangeFilterControl, formatRangeLabel, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement, canPayPostingAgreement } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
@@ -36,22 +35,24 @@ export default function InfluencerDetailPage() {
   const canManagePayments = canRecordPayment(myRole);
   const canManageAgreement = canManagePostingAgreement(myRole);
   const canPayAgreement = canPayPostingAgreement(myRole);
-  const dateRangeFilter = useDateRangeFilter("weekly");
-  const { range } = dateRangeFilter;
 
   const { data, refetch } = useQuery({
     queryKey: ["influencer-profile", influencerId],
     queryFn: () => api.get<InfluencerProfile>(`/api/v1/organizations/${organizationId}/influencers/${influencerId}`),
   });
 
+  // All-time, always — with weekly campaigns now the centralized source of "which week," a
+  // page-level date-range view is redundant: the Campaigns table below breaks totals down per
+  // week (and links through to each week's own posts), so these headline figures are simplest
+  // read as one constant "since the beginning" number, not yet another range to pick.
   const { data: summary, refetch: refetchSummary } = useQuery({
-    queryKey: ["influencer2-summary", influencerId, range.from, range.to],
-    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}&from=${range.from}&to=${range.to}`),
+    queryKey: ["influencer2-summary", influencerId, "all-time"],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?influencerId=${influencerId}`),
   });
 
   const { data: recentCampaigns, refetch: refetchCampaigns } = useQuery({
-    queryKey: ["influencer2-campaigns", organizationId, influencerId, "recent", range.from, range.to],
-    queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?influencerId=${influencerId}&pageSize=8&from=${range.from}&to=${range.to}`),
+    queryKey: ["influencer2-campaigns", organizationId, influencerId, "recent", "all-time"],
+    queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?influencerId=${influencerId}&pageSize=8`),
   });
 
   function refreshAll() {
@@ -109,9 +110,7 @@ export default function InfluencerDetailPage() {
 
       {canPayAgreement && postingSection}
 
-      <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
-
-      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
+      <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{t("dateRangeAllTime")}</span></p>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Link href={`/org/${organizationId}/influencers/${influencerId}/campaigns`} className="card block h-full transition hover:-translate-y-0.5 hover:shadow-lg">
