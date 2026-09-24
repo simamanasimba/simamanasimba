@@ -187,7 +187,7 @@ export function BulkCheckInModal({ organizationId, eventId, onClose, onDone }: {
             <form onSubmit={submitSelect} className="space-y-3">
               <div className="relative">
                 <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input className="input pl-9" placeholder={t("searchPersonPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input className="input !pl-9" placeholder={t("searchPersonPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="max-h-72 overflow-y-auto rounded-xl border border-line">
                 {members.length === 0 ? (

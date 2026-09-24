@@ -253,7 +253,7 @@ export default function MembersPage() {
           <div className="relative flex-1 sm:min-w-[240px] sm:max-w-sm">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
-              className="input pl-9"
+              className="input !pl-9"
               placeholder={t("searchPlaceholder")}
               value={q}
               onChange={(e) => {

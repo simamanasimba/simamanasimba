@@ -21,7 +21,10 @@ export function TableSearchInput({
     <div className={`relative flex-1 sm:min-w-[220px] sm:max-w-sm ${className}`}>
       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
       <input
-        className="input pl-9"
+        // !pl-9: .input's own px-3.5 padding-left is a plain CSS rule that lands after Tailwind's
+        // utilities layer in the compiled stylesheet, so at equal specificity it wins over a plain
+        // pl-9 override — the icon and placeholder overlapped. !important forces this one through.
+        className="input !pl-9"
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
