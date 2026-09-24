@@ -457,12 +457,25 @@ export class PostingAgreementsService {
    * since evaluateWeek() is idempotent and only computes/stores a snapshot from real data; it never
    * moves money. Only createTicket() does that, and it stays a separate, explicit action Finance
    * (or an admin) still has to click. */
+  /** Finance's own queue, so it only ever surfaces ONE row per real-world week — not one per
+   * linkage mode. A beneficiary can have posts tagged under up to three independent systems at
+   * once (the very old auto-computed weekNumber cycle, an even older per-beneficiary
+   * Influencer2Folder, and the current org-wide PostingWeekDefinition), and nothing stops a
+   * beneficiary that still has legacy folders from also being evaluated fresh against the new
+   * centralized weeks for the exact same real period — each linkage mode is its own independent
+   * evaluation row, so both show up as separately "ready to pay," Finance sees the same real
+   * week's money twice, and paying both would be an actual duplicate payment. Folders are
+   * explicitly legacy ("no new creation encouraged" — see Influencer2FoldersService) and every
+   * beneficiary with an active agreement is expected to be on centralized weeks going forward, so
+   * this queue no longer auto-evaluates OR lists folder-linked evaluations at all — a folder's
+   * evaluation/payment history is untouched and still fully manageable from that beneficiary's own
+   * Campaigns panel, it just doesn't duplicate the org-wide Finance queue anymore. */
   async listReadyForPayment(organizationId: string, userId: string) {
     const agreements = await this.prisma.postingAgreement.findMany({ where: { organizationId, isActive: true } });
     const now = Date.now();
 
-    // Org-wide week definitions apply to every agreement's own beneficiary the same way folders
-    // do — evaluated once per (agreement, week), same auto-evaluate-then-list pattern as below.
+    // Org-wide week definitions apply to every agreement's own beneficiary — evaluated once per
+    // (agreement, week), same auto-evaluate-then-list pattern as the weekNumber cycle above it.
     const weekDefinitions = await this.weekDefinitions.list(organizationId);
 
     for (const agreement of agreements) {
@@ -473,23 +486,6 @@ export class PostingAgreementsService {
         if (w.weekEnd.getTime() <= now && !evaluatedWeekNumbers.has(w.weekNumber)) {
           await this.evaluateWeek(organizationId, agreement.id, w.weekNumber, userId);
         }
-      }
-
-      // Folders ("campaigns") belong to a beneficiary, not to one agreement directly — the same
-      // rule PostingAgreement itself uses (one agreement's target applies to every folder/campaign
-      // its beneficiary creates, see Influencer2FoldersService).
-      const beneficiaryFolders = await this.prisma.influencer2Folder.findMany({
-        where: agreement.mediaHostId ? { organizationId, mediaHostId: agreement.mediaHostId } : { organizationId, influencerId: agreement.influencerId },
-      });
-      const existingFolderEvals = await this.prisma.postingAgreementEvaluation.findMany({
-        where: { agreementId: agreement.id, folderId: { not: null } },
-        select: { folderId: true },
-      });
-      const evaluatedFolderIds = new Set(existingFolderEvals.map((e) => e.folderId));
-      for (const folder of beneficiaryFolders) {
-        if (evaluatedFolderIds.has(folder.id)) continue;
-        if (folder.endDate && folder.endDate.getTime() > now) continue; // not finished yet
-        await this.evaluateFolder(organizationId, agreement.id, folder.id, userId);
       }
 
       const existingWeekDefEvals = await this.prisma.postingAgreementEvaluation.findMany({
@@ -505,7 +501,10 @@ export class PostingAgreementsService {
     }
 
     const evaluations = await this.prisma.postingAgreementEvaluation.findMany({
-      where: { targetMet: true, paymentId: null, agreement: { organizationId } },
+      // folderId: null excludes legacy folder-linked evaluations from this queue even if one was
+      // evaluated earlier (before this change, or straight from a beneficiary's own Campaigns
+      // panel, which still evaluates folders on request) — see this method's own doc comment.
+      where: { targetMet: true, paymentId: null, folderId: null, agreement: { organizationId } },
       include: { agreement: true },
       orderBy: { createdAt: "desc" },
     });
