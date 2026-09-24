@@ -79,7 +79,7 @@ export default function MediaHostDetailPage() {
     <>
       <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
       <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} myRole={myRole} />
-      <PostingWeeksPanel organizationId={organizationId} mediaHostId={hostId} canPay={canPayAgreement} />
+      <PostingWeeksPanel organizationId={organizationId} mediaHostId={hostId} canPay={canPayAgreement} myRole={myRole} />
     </>
   );
 

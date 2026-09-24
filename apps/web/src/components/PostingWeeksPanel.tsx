@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Receipt, XCircle } from "lucide-react";
+import { CheckCircle2, Link2, Receipt, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
+import { LinkExistingPaymentModal } from "@/components/LinkExistingPaymentModal";
 import { TableSearchInput } from "@/components/TableSearchInput";
+import { isSuperAdmin } from "@/lib/permissions";
 import { useLang } from "@/lib/i18n";
 import type { PostingAgreement, PostingWeekDefinition } from "@/lib/types";
 
@@ -20,20 +22,26 @@ export function PostingWeeksPanel({
   mediaHostId,
   influencerId,
   canPay,
+  myRole,
 }: {
   organizationId: string;
   mediaHostId?: string;
   influencerId?: string;
   /** Mark a met-target week as paid — Finance only. */
   canPay: boolean;
+  /** Gates the "Link existing payment" reconciliation action to Super Admin only — see
+   * LinkExistingPaymentModal's own doc comment for what it's for. */
+  myRole: string | undefined | null;
 }) {
   const { t } = useLang();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [payingWeek, setPayingWeek] = useState<PostingWeekDefinition | null>(null);
+  const [linkingWeek, setLinkingWeek] = useState<PostingWeekDefinition | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const canLinkPayment = isSuperAdmin(myRole);
 
   const beneficiaryQuery = mediaHostId ? `mediaHostId=${mediaHostId}` : `influencerId=${influencerId}`;
   const postsHref = (weekDefinitionId: string) =>
@@ -196,6 +204,15 @@ export function PostingWeeksPanel({
                           {t("payConditionallyCta")}
                         </button>
                       ) : null}
+                      {/* A week can be genuinely already paid through a path outside this panel (a
+                          general/bulk payment, or one predating Campaign Weeks) — reconciliation,
+                          Super Admin only, always available alongside whatever else this cell shows
+                          as long as no payment is linked yet. */}
+                      {w.evaluation && !w.evaluation.paymentId && canLinkPayment && (
+                        <button title={t("linkExistingPaymentTitle")} className="btn-secondary !p-1.5" onClick={() => setLinkingWeek(w)}>
+                          <Link2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -215,6 +232,22 @@ export function PostingWeeksPanel({
           onClose={() => setPayingWeek(null)}
           onDone={() => {
             setPayingWeek(null);
+            refetch();
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+            queryClient.invalidateQueries({ queryKey: ["finance-dashboard"] });
+          }}
+        />
+      )}
+
+      {linkingWeek?.evaluation && (
+        <LinkExistingPaymentModal
+          organizationId={organizationId}
+          evaluationId={linkingWeek.evaluation.id}
+          mediaHostId={mediaHostId}
+          influencerId={influencerId}
+          onClose={() => setLinkingWeek(null)}
+          onDone={() => {
+            setLinkingWeek(null);
             refetch();
             queryClient.invalidateQueries({ queryKey: ["payments"] });
             queryClient.invalidateQueries({ queryKey: ["finance-dashboard"] });

@@ -41,6 +41,26 @@ export class PaymentsService {
     return where;
   }
 
+  /** For the Sensitive Actions Log: "payment X was undone" is meaningless without saying WHO it
+   * was for — resolved here since mediaHostId/influencerId/memberId are plain columns, not real
+   * relations the audit log's own include could follow (same isolation choice as the rest of this
+   * schema). Used only by the three Action Access Control payment methods below. */
+  private async describeBeneficiary(payment: { mediaHostId: string | null; influencerId: string | null; memberId: string | null }): Promise<string> {
+    if (payment.mediaHostId) {
+      const host = await this.prisma.mediaHost.findUnique({ where: { id: payment.mediaHostId }, select: { name: true } });
+      return host?.name ?? "—";
+    }
+    if (payment.influencerId) {
+      const influencer = await this.prisma.influencer.findUnique({ where: { id: payment.influencerId }, select: { name: true } });
+      return influencer?.name ?? "—";
+    }
+    if (payment.memberId) {
+      const member = await this.prisma.member.findUnique({ where: { id: payment.memberId }, select: { firstName: true, lastName: true } });
+      return member ? `${member.firstName} ${member.lastName}` : "—";
+    }
+    return "—";
+  }
+
   async list(organizationId: string, filters: PaymentFilters) {
     const payments = await this.prisma.payment.findMany({
       where: this.buildWhere(organizationId, filters),
@@ -246,6 +266,8 @@ export class PaymentsService {
     return {
       before: { ...before, amount: Number(before.amount), paidAmount: before.paidAmount != null ? Number(before.paidAmount) : null },
       after: { ...after, amount: Number(after.amount), paidAmount: after.paidAmount != null ? Number(after.paidAmount) : null },
+      // Beneficiary/description never change via EditPaymentDto — one lookup covers both before/after.
+      beneficiaryName: await this.describeBeneficiary(before),
     };
   }
 
@@ -276,7 +298,72 @@ export class PaymentsService {
       return result;
     });
 
-    return { payment: { ...updated, amount: Number(updated.amount), paidAmount: updated.paidAmount != null ? Number(updated.paidAmount) : null }, previousStatus };
+    return {
+      payment: { ...updated, amount: Number(updated.amount), paidAmount: updated.paidAmount != null ? Number(updated.paidAmount) : null },
+      previousStatus,
+      // The evaluation's own paymentId FK is what just got cleared above — once that happens,
+      // Payment.postingAgreementEvaluation (the reverse side of that relation) can never find its
+      // way back to it again, so this id is the ONLY remaining record of which evaluation this
+      // payment used to belong to. The controller stores it in the audit log's metadata so a later
+      // "Redo" (see redoUndoPayment) has something to restore, since Payment itself has no column
+      // that would otherwise remember this.
+      evaluationId: payment.postingAgreementEvaluation?.id ?? null,
+      // For the Sensitive Actions Log — "payment undone" is meaningless without who it was for and
+      // how much, see describeBeneficiary's own doc comment.
+      beneficiaryName: await this.describeBeneficiary(payment),
+    };
+  }
+
+  /** Reverses one specific undoPayment() call — Super Admin's "Redo" action from the Sensitive
+   * Actions Log, tied to that exact audit log entry (not just "whatever the payment's current
+   * status implies"), so repeated undo/redo cycles over time each resolve unambiguously. Restores
+   * the payment's status to what the undo recorded, and re-links the evaluation/media
+   * engagement/Influencer2 campaign it had flipped to "unpaid" — but ONLY if each is still in the
+   * exact "unpaid" state the undo left it in. If something else has since claimed that evaluation
+   * (e.g. Finance paid the same week again through the normal flow after the undo) or otherwise
+   * moved on, that piece is left alone rather than silently overwritten — the payment's own status
+   * still gets restored either way, so nothing here can get "stuck". */
+  async redoUndoPayment(organizationId: string, paymentId: string, auditLogId: string) {
+    const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
+    if (!payment) throw new NotFoundException("Payment not found");
+    if (payment.status !== "CANCELLED") throw new BadRequestException("This payment isn't cancelled — there's nothing to redo");
+
+    const undoLog = await this.prisma.auditLog.findFirst({
+      where: { id: auditLogId, organizationId, entityType: "payment", entityId: paymentId, action: "payment.undone" },
+    });
+    if (!undoLog) throw new NotFoundException("The original undo record for this payment wasn't found");
+    const metadata = undoLog.metadata as { previousStatus?: string; evaluationId?: string | null };
+    const restoreStatus = metadata.previousStatus;
+    if (!restoreStatus || !["PENDING", "PROCESSING", "PAID", "REJECTED"].includes(restoreStatus)) {
+      throw new BadRequestException("Can't redo — the original undo record doesn't have a status to restore");
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.payment.update({ where: { id: paymentId }, data: { status: restoreStatus as PaymentStatus } });
+
+      if (metadata.evaluationId) {
+        const evaluation = await tx.postingAgreementEvaluation.findUnique({ where: { id: metadata.evaluationId } });
+        if (evaluation && !evaluation.paymentId) {
+          await tx.postingAgreementEvaluation.update({ where: { id: evaluation.id }, data: { paymentId } });
+        }
+      }
+      if (restoreStatus === "PAID") {
+        if (payment.mediaEngagementId) {
+          const engagement = await tx.mediaEngagement.findUnique({ where: { id: payment.mediaEngagementId } });
+          if (engagement?.status === "NOT_PAID") await tx.mediaEngagement.update({ where: { id: payment.mediaEngagementId }, data: { status: "PAID" } });
+        }
+        if (payment.influencer2CampaignId) {
+          const campaign = await tx.influencer2Campaign.findUnique({ where: { id: payment.influencer2CampaignId } });
+          if (campaign?.paymentStatus === "NOT_PAID") await tx.influencer2Campaign.update({ where: { id: payment.influencer2CampaignId }, data: { paymentStatus: "PAID" } });
+        }
+      }
+      return result;
+    });
+
+    return {
+      payment: { ...updated, amount: Number(updated.amount), paidAmount: updated.paidAmount != null ? Number(updated.paidAmount) : null },
+      beneficiaryName: await this.describeBeneficiary(payment),
+    };
   }
 
   async setAttachment(organizationId: string, paymentId: string, documentUrl: string) {

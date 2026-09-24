@@ -10,7 +10,14 @@ import { Roles } from "../../common/decorators/roles.decorator";
  * just the read side: the list Super Admin reviews for follow-up. Every entry already carries its
  * `reason` in `metadata` (recorded by the action itself), so nothing further is needed here beyond
  * filtering the general audit log down to these specific action names. */
-const SENSITIVE_ACTIONS = ["posting_agreement.updated", "posting_agreement.deleted", "payment.edited", "payment.undone"];
+const SENSITIVE_ACTIONS = [
+  "posting_agreement.updated",
+  "posting_agreement.deleted",
+  "posting_agreement.payment_linked",
+  "payment.edited",
+  "payment.undone",
+  "payment.redone",
+];
 
 @Controller("api/v1/organizations/:organizationId/audit-logs")
 @UseGuards(OrgMembershipGuard, RolesGuard)

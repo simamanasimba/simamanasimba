@@ -5,6 +5,7 @@ import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
 import { UpdatePostingAgreementDto } from "./dto/update-posting-agreement.dto";
 import { RemovePostingAgreementDto } from "./dto/remove-posting-agreement.dto";
 import { MarkAgreementPaidDto } from "./dto/mark-agreement-paid.dto";
+import { LinkExistingPaymentDto } from "./dto/link-existing-payment.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -163,5 +164,29 @@ export class PostingAgreementsController {
       metadata: { amount: payment.amount, paidAmount: payment.paidAmount },
     });
     return payment;
+  }
+
+  /** Reconciliation action — Super Admin only. Links an already-recorded payment to the week/
+   * campaign it actually covers, for a beneficiary where money changed hands outside the normal
+   * mark-paid flow (see LinkExistingPaymentDto and PostingAgreementsService.linkExistingPayment).
+   * Sensitive action, flagged in the audit log for review. */
+  @Post("evaluations/:evaluationId/link-payment")
+  @Roles("ORG_SUPER_ADMIN")
+  async linkPayment(
+    @Param("organizationId") organizationId: string,
+    @Param("evaluationId") evaluationId: string,
+    @Body() dto: LinkExistingPaymentDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const result = await this.agreements.linkExistingPayment(organizationId, evaluationId, dto.paymentId);
+    await this.audit.record({
+      organizationId,
+      userId: user.id,
+      action: "posting_agreement.payment_linked",
+      entityType: "posting_agreement_evaluation",
+      entityId: evaluationId,
+      metadata: { reason: dto.reason, paymentId: dto.paymentId },
+    });
+    return result;
   }
 }

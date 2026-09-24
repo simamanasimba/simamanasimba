@@ -670,4 +670,34 @@ export class PostingAgreementsService {
 
     return { ...payment, amount: Number(payment.amount), paidAmount: payment.paidAmount != null ? Number(payment.paidAmount) : null };
   }
+
+  /** Reconciliation action — Super Admin only (see LinkExistingPaymentDto). A payment was already
+   * recorded for this beneficiary through a path that never names a specific week/campaign (a
+   * general "Record Payment", a bulk payment, or anything predating the Campaign Weeks system) —
+   * this links it to the evaluation it actually covers, which is the ONLY thing making that
+   * week/campaign show "Awaiting Finance" or "ready to pay" even though it was genuinely already
+   * paid. Never creates or modifies a Payment: the money is already recorded and already counted
+   * in every spend total exactly once, this just corrects which week it's credited to. */
+  async linkExistingPayment(organizationId: string, evaluationId: string, paymentId: string) {
+    const evaluation = await this.prisma.postingAgreementEvaluation.findFirst({
+      where: { id: evaluationId, agreement: { organizationId } },
+      include: { agreement: true },
+    });
+    if (!evaluation) throw new NotFoundException("Evaluation not found");
+    if (evaluation.paymentId) throw new BadRequestException("This week/campaign is already linked to a payment");
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, organizationId },
+      include: { postingAgreementEvaluation: true },
+    });
+    if (!payment) throw new NotFoundException("Payment not found");
+    if (payment.postingAgreementEvaluation) throw new BadRequestException("This payment is already linked to a different week/campaign");
+
+    const agreement = evaluation.agreement;
+    const beneficiaryMatches = agreement.mediaHostId ? payment.mediaHostId === agreement.mediaHostId : payment.influencerId === agreement.influencerId;
+    if (!beneficiaryMatches) throw new BadRequestException("This payment doesn't belong to the same media host/influencer as this agreement");
+
+    await this.prisma.postingAgreementEvaluation.update({ where: { id: evaluationId }, data: { paymentId } });
+    return { success: true };
+  }
 }

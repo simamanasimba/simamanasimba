@@ -7,6 +7,7 @@ import { BulkCreatePaymentDto } from "./dto/bulk-create-payment.dto";
 import { MarkPaidDto } from "./dto/mark-paid.dto";
 import { EditPaymentDto } from "./dto/edit-payment.dto";
 import { UndoPaymentDto } from "./dto/undo-payment.dto";
+import { RedoPaymentDto } from "./dto/redo-payment.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -135,14 +136,23 @@ export class PaymentsController {
     @Body() dto: EditPaymentDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const { before, after } = await this.payments.editPayment(organizationId, paymentId, dto);
+    const { before, after, beneficiaryName } = await this.payments.editPayment(organizationId, paymentId, dto);
     await this.audit.record({
       organizationId,
       userId: user.id,
       action: "payment.edited",
       entityType: "payment",
       entityId: paymentId,
-      metadata: { reason: dto.reason, before, after },
+      metadata: {
+        reason: dto.reason,
+        before,
+        after,
+        beneficiaryName,
+        amount: after.amount,
+        paidAmount: after.paidAmount,
+        currency: after.currency,
+        description: after.description,
+      },
     });
     return after;
   }
@@ -158,14 +168,58 @@ export class PaymentsController {
     @Body() dto: UndoPaymentDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const { payment, previousStatus } = await this.payments.undoPayment(organizationId, paymentId);
+    const { payment, previousStatus, evaluationId, beneficiaryName } = await this.payments.undoPayment(organizationId, paymentId);
     await this.audit.record({
       organizationId,
       userId: user.id,
       action: "payment.undone",
       entityType: "payment",
       entityId: paymentId,
-      metadata: { reason: dto.reason, previousStatus },
+      metadata: {
+        reason: dto.reason,
+        previousStatus,
+        // evaluationId is stored purely so a later Redo (below) has something to restore — see
+        // PaymentsService.undoPayment's own doc comment for why this can't be re-derived later.
+        evaluationId,
+        beneficiaryName,
+        amount: payment.amount,
+        paidAmount: payment.paidAmount,
+        currency: payment.currency,
+        description: payment.description,
+      },
+    });
+    return payment;
+  }
+
+  /** Sensitive action — Super Admin only. Reverses one specific undoPayment() call (identified by
+   * that undo's own audit log entry), restoring the payment's status and re-linking whatever it
+   * had flipped to "unpaid" — see PaymentsService.redoUndoPayment for the exact rules. Always
+   * requires a stated reason, flagged in the audit log like every other sensitive action. */
+  @Post(":paymentId/redo")
+  @Roles("ORG_SUPER_ADMIN")
+  async redo(
+    @Param("organizationId") organizationId: string,
+    @Param("paymentId") paymentId: string,
+    @Body() dto: RedoPaymentDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const { payment, beneficiaryName } = await this.payments.redoUndoPayment(organizationId, paymentId, dto.auditLogId);
+    await this.audit.record({
+      organizationId,
+      userId: user.id,
+      action: "payment.redone",
+      entityType: "payment",
+      entityId: paymentId,
+      metadata: {
+        reason: dto.reason,
+        restoredStatus: payment.status,
+        undoAuditLogId: dto.auditLogId,
+        beneficiaryName,
+        amount: payment.amount,
+        paidAmount: payment.paidAmount,
+        currency: payment.currency,
+        description: payment.description,
+      },
     });
     return payment;
   }
