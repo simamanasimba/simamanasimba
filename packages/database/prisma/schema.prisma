@@ -1598,6 +1598,13 @@ model Payment {
   /// reason on record for the gap. Null until Finance marks the payment paid.
   paidAmount         Decimal?  @db.Decimal(14, 2) @map("paid_amount")
   amountVarianceNote String?   @db.Text @map("amount_variance_note")
+  /// A posting-agreement payment paid out despite the week/campaign NOT meeting its target(s) — a
+  /// deliberate Finance override (see PostingAgreementsService.markPaidDirectly), never set for a
+  /// normal met-target payment. `conditionalReason` is mandatory whenever this is true so there's
+  /// always a recorded justification; counts normally in every spend total, just also flaggable on
+  /// its own via PaymentsService.listConditionalPayments() for Finance to review on demand.
+  isConditional      Boolean   @default(false) @map("is_conditional")
+  conditionalReason  String?   @db.Text @map("conditional_reason")
   mediaEngagementId  String? @unique @map("media_engagement_id")
   /// Set instead of mediaEngagementId when paying against an Influencer 2
   /// campaign (the influencer-side campaign system) rather than the original

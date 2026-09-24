@@ -180,6 +180,10 @@ export function PostingWeeksPanel({
                         </button>
                       ) : w.evaluation?.targetMet ? (
                         <span className="text-xs text-muted">{t("awaitingFinanceLabel")}</span>
+                      ) : w.evaluation && canPay ? (
+                        <button className="btn-secondary !py-1 text-xs text-warning" onClick={() => setPayingWeek(w)}>
+                          {t("payConditionallyCta")}
+                        </button>
                       ) : null}
                     </div>
                   </td>
@@ -196,6 +200,7 @@ export function PostingWeeksPanel({
           evaluationId={payingWeek.evaluation.id}
           agreedAmount={agreement.weeklyAmount}
           currency={agreement.currency}
+          isConditional={!payingWeek.evaluation.targetMet}
           onClose={() => setPayingWeek(null)}
           onDone={() => {
             setPayingWeek(null);

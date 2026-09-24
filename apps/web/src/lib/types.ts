@@ -456,6 +456,10 @@ export interface Payment {
   mobileMoneyProvider?: string | null;
   mobileMoneyNumber?: string | null;
   mobileMoneyTransactionId?: string | null;
+  /** True only for a posting-agreement payment Finance recorded despite the week/campaign missing
+   * its target — a deliberate override, always paired with conditionalReason. */
+  isConditional?: boolean;
+  conditionalReason?: string | null;
   createdByUserId?: string;
   createdByName?: string | null;
   approvedByUserId?: string | null;

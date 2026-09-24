@@ -73,6 +73,28 @@ export class PaymentsService {
     }));
   }
 
+  /** Every payment Finance recorded despite its posting-agreement week/campaign missing target —
+   * see Payment.isConditional's doc comment. This is the on-demand review list the flag exists
+   * for: nothing here is excluded from any other spend total, it's purely an additional lens. */
+  async listConditionalPayments(organizationId: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: { organizationId, isConditional: true },
+      include: { campaign: { select: { id: true, name: true } }, mediaHost: true, influencer: true },
+      orderBy: { paymentDate: "desc" },
+    });
+
+    const userIds = Array.from(new Set(payments.map((p) => p.createdByUserId).filter((id): id is string => Boolean(id))));
+    const users = userIds.length ? await this.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } }) : [];
+    const nameById = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`]));
+
+    return payments.map((p) => ({
+      ...p,
+      amount: Number(p.amount),
+      paidAmount: p.paidAmount != null ? Number(p.paidAmount) : null,
+      createdByName: nameById.get(p.createdByUserId) ?? null,
+    }));
+  }
+
   async create(organizationId: string, dto: CreatePaymentDto, userId: string) {
     if (dto.beneficiaryType === "MEDIA_HOST" && !dto.mediaHostId) throw new BadRequestException("mediaHostId is required for a media host payment");
     if (dto.beneficiaryType === "INFLUENCER" && !dto.influencerId) throw new BadRequestException("influencerId is required for an influencer payment");

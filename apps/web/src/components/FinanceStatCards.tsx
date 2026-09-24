@@ -24,6 +24,10 @@ export function FinanceStatCards({ organizationId }: { organizationId: string })
     queryKey: ["expense-totals", organizationId],
     queryFn: () => api.get<Record<ExpenseCategory, number>>(`/api/v1/organizations/${organizationId}/expenses/totals`),
   });
+  const { data: conditionalPayments } = useQuery({
+    queryKey: ["conditional-payments", organizationId],
+    queryFn: () => api.get<unknown[]>(`/api/v1/organizations/${organizationId}/payments/conditional`),
+  });
 
   const mediaSpend = (dashboard?.spendByMediaHost ?? []).reduce((sum, r) => sum + r.amount, 0);
   const influencerSpend = (dashboard?.spendByInfluencer ?? []).reduce((sum, r) => sum + r.amount, 0);
@@ -50,6 +54,12 @@ export function FinanceStatCards({ organizationId }: { organizationId: string })
       <div className="rounded-xl border border-line/60 bg-card px-3.5 py-2.5 shadow-card"><p className="text-xs text-muted">{t("operationalSpendLabel")}</p><p className="nums text-lg font-bold text-ink">{(expenseTotals?.OPERATIONAL ?? dashboard?.operationalSpend ?? 0).toLocaleString()}</p></div>
       <div className="rounded-xl border border-line/60 bg-card px-3.5 py-2.5 shadow-card"><p className="text-xs text-muted">{t("administrativeSpendLabel")}</p><p className="nums text-lg font-bold text-ink">{(expenseTotals?.ADMINISTRATIVE ?? dashboard?.administrativeSpend ?? 0).toLocaleString()}</p></div>
       <div className="rounded-xl border border-line/60 bg-card px-3.5 py-2.5 shadow-card"><p className="text-xs text-muted">{t("pendingPayments")}</p><p className="nums text-lg font-bold text-ink">{dashboard?.pendingCount ?? 0}</p></div>
+      {conditionalPayments != null && conditionalPayments.length > 0 && (
+        <Link href={`/org/${organizationId}/finance/conditional-payments`} className="rounded-xl border border-warning/40 bg-warning/10 px-3.5 py-2.5 shadow-card transition hover:-translate-y-0.5 hover:shadow-lg" title={t("conditionalPaymentsHint")}>
+          <p className="text-xs text-warning">{t("conditionalPaymentsTitle")}</p>
+          <p className="nums text-lg font-bold text-warning">{conditionalPayments.length}</p>
+        </Link>
+      )}
     </div>
   );
 }

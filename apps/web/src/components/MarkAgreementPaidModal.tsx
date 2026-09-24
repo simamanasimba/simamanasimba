@@ -25,6 +25,7 @@ export function MarkAgreementPaidModal({
   evaluationId,
   agreedAmount,
   currency,
+  isConditional,
   onClose,
   onDone,
 }: {
@@ -32,6 +33,10 @@ export function MarkAgreementPaidModal({
   evaluationId: string;
   agreedAmount: number;
   currency: string;
+  /** True when the week/campaign being paid did NOT meet its target — switches this into the
+   * "conditional payment" path, which requires a mandatory reason and flags the payment for
+   * Finance's own review list. */
+  isConditional?: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -46,12 +51,17 @@ export function MarkAgreementPaidModal({
   const [bankTransactionRef, setBankTransactionRef] = useState("");
   const [mobileMoneyNumber, setMobileMoneyNumber] = useState("");
   const [mobileMoneyTransactionId, setMobileMoneyTransactionId] = useState("");
+  const [conditionalReason, setConditionalReason] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isConditional && !conditionalReason.trim()) {
+      setError(t("conditionalReasonRequired"));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -66,6 +76,7 @@ export function MarkAgreementPaidModal({
         bankTransactionRef: method === "BANK_TRANSFER" ? bankTransactionRef || undefined : undefined,
         mobileMoneyNumber: method === "MOBILE_MONEY" ? mobileMoneyNumber || undefined : undefined,
         mobileMoneyTransactionId: method === "MOBILE_MONEY" ? mobileMoneyTransactionId || undefined : undefined,
+        conditionalReason: isConditional ? conditionalReason.trim() : undefined,
       });
 
       if (attachmentFile) {
@@ -88,12 +99,12 @@ export function MarkAgreementPaidModal({
 
   return (
     <Modal
-      title={t("markAsPaidTitle")}
+      title={isConditional ? t("payConditionallyCta") : t("markAsPaidTitle")}
       onClose={onClose}
       footer={
         <div className="flex justify-end gap-2 border-t border-line pt-4">
           <button type="button" onClick={onClose} className="btn-secondary">{t("cancel")}</button>
-          <button type="submit" form="mark-agreement-paid-form" disabled={submitting} className="btn-primary">{submitting ? t("saving") : t("markAsPaidTitle")}</button>
+          <button type="submit" form="mark-agreement-paid-form" disabled={submitting} className="btn-primary">{submitting ? t("saving") : isConditional ? t("payConditionallyCta") : t("markAsPaidTitle")}</button>
         </div>
       }
     >
@@ -102,6 +113,21 @@ export function MarkAgreementPaidModal({
           <span className="text-muted">{t("amountAgreedLabel")}: </span>
           <span className="font-semibold text-ink">{currency} {agreedAmount.toLocaleString()}</span>
         </div>
+
+        {isConditional && (
+          <div className="rounded-xl border border-warning/40 bg-warning/10 p-3.5">
+            <p className="mb-2 text-xs font-medium text-warning">{t("conditionalPaymentHint")}</p>
+            <label className="label">{t("conditionalReasonLabel")}</label>
+            <textarea
+              required
+              rows={3}
+              className="input"
+              value={conditionalReason}
+              onChange={(e) => setConditionalReason(e.target.value)}
+              placeholder={t("conditionalReasonPlaceholder")}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>

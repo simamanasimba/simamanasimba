@@ -547,14 +547,17 @@ export class PostingAgreementsService {
    * the agreed amount, and a notes string describing how the target was met. Used by both
    * createTicket (the older PENDING-ticket path, kept for any code still calling it) and
    * markPaidDirectly (the one Finance actually uses now — see its own doc comment for why). */
-  private async resolvePayableEvaluation(organizationId: string, evaluationId: string) {
+  private async resolvePayableEvaluation(organizationId: string, evaluationId: string, opts?: { allowUnmetTarget?: boolean }) {
     const evaluation = await this.prisma.postingAgreementEvaluation.findFirst({
       where: { id: evaluationId, agreement: { organizationId } },
       include: { agreement: true },
     });
     if (!evaluation) throw new NotFoundException("Evaluation not found");
     if (evaluation.paymentId) throw new BadRequestException("A payment already exists for this week/campaign");
-    if (!evaluation.targetMet) throw new BadRequestException("This week's/campaign's requirements were not met — no payment to record");
+    // A missed target only blocks the normal path — markPaidDirectly() passes allowUnmetTarget
+    // when Finance is deliberately paying anyway (a "conditional payment"), which requires its own
+    // mandatory reason, checked there rather than here.
+    if (!evaluation.targetMet && !opts?.allowUnmetTarget) throw new BadRequestException("This week's/campaign's requirements were not met — no payment to record");
 
     const agreement = evaluation.agreement;
     const beneficiaryType: PaymentBeneficiaryType = agreement.mediaHostId ? "MEDIA_HOST" : "INFLUENCER";
@@ -610,9 +613,23 @@ export class PostingAgreementsService {
   /** The one real "pay" action: records a met-target week/campaign as PAID immediately — no
    * separate approve step, no PENDING limbo. This *is* Finance actually paying someone, right
    * here, with whatever they attach as proof — not a request that goes somewhere unseen. Only
-   * once per week/campaign (paymentId is unique on the evaluation, same guard as createTicket). */
+   * once per week/campaign (paymentId is unique on the evaluation, same guard as createTicket).
+   *
+   * Also the one place a MISSED target can still be paid — a "conditional payment": Finance's own
+   * deliberate call to pay someone who didn't hit their target anyway. Allowed here only with a
+   * mandatory `conditionalReason`, which gets recorded on the Payment (isConditional + the reason)
+   * alongside who did it (createdByUserId/approvedByUserId, already captured below) — so it counts
+   * normally in every spend total like any other PAID payment, but stays lookup-able as its own
+   * flagged list via PaymentsService.listConditionalPayments(). */
   async markPaidDirectly(organizationId: string, evaluationId: string, dto: MarkAgreementPaidDto, userId: string) {
-    const { evaluation, agreement, beneficiaryType, groupLabel, amount, notes } = await this.resolvePayableEvaluation(organizationId, evaluationId);
+    const { evaluation, agreement, beneficiaryType, groupLabel, amount, notes } = await this.resolvePayableEvaluation(organizationId, evaluationId, { allowUnmetTarget: true });
+
+    const isConditional = !evaluation.targetMet;
+    const conditionalReason = dto.conditionalReason?.trim() || null;
+    if (isConditional && !conditionalReason) {
+      throw new BadRequestException("This week's/campaign's requirements were not met — paying anyway requires a reason (conditional payment)");
+    }
+    const finalNotes = isConditional ? [notes, `Conditional payment — target not met. Reason: ${conditionalReason}`].filter(Boolean).join("; ") : notes;
 
     const paidAmount = dto.amountPaid ?? amount;
     const amountVarianceNote = paidAmount !== amount ? `Paid ${paidAmount} instead of the agreed ${amount}` : null;
@@ -628,7 +645,7 @@ export class PostingAgreementsService {
           amount,
           currency: agreement.currency,
           description: `Posting agreement — ${groupLabel}`,
-          notes,
+          notes: finalNotes,
           method: dto.method,
           referenceNumber: dto.referenceNumber,
           bankName: dto.bankName,
@@ -640,6 +657,8 @@ export class PostingAgreementsService {
           status: "PAID",
           paidAmount,
           amountVarianceNote,
+          isConditional,
+          conditionalReason: isConditional ? conditionalReason : null,
           createdByUserId: userId,
           approvedByUserId: userId,
           approvedAt: new Date(),

@@ -48,6 +48,16 @@ export class PaymentsController {
     return this.payments.getFinanceDashboard(organizationId);
   }
 
+  /** Finance's on-demand review list: every payment recorded despite a missed posting-agreement
+   * target — see Payment.isConditional. Registered before the ":paymentId" routes below so
+   * "conditional" is never mistaken for one. */
+  @Get("conditional")
+  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
+  @RequiresArea("finance")
+  listConditional(@Param("organizationId") organizationId: string) {
+    return this.payments.listConditionalPayments(organizationId);
+  }
+
   @Post()
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
   async create(@Param("organizationId") organizationId: string, @Body() dto: CreatePaymentDto, @CurrentUser() user: RequestUser) {

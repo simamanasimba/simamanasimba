@@ -295,6 +295,10 @@ export function PostingFoldersPanel({
                         </button>
                       ) : f.evaluation?.targetMet ? (
                         <span className="text-xs text-muted">{t("awaitingFinanceLabel")}</span>
+                      ) : f.evaluation && canPay ? (
+                        <button className="btn-secondary !py-1 text-xs text-warning" onClick={() => setPayingFolder(f)}>
+                          {t("payConditionallyCta")}
+                        </button>
                       ) : null}
                       {canManage && (
                         <>
@@ -328,6 +332,7 @@ export function PostingFoldersPanel({
           evaluationId={payingFolder.evaluation.id}
           agreedAmount={agreement.weeklyAmount}
           currency={agreement.currency}
+          isConditional={!payingFolder.evaluation.targetMet}
           onClose={() => setPayingFolder(null)}
           onDone={() => {
             setPayingFolder(null);
