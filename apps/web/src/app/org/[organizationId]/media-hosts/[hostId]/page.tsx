@@ -112,7 +112,7 @@ export default function MediaHostDetailPage() {
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Link href={`/org/${organizationId}/media-hosts/${hostId}/campaigns`} className="card block h-full transition hover:-translate-y-0.5 hover:shadow-lg">
-          <p className="text-xs text-muted">{t("totalPostsLabel")}</p>
+          <p className="text-xs text-muted">{t("totalPostsAllTimeLabel")}</p>
           <p className="nums text-lg font-bold text-brand-700">{summary?.totalPosts ?? "—"}</p>
         </Link>
         <div className="card">

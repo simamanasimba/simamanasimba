@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Printer, Settings2 } from "lucide-react";
+import { CalendarRange, Printer, Settings2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLang, type DictKey } from "@/lib/i18n";
 import type { PerformanceDirection, PerformanceMetric, PerformanceReport } from "@/lib/types";
@@ -141,6 +142,9 @@ export function PerformanceReportView({ organizationId, onConfigureTargets }: { 
           <button type="button" onClick={onConfigureTargets} className="btn-secondary no-print" title={t("configureTargetsOptionLabel")}>
             <Settings2 size={14} /> {t("configureTargetsOptionLabel")}
           </button>
+          <Link href={`/org/${organizationId}/settings#campaign-weeks`} className="btn-secondary no-print" title={t("campaignWeeksTitle")}>
+            <CalendarRange size={14} /> {t("campaignWeeksTitle")}
+          </Link>
           <button type="button" onClick={onPrint} className="btn-secondary no-print" title={t("printReportCta")}>
             <Printer size={14} /> {t("printReportCta")}
           </button>

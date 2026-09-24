@@ -197,7 +197,9 @@ export default function SettingsPage() {
 
       <BrandingCard organizationId={organizationId} />
 
-      <CampaignWeeksCard organizationId={organizationId} />
+      <div id="campaign-weeks">
+        <CampaignWeeksCard organizationId={organizationId} />
+      </div>
 
       {me?.user.isPlatformOwner && <BackupsCard />}
 
