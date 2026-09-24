@@ -8,6 +8,7 @@ import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import { TableSearchInput } from "@/components/TableSearchInput";
+import { PAYMENT_STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE } from "@/lib/paymentStatusDisplay";
 import { useLang } from "@/lib/i18n";
 import type { Influencer2Folder, PostingAgreement } from "@/lib/types";
 
@@ -306,7 +307,11 @@ export function PostingFoldersPanel({
                         // A payment record exists but isn't PAID (old data from before "Mark as
                         // paid" always paid immediately) — never re-offer paying it, that would try
                         // to create a second payment for the same campaign.
-                        <span className="text-xs text-muted">{f.evaluation.payment?.status ?? t("weekPendingEvaluationLabel")}</span>
+                        f.evaluation.payment ? (
+                          <span className={`badge ${PAYMENT_STATUS_BADGE[f.evaluation.payment.status]}`}>{t(PAYMENT_STATUS_LABEL_KEYS[f.evaluation.payment.status])}</span>
+                        ) : (
+                          <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
+                        )
                       ) : f.evaluation?.targetMet && canPay ? (
                         <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingFolder(f)}>
                           {t("markAsPaidTitle")}

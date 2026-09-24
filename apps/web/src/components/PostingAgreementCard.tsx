@@ -11,6 +11,7 @@ import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import { TableSearchInput } from "@/components/TableSearchInput";
 import { printAgreement } from "@/lib/printAgreement";
 import { isSuperAdmin } from "@/lib/permissions";
+import { PAYMENT_STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE } from "@/lib/paymentStatusDisplay";
 import type { PostingAgreement, PostingAgreementEngagementMetric, PostingAgreementWeek } from "@/lib/types";
 
 /** A small ✓/✗/— pill for one of the two possible per-week checks — "—" when that check isn't
@@ -344,9 +345,15 @@ export function PostingAgreementCard({
                               <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("paymentStatusPaid")}</span>
                             ) : w.evaluation?.paymentId ? (
                               // A payment record exists but isn't PAID (old data from before
-                              // "Mark as paid" always paid immediately) — never re-offer paying it,
-                              // that would try to create a second payment for the same week.
-                              <span className="text-xs text-muted">{w.evaluation.payment?.status ?? t("weekPendingEvaluationLabel")}</span>
+                              // "Mark as paid" always paid immediately, or a cancelled/undone
+                              // payment left linked on purpose — see PaymentsService.undoPayment) —
+                              // never re-offer paying it, that would try to create a second payment
+                              // for the same week.
+                              w.evaluation.payment ? (
+                                <span className={`badge ${PAYMENT_STATUS_BADGE[w.evaluation.payment.status]}`}>{t(PAYMENT_STATUS_LABEL_KEYS[w.evaluation.payment.status])}</span>
+                              ) : (
+                                <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
+                              )
                             ) : w.evaluation?.targetMet && canPay ? (
                               <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingWeek(w)}>
                                 {t("markAsPaidTitle")}

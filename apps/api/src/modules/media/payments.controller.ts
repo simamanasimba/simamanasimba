@@ -158,8 +158,9 @@ export class PaymentsController {
   }
 
   /** Sensitive action — Super Admin only. Reverses a payment (including an already-PAID one) to
-   * CANCELLED, with a mandatory reason, flagged in the audit log for review. See
-   * PaymentsService.undoPayment for what else gets cleaned up alongside the status change. */
+   * CANCELLED, with a mandatory reason, flagged in the audit log for review. Deliberately leaves
+   * the week/campaign it was linked to exactly as-is — see PaymentsService.undoPayment's own doc
+   * comment for why that's what keeps a cancelled payment out of the normal pay queue. */
   @Post(":paymentId/undo")
   @Roles("ORG_SUPER_ADMIN")
   async undo(
@@ -168,7 +169,7 @@ export class PaymentsController {
     @Body() dto: UndoPaymentDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const { payment, previousStatus, evaluationId, beneficiaryName } = await this.payments.undoPayment(organizationId, paymentId);
+    const { payment, previousStatus, beneficiaryName } = await this.payments.undoPayment(organizationId, paymentId);
     await this.audit.record({
       organizationId,
       userId: user.id,
@@ -178,9 +179,6 @@ export class PaymentsController {
       metadata: {
         reason: dto.reason,
         previousStatus,
-        // evaluationId is stored purely so a later Redo (below) has something to restore — see
-        // PaymentsService.undoPayment's own doc comment for why this can't be re-derived later.
-        evaluationId,
         beneficiaryName,
         amount: payment.amount,
         paidAmount: payment.paidAmount,

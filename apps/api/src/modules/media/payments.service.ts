@@ -274,40 +274,27 @@ export class PaymentsService {
   /** Super Admin's "this shouldn't have been recorded" action — reverses a payment, including an
    * already-PAID one, to CANCELLED. A CANCELLED payment is invisible to getFinanceDashboard() (it
    * only ever reads status: "PAID" rows), so this takes the money back out of every spend total
-   * automatically, with no separate cleanup needed there. What DOES need explicit cleanup: any
-   * linked posting-agreement evaluation, media engagement, or Influencer2 campaign that this
-   * payment had flipped to "paid" — those are reverted too, so the underlying week/campaign
-   * becomes payable again instead of being stuck forever behind a payment that no longer counts. */
+   * automatically.
+   *
+   * Deliberately does NOT unlink the posting-agreement evaluation/media engagement/Influencer2
+   * campaign it was attached to, and does NOT flip them back to "unpaid" — a cancelled payment
+   * means "this specific money record was wrong," not "this week never happened, go ask Finance to
+   * pay it again." The week/campaign stays linked to the (now cancelled) payment, which is exactly
+   * what keeps it OUT of ready-for-payment/"Awaiting Finance" — it reads as cancelled/archived
+   * instead of silently reappearing in the normal pay queue, where Finance could pay it again
+   * without knowing why it was cancelled in the first place. If it genuinely does need to be paid
+   * again, that's Redo (restores this exact undo) or a deliberate new action — never automatic. */
   async undoPayment(organizationId: string, paymentId: string) {
-    const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId }, include: { postingAgreementEvaluation: true } });
+    const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment) throw new NotFoundException("Payment not found");
     if (payment.status === "CANCELLED") throw new BadRequestException("This payment is already cancelled");
 
     const previousStatus = payment.status;
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.payment.update({ where: { id: paymentId }, data: { status: "CANCELLED" } });
-      if (payment.postingAgreementEvaluation) {
-        await tx.postingAgreementEvaluation.update({ where: { id: payment.postingAgreementEvaluation.id }, data: { paymentId: null } });
-      }
-      if (payment.mediaEngagementId) {
-        await tx.mediaEngagement.update({ where: { id: payment.mediaEngagementId }, data: { status: "NOT_PAID" } });
-      }
-      if (payment.influencer2CampaignId) {
-        await tx.influencer2Campaign.update({ where: { id: payment.influencer2CampaignId }, data: { paymentStatus: "NOT_PAID" } });
-      }
-      return result;
-    });
+    const updated = await this.prisma.payment.update({ where: { id: paymentId }, data: { status: "CANCELLED" } });
 
     return {
       payment: { ...updated, amount: Number(updated.amount), paidAmount: updated.paidAmount != null ? Number(updated.paidAmount) : null },
       previousStatus,
-      // The evaluation's own paymentId FK is what just got cleared above — once that happens,
-      // Payment.postingAgreementEvaluation (the reverse side of that relation) can never find its
-      // way back to it again, so this id is the ONLY remaining record of which evaluation this
-      // payment used to belong to. The controller stores it in the audit log's metadata so a later
-      // "Redo" (see redoUndoPayment) has something to restore, since Payment itself has no column
-      // that would otherwise remember this.
-      evaluationId: payment.postingAgreementEvaluation?.id ?? null,
       // For the Sensitive Actions Log — "payment undone" is meaningless without who it was for and
       // how much, see describeBeneficiary's own doc comment.
       beneficiaryName: await this.describeBeneficiary(payment),

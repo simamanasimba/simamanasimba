@@ -9,6 +9,7 @@ import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import { LinkExistingPaymentModal } from "@/components/LinkExistingPaymentModal";
 import { TableSearchInput } from "@/components/TableSearchInput";
 import { isSuperAdmin } from "@/lib/permissions";
+import { PAYMENT_STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE } from "@/lib/paymentStatusDisplay";
 import { useLang } from "@/lib/i18n";
 import type { PostingAgreement, PostingWeekDefinition } from "@/lib/types";
 
@@ -192,7 +193,11 @@ export function PostingWeeksPanel({
                       {w.evaluation?.payment?.status === "PAID" ? (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><Receipt size={13} /> {t("paymentStatusPaid")}</span>
                       ) : w.evaluation?.paymentId ? (
-                        <span className="text-xs text-muted">{w.evaluation.payment?.status ?? t("weekPendingEvaluationLabel")}</span>
+                        w.evaluation.payment ? (
+                          <span className={`badge ${PAYMENT_STATUS_BADGE[w.evaluation.payment.status]}`}>{t(PAYMENT_STATUS_LABEL_KEYS[w.evaluation.payment.status])}</span>
+                        ) : (
+                          <span className="text-xs text-muted">{t("weekPendingEvaluationLabel")}</span>
+                        )
                       ) : w.evaluation?.targetMet && canPay ? (
                         <button className="btn-secondary !py-1 text-xs" onClick={() => setPayingWeek(w)}>
                           {t("markAsPaidTitle")}
