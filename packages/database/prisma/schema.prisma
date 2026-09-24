@@ -1904,6 +1904,12 @@ model Influencer2CampaignPlatform {
   metrics  Influencer2MetricValue[]
 
   @@unique([campaignId, platformId])
+  // publishedDateFilter/publishedPlatformFilter (Influencer2CampaignsService) range-scan these two
+  // columns for every "which posts fall in this date range" query — Dashboard, Campaigns pages,
+  // posting-agreement week/folder evaluation, all of it. Neither column had an index before, so a
+  // wide range (a "custom" pick spanning months, or "All time") forced a full table scan.
+  @@index([publishedAt])
+  @@index([createdAt])
   @@map("influencer2_campaign_platforms")
 }
 

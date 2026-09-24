@@ -478,6 +478,51 @@ export class Influencer2CampaignsService {
     };
   }
 
+  /** Every metric total (summary/weeklyAssessment/folderAssessment/weekDefinitionAssessment) used
+   * to compute this by pulling EVERY matching latest metric-value row over the network and summing
+   * in JS — fine for a single week, but for "All time"/a wide custom range at org-wide scope that
+   * could be tens of thousands of rows, which is exactly why those ranges were slow. Summing is
+   * pushed down to MySQL instead via groupBy (one row per distinct metric DEFINITION, not per
+   * value — typically a handful per org), then the tiny per-definition sums are bucketed into
+   * category totals here, in JS, over that handful of rows instead of every raw one. Produces the
+   * exact same numbers as before: summing all rows in a category is the same whether you sum them
+   * directly or sum-per-definition-then-add-the-per-definition-sums. */
+  private async computeMetricTotals(campaignPlatformWhere: Prisma.Influencer2CampaignPlatformWhereInput) {
+    const grouped = await this.prisma.influencer2MetricValue.groupBy({
+      by: ["metricDefinitionId"],
+      where: { isLatest: true, campaignPlatform: campaignPlatformWhere },
+      _sum: { value: true },
+    });
+
+    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
+    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
+    if (grouped.length > 0) {
+      const definitions = await this.prisma.influencer2MetricDefinition.findMany({
+        where: { id: { in: grouped.map((g) => g.metricDefinitionId) } },
+        select: { id: true, category: true, countsAsEngagement: true },
+      });
+      const defById = new Map(definitions.map((d) => [d.id, d]));
+      for (const g of grouped) {
+        const def = defById.get(g.metricDefinitionId);
+        if (!def) continue;
+        const value = Number(g._sum.value ?? 0);
+        if (def.countsAsEngagement) totalEngagement += value;
+        if (def.category === "VIEWS") { totalViews += value; hasViews = true; }
+        else if (def.category === "LIKES") { totalLikes += value; hasLikes = true; }
+        else if (def.category === "COMMENTS") { totalComments += value; hasComments = true; }
+        else if (def.category === "SHARES") { totalShares += value; hasShares = true; }
+      }
+    }
+
+    return {
+      totalViews: hasViews ? totalViews : null,
+      totalLikes: hasLikes ? totalLikes : null,
+      totalComments: hasComments ? totalComments : null,
+      totalShares: hasShares ? totalShares : null,
+      totalEngagement,
+    };
+  }
+
   /** Aggregate stats for one influencer, one media host, or — via `scope` —
    * EVERY media host or EVERY influencer in the org at once (the collective
    * "Media Engagement"/"Influencers" dashboard views). Computed via
@@ -511,14 +556,11 @@ export class Influencer2CampaignsService {
     // Influencer2CampaignPlatform rows here instead (as this used to) silently inflated the total
     // for anything with more than one platform, disagreeing with every other "Posts" figure in the
     // app for the exact same data.
-    const [campaignCount, values, beneficiaryRows] = await Promise.all([
+    const [campaignCount, totals, beneficiaryRows] = await Promise.all([
       this.prisma.influencer2Campaign.count({ where: campaignWhere }),
-      this.prisma.influencer2MetricValue.findMany({
-        where: {
-          isLatest: true,
-          campaignPlatform: { campaign: { organizationId, ...beneficiary }, ...(hasRange ? this.publishedPlatformFilter(filter.from!, filter.to!) : {}) },
-        },
-        include: { metricDefinition: true },
+      this.computeMetricTotals({
+        campaign: { organizationId, ...beneficiary },
+        ...(hasRange ? this.publishedPlatformFilter(filter.from!, filter.to!) : {}),
       }),
       filter.scope
         ? this.prisma.influencer2Campaign.findMany({
@@ -529,27 +571,12 @@ export class Influencer2CampaignsService {
         : Promise.resolve(null),
     ]);
 
-    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
-    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
-    for (const v of values) {
-      const value = Number(v.value);
-      if (v.metricDefinition.countsAsEngagement) totalEngagement += value;
-      if (v.metricDefinition.category === "VIEWS") { totalViews += value; hasViews = true; }
-      else if (v.metricDefinition.category === "LIKES") { totalLikes += value; hasLikes = true; }
-      else if (v.metricDefinition.category === "COMMENTS") { totalComments += value; hasComments = true; }
-      else if (v.metricDefinition.category === "SHARES") { totalShares += value; hasShares = true; }
-    }
-
     return {
       totalCampaigns: campaignCount,
       totalPosts: campaignCount,
       totalBeneficiaries: beneficiaryRows?.length ?? null,
-      totalViews: hasViews ? totalViews : null,
-      totalLikes: hasLikes ? totalLikes : null,
-      totalComments: hasComments ? totalComments : null,
-      totalShares: hasShares ? totalShares : null,
-      totalEngagement,
-      engagementPerPost: campaignCount > 0 ? Math.round((totalEngagement / campaignCount) * 100) / 100 : null,
+      ...totals,
+      engagementPerPost: campaignCount > 0 ? Math.round((totals.totalEngagement / campaignCount) * 100) / 100 : null,
     };
   }
 
@@ -568,33 +595,12 @@ export class Influencer2CampaignsService {
     // Same "one post = one Influencer2Campaign row, not one per platform" rule as summary() —
     // otherwise a single post cross-posted to 2 platforms would count double toward a weekly
     // posts-per-week target, and its reach would look like it came from twice as many posts.
-    const [postCount, values] = await Promise.all([
+    const [postCount, totals] = await Promise.all([
       this.prisma.influencer2Campaign.count({ where: campaignWhere }),
-      this.prisma.influencer2MetricValue.findMany({
-        where: { isLatest: true, campaignPlatform: { campaign: campaignWhere } },
-        include: { metricDefinition: true },
-      }),
+      this.computeMetricTotals({ campaign: campaignWhere }),
     ]);
 
-    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
-    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
-    for (const v of values) {
-      const value = Number(v.value);
-      if (v.metricDefinition.countsAsEngagement) totalEngagement += value;
-      if (v.metricDefinition.category === "VIEWS") { totalViews += value; hasViews = true; }
-      else if (v.metricDefinition.category === "LIKES") { totalLikes += value; hasLikes = true; }
-      else if (v.metricDefinition.category === "COMMENTS") { totalComments += value; hasComments = true; }
-      else if (v.metricDefinition.category === "SHARES") { totalShares += value; hasShares = true; }
-    }
-
-    return {
-      totalPosts: postCount,
-      totalViews: hasViews ? totalViews : null,
-      totalLikes: hasLikes ? totalLikes : null,
-      totalComments: hasComments ? totalComments : null,
-      totalShares: hasShares ? totalShares : null,
-      totalEngagement,
-    };
+    return { totalPosts: postCount, ...totals };
   }
 
   /** One folder's ("campaign") totals — same shape and same "current metrics, not a collectedAt
@@ -609,33 +615,12 @@ export class Influencer2CampaignsService {
       ...this.folderMatchFilter(filter.folderId, filter.startDate, filter.endDate),
     };
 
-    const [postCount, values] = await Promise.all([
+    const [postCount, totals] = await Promise.all([
       this.prisma.influencer2Campaign.count({ where: campaignWhere }),
-      this.prisma.influencer2MetricValue.findMany({
-        where: { isLatest: true, campaignPlatform: { campaign: campaignWhere } },
-        include: { metricDefinition: true },
-      }),
+      this.computeMetricTotals({ campaign: campaignWhere }),
     ]);
 
-    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
-    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
-    for (const v of values) {
-      const value = Number(v.value);
-      if (v.metricDefinition.countsAsEngagement) totalEngagement += value;
-      if (v.metricDefinition.category === "VIEWS") { totalViews += value; hasViews = true; }
-      else if (v.metricDefinition.category === "LIKES") { totalLikes += value; hasLikes = true; }
-      else if (v.metricDefinition.category === "COMMENTS") { totalComments += value; hasComments = true; }
-      else if (v.metricDefinition.category === "SHARES") { totalShares += value; hasShares = true; }
-    }
-
-    return {
-      totalPosts: postCount,
-      totalViews: hasViews ? totalViews : null,
-      totalLikes: hasLikes ? totalLikes : null,
-      totalComments: hasComments ? totalComments : null,
-      totalShares: hasShares ? totalShares : null,
-      totalEngagement,
-    };
+    return { totalPosts: postCount, ...totals };
   }
 
   /** One org-wide week definition's totals for ONE beneficiary — same shape and same "current
@@ -650,33 +635,12 @@ export class Influencer2CampaignsService {
       ...this.publishedDateFilter(filter.startDate, filter.endDate),
     };
 
-    const [postCount, values] = await Promise.all([
+    const [postCount, totals] = await Promise.all([
       this.prisma.influencer2Campaign.count({ where: campaignWhere }),
-      this.prisma.influencer2MetricValue.findMany({
-        where: { isLatest: true, campaignPlatform: { campaign: campaignWhere } },
-        include: { metricDefinition: true },
-      }),
+      this.computeMetricTotals({ campaign: campaignWhere }),
     ]);
 
-    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
-    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
-    for (const v of values) {
-      const value = Number(v.value);
-      if (v.metricDefinition.countsAsEngagement) totalEngagement += value;
-      if (v.metricDefinition.category === "VIEWS") { totalViews += value; hasViews = true; }
-      else if (v.metricDefinition.category === "LIKES") { totalLikes += value; hasLikes = true; }
-      else if (v.metricDefinition.category === "COMMENTS") { totalComments += value; hasComments = true; }
-      else if (v.metricDefinition.category === "SHARES") { totalShares += value; hasShares = true; }
-    }
-
-    return {
-      totalPosts: postCount,
-      totalViews: hasViews ? totalViews : null,
-      totalLikes: hasLikes ? totalLikes : null,
-      totalComments: hasComments ? totalComments : null,
-      totalShares: hasShares ? totalShares : null,
-      totalEngagement,
-    };
+    return { totalPosts: postCount, ...totals };
   }
 
   /**
@@ -686,46 +650,56 @@ export class Influencer2CampaignsService {
    * mediaHostId aren't real foreign keys (see the field comment on Influencer2Campaign), so
    * beneficiary names are resolved with a separate batch lookup rather than a Prisma include.
    */
+  // The one current caller (MediaEngagementOverview) only ever reads byMediaType — campaigns/
+  // byPlatform aren't rendered anywhere today — but they stay part of the response for whatever
+  // drill-down eventually wants them, just bounded: for "All time"/a wide custom range at org-wide
+  // scope, fetching every single post+platform ever recorded (unbounded, no take/skip) was the
+  // single biggest cost on this endpoint. byMediaType/byPlatform below are computed via DB-side
+  // groupBy instead — bounded by the number of distinct media hosts/platforms in the org, not by
+  // how many posts exist, so they stay fast and fully accurate regardless of range size.
+  private static readonly REPORT_DETAILS_CAMPAIGN_LIMIT = 200;
+
   async reportDetails(organizationId: string, filter: { scope: "ALL_MEDIA_HOSTS" | "ALL_INFLUENCERS"; from?: Date; to?: Date }) {
     const beneficiary = filter.scope === "ALL_MEDIA_HOSTS" ? { mediaHostId: { not: null } } : { influencerId: { not: null } };
     const rangeFilter = filter.from && filter.to ? this.publishedDateFilter(filter.from, filter.to) : {};
+    const campaignWhere: Prisma.Influencer2CampaignWhereInput = { organizationId, ...beneficiary, ...rangeFilter };
 
-    const campaigns = await this.prisma.influencer2Campaign.findMany({
-      where: { organizationId, ...beneficiary, ...rangeFilter },
-      select: {
-        id: true,
-        name: true,
-        contentType: true,
-        status: true,
-        createdAt: true,
-        influencerId: true,
-        mediaHostId: true,
-        platforms: { select: { platform: { select: { name: true } } } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const [campaigns, mediaTypeGroups, platformGroups] = await Promise.all([
+      this.prisma.influencer2Campaign.findMany({
+        where: campaignWhere,
+        select: {
+          id: true,
+          name: true,
+          contentType: true,
+          status: true,
+          createdAt: true,
+          influencerId: true,
+          mediaHostId: true,
+          platforms: { select: { platform: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: Influencer2CampaignsService.REPORT_DETAILS_CAMPAIGN_LIMIT,
+      }),
+      filter.scope === "ALL_MEDIA_HOSTS"
+        ? this.prisma.influencer2Campaign.groupBy({ by: ["mediaHostId"], where: campaignWhere, _count: true })
+        : Promise.resolve([]),
+      this.prisma.influencer2CampaignPlatform.groupBy({ by: ["platformId"], where: { campaign: campaignWhere }, _count: true }),
+    ]);
 
     const influencerIds = Array.from(new Set(campaigns.map((c) => c.influencerId).filter((id): id is string => Boolean(id))));
-    const mediaHostIds = Array.from(new Set(campaigns.map((c) => c.mediaHostId).filter((id): id is string => Boolean(id))));
-    const [influencers, mediaHosts]: [Array<{ id: string; name: string }>, Array<{ id: string; name: string; type: string }>] = await Promise.all([
+    const mediaHostIds = Array.from(new Set([...campaigns.map((c) => c.mediaHostId), ...mediaTypeGroups.map((g) => g.mediaHostId)].filter((id): id is string => Boolean(id))));
+    const platformIds = platformGroups.map((g) => g.platformId);
+    const [influencers, mediaHosts, platforms]: [Array<{ id: string; name: string }>, Array<{ id: string; name: string; type: string }>, Array<{ id: string; name: string }>] = await Promise.all([
       influencerIds.length ? this.prisma.influencer.findMany({ where: { id: { in: influencerIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
       mediaHostIds.length ? this.prisma.mediaHost.findMany({ where: { id: { in: mediaHostIds } }, select: { id: true, name: true, type: true } }) : Promise.resolve([]),
+      platformIds.length ? this.prisma.influencer2Platform.findMany({ where: { id: { in: platformIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
     ]);
     const influencerById = new Map(influencers.map((i) => [i.id, i.name]));
     const hostById = new Map(mediaHosts.map((h) => [h.id, h]));
+    const platformNameById = new Map(platforms.map((p) => [p.id, p.name]));
 
-    const byPlatform = new Map<string, number>();
-    const byMediaType = new Map<string, number>();
     const rows = campaigns.map((c) => {
-      const platforms = c.platforms.map((p) => p.platform.name);
-      for (const p of platforms) byPlatform.set(p, (byPlatform.get(p) ?? 0) + 1);
       const host = c.mediaHostId ? hostById.get(c.mediaHostId) : undefined;
-      // mediaHostId/influencerId aren't real foreign keys, so a campaign can outlive the host it
-      // pointed to (deleting a host doesn't touch its campaigns). Bucket those under UNKNOWN
-      // instead of silently dropping them — otherwise byMediaType's total quietly falls short of
-      // summary()'s totalCampaigns for the same scope/range, which reads as a bug, not a deleted host.
-      if (host) byMediaType.set(host.type, (byMediaType.get(host.type) ?? 0) + 1);
-      else if (c.mediaHostId) byMediaType.set("UNKNOWN", (byMediaType.get("UNKNOWN") ?? 0) + 1);
       return {
         id: c.id,
         name: c.name,
@@ -734,9 +708,25 @@ export class Influencer2CampaignsService {
         createdAt: c.createdAt,
         beneficiaryName: c.influencerId ? (influencerById.get(c.influencerId) ?? "—") : (host?.name ?? "—"),
         mediaType: host?.type ?? null,
-        platforms,
+        platforms: c.platforms.map((p) => p.platform.name),
       };
     });
+
+    const byMediaType = new Map<string, number>();
+    for (const g of mediaTypeGroups) {
+      const host = g.mediaHostId ? hostById.get(g.mediaHostId) : undefined;
+      // mediaHostId isn't a real foreign key (see the field comment on Influencer2Campaign), so a
+      // campaign can outlive the host it pointed to. Bucket those under UNKNOWN instead of silently
+      // dropping them — otherwise byMediaType's total quietly falls short of summary()'s
+      // totalCampaigns for the same scope/range, which reads as a bug, not a deleted host.
+      const key = host ? host.type : "UNKNOWN";
+      byMediaType.set(key, (byMediaType.get(key) ?? 0) + g._count);
+    }
+    const byPlatform = new Map<string, number>();
+    for (const g of platformGroups) {
+      const name = platformNameById.get(g.platformId) ?? "—";
+      byPlatform.set(name, (byPlatform.get(name) ?? 0) + g._count);
+    }
 
     return {
       campaigns: rows,
