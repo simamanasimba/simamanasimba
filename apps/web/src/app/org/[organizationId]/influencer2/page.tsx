@@ -142,6 +142,7 @@ export default function Influencer2ListPage() {
                     <th className="px-4 py-2.5 text-right">{t("influencer2ViewsColLabel")}</th>
                     <th className="px-4 py-2.5 text-right">{t("influencer2EngagementColLabel")}</th>
                     <th className="px-4 py-2.5">{t("statusColLabel")}</th>
+                    <th className="px-4 py-2.5">{t("updatedColLabel")}</th>
                     <th className="px-4 py-2.5" />
                   </tr>
                 </thead>
@@ -168,6 +169,7 @@ export default function Influencer2ListPage() {
                             {t(PAYMENT_PROGRESS_LABEL_KEYS[campaign.paymentProgress ?? "UNPAID"])}
                           </span>
                         </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted">{new Date(campaign.updatedAt).toLocaleString()}</td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right">
                           {canApprove && isUnpaid && (campaign.influencerId || campaign.mediaHostId) && (
                             <button

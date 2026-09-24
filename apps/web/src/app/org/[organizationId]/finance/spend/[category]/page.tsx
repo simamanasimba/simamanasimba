@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
 import type { FinanceDashboard } from "@/lib/types";
 import { RequireAccess } from "@/components/RequireAccess";
@@ -26,7 +26,13 @@ interface Row {
   id: string;
   name: string;
   amount: number;
+  paymentCount: number;
 }
+
+// Only media/influencer beneficiaries are ever paid through the centralized Campaign Weeks system
+// — a member/meeting's payment count has nothing to compare against, so the "needs inspection"
+// flag (payment count > completed weeks) only ever applies to those two categories.
+const WEEK_BASED_CATEGORIES: SpendCategory[] = ["media", "influencer"];
 
 /** The full-page "what actually made up that number" drill-down behind a Finance spend tile —
  * a real page rather than a popup, since Finance needs to review and export these for auditing,
@@ -45,13 +51,13 @@ export default function SpendDetailPage() {
     if (!dashboard) return [];
     switch (category) {
       case "media":
-        return dashboard.spendByMediaHost.filter((r): r is typeof r & { mediaHostId: string } => Boolean(r.mediaHostId)).map((r) => ({ id: r.mediaHostId, name: r.name, amount: r.amount }));
+        return dashboard.spendByMediaHost.filter((r): r is typeof r & { mediaHostId: string } => Boolean(r.mediaHostId)).map((r) => ({ id: r.mediaHostId, name: r.name, amount: r.amount, paymentCount: r.paymentCount }));
       case "influencer":
-        return dashboard.spendByInfluencer.filter((r): r is typeof r & { influencerId: string } => Boolean(r.influencerId)).map((r) => ({ id: r.influencerId, name: r.name, amount: r.amount }));
+        return dashboard.spendByInfluencer.filter((r): r is typeof r & { influencerId: string } => Boolean(r.influencerId)).map((r) => ({ id: r.influencerId, name: r.name, amount: r.amount, paymentCount: r.paymentCount }));
       case "member":
-        return dashboard.spendByMember.filter((r): r is typeof r & { memberId: string } => Boolean(r.memberId)).map((r) => ({ id: r.memberId, name: r.name, amount: r.amount }));
+        return dashboard.spendByMember.filter((r): r is typeof r & { memberId: string } => Boolean(r.memberId)).map((r) => ({ id: r.memberId, name: r.name, amount: r.amount, paymentCount: r.paymentCount }));
       case "meeting":
-        return dashboard.spendByEvent.map((r) => ({ id: r.eventId, name: r.name, amount: r.amount }));
+        return dashboard.spendByEvent.map((r) => ({ id: r.eventId, name: r.name, amount: r.amount, paymentCount: 0 }));
       default:
         return [];
     }
@@ -80,10 +86,10 @@ export default function SpendDetailPage() {
   }
 
   function onExport() {
-    const header = ["Name", "Amount"];
+    const header = ["Name", "Amount", "Payments"];
     const lines = [header.map(escapeCsv).join(",")];
-    for (const r of sorted) lines.push([r.name, r.amount].map(escapeCsv).join(","));
-    lines.push(["Total", total].map(escapeCsv).join(","));
+    for (const r of sorted) lines.push([r.name, r.amount, r.paymentCount].map(escapeCsv).join(","));
+    lines.push(["Total", total, ""].map(escapeCsv).join(","));
     downloadCsv(`${category}-spend.csv`, lines.join("\n"));
   }
 
@@ -119,18 +125,33 @@ export default function SpendDetailPage() {
               <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-4 py-2.5">{t("nameLabel")}</th>
+                  {WEEK_BASED_CATEGORIES.includes(category) && <th className="px-4 py-2.5 text-right">{t("paymentCountLabel")}</th>}
                   <th className="px-4 py-2.5 text-right">{t("amountLabel")}</th>
+                  {WEEK_BASED_CATEGORIES.includes(category) && <th className="px-4 py-2.5" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-brand-50/40">
+                {filtered.map((r) => {
+                  const needsInspection = WEEK_BASED_CATEGORIES.includes(category) && r.paymentCount > (dashboard?.completedWeeksCount ?? Infinity);
+                  return (
+                  <tr key={r.id} className={`hover:bg-brand-50/40 ${needsInspection ? "bg-warning/5" : ""}`}>
                     <td className="px-4 py-2.5">
                       <Link href={hrefFor(r.id)} className="font-medium text-brand hover:underline">{r.name}</Link>
                     </td>
+                    {WEEK_BASED_CATEGORIES.includes(category) && <td className="nums px-4 py-2.5 text-right text-muted">{r.paymentCount}</td>}
                     <td className="nums px-4 py-2.5 text-right font-semibold text-ink">{r.amount.toLocaleString()}</td>
+                    {WEEK_BASED_CATEGORIES.includes(category) && (
+                      <td className="px-4 py-2.5">
+                        {needsInspection && (
+                          <span title={t("needsInspectionHint")} className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+                            <AlertTriangle size={13} /> {t("needsInspectionLabel")}
+                          </span>
+                        )}
+                      </td>
+                    )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

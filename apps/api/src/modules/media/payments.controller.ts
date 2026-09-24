@@ -61,6 +61,15 @@ export class PaymentsController {
     return this.payments.listConditionalPayments(organizationId);
   }
 
+  /** Reconciliation: every real payment for one beneficiary that isn't accounted for by any week/
+   * campaign evaluation — see PaymentsService.listUnlinked for what this catches and why. Super
+   * Admin only, registered before the ":paymentId" routes for the same reason as "conditional". */
+  @Get("unlinked")
+  @Roles("ORG_SUPER_ADMIN")
+  listUnlinked(@Param("organizationId") organizationId: string, @Query("mediaHostId") mediaHostId?: string, @Query("influencerId") influencerId?: string) {
+    return this.payments.listUnlinked(organizationId, { mediaHostId, influencerId });
+  }
+
   @Post()
   @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
   async create(@Param("organizationId") organizationId: string, @Body() dto: CreatePaymentDto, @CurrentUser() user: RequestUser) {

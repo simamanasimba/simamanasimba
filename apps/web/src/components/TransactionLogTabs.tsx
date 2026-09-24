@@ -88,7 +88,7 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
     const q = search.trim().toLowerCase();
     if (!q) return dateAndPersonFiltered;
     return dateAndPersonFiltered.filter((p) =>
-      [paymentBeneficiaryName(p), p.method, p.bankTransactionRef ?? p.mobileMoneyTransactionId ?? p.referenceNumber, p.status].some((f) =>
+      [paymentBeneficiaryName(p), p.method, p.bankTransactionRef ?? p.mobileMoneyTransactionId ?? p.referenceNumber, p.status, p.weekLabel].some((f) =>
         (f ?? "").toLowerCase().includes(q),
       ),
     );
@@ -199,6 +199,7 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
                   </th>
                   <th className="px-4 py-2.5">{t("paymentDateLabel")}</th>
                   <th className="px-4 py-2.5">{t("colName")}</th>
+                  <th className="px-4 py-2.5">{t("weekColLabel")}</th>
                   <th className="px-4 py-2.5">{t("amountLabel")}</th>
                   <th className="px-4 py-2.5">{t("paymentMethodLabel")}</th>
                   <th className="px-4 py-2.5">{t("paymentStatusLabel")}</th>
@@ -226,6 +227,7 @@ export function TransactionLogTabs({ organizationId }: { organizationId: string 
                         return href ? <Link href={href} className="font-medium hover:underline">{name}</Link> : name;
                       })()}
                     </td>
+                    <td className="px-4 py-2.5 text-muted">{p.weekLabel ?? "—"}</td>
                     <td className="nums px-4 py-2.5">
                       {p.currency} {p.amount.toLocaleString()}
                       {p.paidAmount != null && p.paidAmount !== p.amount && (

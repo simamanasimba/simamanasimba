@@ -91,6 +91,7 @@ export default function Influencer2DetailPage() {
               {campaign.contentType}
               {campaign.description ? ` · ${campaign.description}` : ""}
             </p>
+            <p className="mt-0.5 text-xs text-muted">{t("lastEditedLabel")}: {new Date(campaign.updatedAt).toLocaleString()}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {influencer && (
                 <Link href={`/org/${organizationId}/influencers/${influencer.id}`} className="badge bg-brand-50 text-brand-700 hover:underline">{influencer.name}</Link>

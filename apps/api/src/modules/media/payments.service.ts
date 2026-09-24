@@ -61,10 +61,33 @@ export class PaymentsService {
     return "—";
   }
 
+  /** Reconciliation: "I have 5 payments but only 4 weeks" — this is what answers that. A payment
+   * with no linked PostingAgreementEvaluation (weekNumber, folder, OR the centralized
+   * weekDefinition — any of the three) isn't accounted for by anything a beneficiary's own
+   * Campaigns/Weeks view shows, so it's invisible there even though it's real money on record.
+   * Doesn't mean it's wrong — it could be a legitimate general/ad-hoc payment that was never meant
+   * to tie to a week — but it's exactly the set worth a human eye, and the only reliable way to
+   * find a genuine leftover duplicate from before the concurrency fix (see
+   * PostingAgreementsService.markPaidDirectly) without combing through every payment by hand.
+   * Excludes REJECTED/CANCELLED — those are already resolved, not an open question. */
+  async listUnlinked(organizationId: string, filters: { mediaHostId?: string; influencerId?: string }) {
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        organizationId,
+        mediaHostId: filters.mediaHostId,
+        influencerId: filters.influencerId,
+        status: { in: ["PENDING", "PROCESSING", "PAID"] },
+        postingAgreementEvaluation: null,
+      },
+      orderBy: { paymentDate: "desc" },
+    });
+    return payments.map((p) => ({ ...p, amount: Number(p.amount), paidAmount: p.paidAmount != null ? Number(p.paidAmount) : null }));
+  }
+
   async list(organizationId: string, filters: PaymentFilters) {
     const payments = await this.prisma.payment.findMany({
       where: this.buildWhere(organizationId, filters),
-      include: { campaign: { select: { id: true, name: true } }, mediaHost: true, influencer: true, member: true, mediaEngagement: true },
+      include: { campaign: { select: { id: true, name: true } }, mediaHost: true, influencer: true, member: true, mediaEngagement: true, postingAgreementEvaluation: true },
       orderBy: { paymentDate: "desc" },
     });
 
@@ -77,6 +100,28 @@ export class PaymentsService {
     const users = userIds.length ? await this.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } }) : [];
     const nameById = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`]));
 
+    // Which week/campaign each payment is actually for — the exact thing missing from a plain
+    // payment-history table that would otherwise let two payments for the same real week sit right
+    // next to each other looking unremarkable. weekDefinitionId/folderId are plain columns (same
+    // isolation choice as everywhere else here), so their names are resolved with one batch lookup
+    // each rather than a join.
+    const weekDefIds = Array.from(new Set(payments.map((p) => p.postingAgreementEvaluation?.weekDefinitionId).filter((v): v is string => Boolean(v))));
+    const folderIds = Array.from(new Set(payments.map((p) => p.postingAgreementEvaluation?.folderId).filter((v): v is string => Boolean(v))));
+    const [weekDefs, folders]: [Array<{ id: string; name: string }>, Array<{ id: string; name: string }>] = await Promise.all([
+      weekDefIds.length ? this.prisma.postingWeekDefinition.findMany({ where: { id: { in: weekDefIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+      folderIds.length ? this.prisma.influencer2Folder.findMany({ where: { id: { in: folderIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+    ]);
+    const weekDefName = new Map<string, string>(weekDefs.map((w) => [w.id, w.name]));
+    const folderName = new Map<string, string>(folders.map((f) => [f.id, f.name]));
+    function weekLabel(p: (typeof payments)[number]): string | null {
+      const e = p.postingAgreementEvaluation;
+      if (!e) return null;
+      if (e.weekNumber != null) return `Week ${e.weekNumber}`;
+      if (e.weekDefinitionId) return weekDefName.get(e.weekDefinitionId) ?? null;
+      if (e.folderId) return folderName.get(e.folderId) ?? null;
+      return null;
+    }
+
     // Prisma's Decimal serializes to a JSON string (decimal.js deliberately avoids lossy numeric
     // coercion) — left unconverted, `amount` arrives on the frontend as e.g. "50000.00" and any
     // `sum + p.amount` silently string-concatenates instead of adding. Convert every Decimal field
@@ -88,6 +133,7 @@ export class PaymentsService {
       createdByName: nameById.get(p.createdByUserId) ?? null,
       approvedByName: p.approvedByUserId ? (nameById.get(p.approvedByUserId) ?? null) : null,
       rejectedByName: p.rejectedByUserId ? (nameById.get(p.rejectedByUserId) ?? null) : null,
+      weekLabel: weekLabel(p),
       mediaEngagement: p.mediaEngagement
         ? { ...p.mediaEngagement, rateTzs: p.mediaEngagement.rateTzs != null ? Number(p.mediaEngagement.rateTzs) : null, totalTzs: p.mediaEngagement.totalTzs != null ? Number(p.mediaEngagement.totalTzs) : null }
         : p.mediaEngagement,
@@ -386,7 +432,7 @@ export class PaymentsService {
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [paidPayments, pendingCount, paymentCount, meetingBudgets, expensesByCategory, campaigns, mediaHosts, influencers, members] = await Promise.all([
+    const [paidPayments, pendingCount, paymentCount, completedWeeksCount, meetingBudgets, expensesByCategory, campaigns, mediaHosts, influencers, members] = await Promise.all([
       // Raw rows, not a DB-side SUM — a payment's actually-disbursed paidAmount can legitimately
       // differ from its agreed `amount` (Finance can record paying a different figure, with a
       // required variance note), and every "spend" figure below must reflect what was actually
@@ -398,6 +444,13 @@ export class PaymentsService {
       }),
       this.prisma.payment.count({ where: { organizationId, status: { in: ["PENDING", "PROCESSING"] } } }),
       this.prisma.payment.count({ where: { organizationId } }),
+      // The org-wide ceiling on "how many payments could a beneficiary legitimately have from the
+      // centralized weeks system" — one set of Campaign Weeks applies to every media
+      // host/influencer, so a beneficiary genuinely paid once per completed week can never exceed
+      // this count. spendByMediaHost/spendByInfluencer's paymentCount above it is exactly what "5
+      // payments but 4 weeks" looks like — worth a look, not necessarily wrong (a beneficiary can
+      // legitimately have an extra general/ad-hoc payment untied to any week).
+      this.prisma.postingWeekDefinition.count({ where: { organizationId, endDate: { lte: now } } }),
       // Meeting budgets are planned/allocated costs, not payments — there's no separate "meeting
       // expense" record, so the budget figure itself is the closest thing to a cost for a meeting.
       // Fetched per-event (not aggregated) so the Meeting spend tile can drill down the same way
@@ -424,14 +477,21 @@ export class PaymentsService {
     const sumSince = (from: Date) => paidPayments.filter((p) => p.paymentDate >= from).reduce((sum, p) => sum + spent(p), 0);
     const totalPaid = paidPayments.reduce((sum, p) => sum + spent(p), 0);
 
+    // count alongside amount — a beneficiary's payment COUNT paid this way (rather than just the
+    // total TZS) is what actually flags "this looks like too many payments for how many weeks
+    // exist", which a pure amount total can't show on its own (a genuine double payment often has
+    // the exact same amount as the real one, so the total alone hides it).
     function groupSpend<K extends string>(keyOf: (p: (typeof paidPayments)[number]) => K | null, nameOf: (key: K) => string) {
-      const totals = new Map<K, number>();
+      const totals = new Map<K, { amount: number; count: number }>();
       for (const p of paidPayments) {
         const key = keyOf(p);
         if (key == null) continue;
-        totals.set(key, (totals.get(key) ?? 0) + spent(p));
+        const entry = totals.get(key) ?? { amount: 0, count: 0 };
+        entry.amount += spent(p);
+        entry.count += 1;
+        totals.set(key, entry);
       }
-      return [...totals.entries()].map(([id, amount]) => ({ id, name: nameOf(id), amount }));
+      return [...totals.entries()].map(([id, v]) => ({ id, name: nameOf(id), amount: v.amount, paymentCount: v.count }));
     }
 
     return {
@@ -446,10 +506,11 @@ export class PaymentsService {
       totalSpend: totalPaid + operationalSpend + administrativeSpend + meetingSpend,
       paymentCount,
       pendingCount,
-      spendByCampaign: groupSpend((p) => p.campaignId, (id) => campaignName.get(id) ?? "—").map((r) => ({ campaignId: r.id, name: r.name, amount: r.amount })),
-      spendByMediaHost: groupSpend((p) => p.mediaHostId, (id) => hostName.get(id) ?? "—").map((r) => ({ mediaHostId: r.id, name: r.name, amount: r.amount })),
-      spendByInfluencer: groupSpend((p) => p.influencerId, (id) => influencerName.get(id) ?? "—").map((r) => ({ influencerId: r.id, name: r.name, amount: r.amount })),
-      spendByMember: groupSpend((p) => p.memberId, (id) => memberName.get(id) ?? "—").map((r) => ({ memberId: r.id, name: r.name, amount: r.amount })),
+      completedWeeksCount,
+      spendByCampaign: groupSpend((p) => p.campaignId, (id) => campaignName.get(id) ?? "—").map((r) => ({ campaignId: r.id, name: r.name, amount: r.amount, paymentCount: r.paymentCount })),
+      spendByMediaHost: groupSpend((p) => p.mediaHostId, (id) => hostName.get(id) ?? "—").map((r) => ({ mediaHostId: r.id, name: r.name, amount: r.amount, paymentCount: r.paymentCount })),
+      spendByInfluencer: groupSpend((p) => p.influencerId, (id) => influencerName.get(id) ?? "—").map((r) => ({ influencerId: r.id, name: r.name, amount: r.amount, paymentCount: r.paymentCount })),
+      spendByMember: groupSpend((p) => p.memberId, (id) => memberName.get(id) ?? "—").map((r) => ({ memberId: r.id, name: r.name, amount: r.amount, paymentCount: r.paymentCount })),
       spendByEvent,
       // Member ("leader") payments — just that, no longer folded together with meeting budgets or
       // media/influencer costs (those already have their own tiles).

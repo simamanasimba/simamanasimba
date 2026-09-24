@@ -14,6 +14,7 @@ import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { PostingAgreementCard } from "@/components/PostingAgreementCard";
 import { PostingWeeksPanel } from "@/components/PostingWeeksPanel";
+import { UnlinkedPaymentsPanel } from "@/components/UnlinkedPaymentsPanel";
 import { PostingPaymentSummary } from "@/components/PostingPaymentSummary";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement, canPayPostingAgreement } from "@/lib/permissions";
@@ -80,6 +81,7 @@ export default function MediaHostDetailPage() {
       <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
       <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} myRole={myRole} />
       <PostingWeeksPanel organizationId={organizationId} mediaHostId={hostId} canPay={canPayAgreement} myRole={myRole} />
+      <UnlinkedPaymentsPanel organizationId={organizationId} mediaHostId={hostId} myRole={myRole} />
     </>
   );
 

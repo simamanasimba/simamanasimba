@@ -19,7 +19,7 @@ export function PaymentHistoryTable({ organizationId, payments }: { organization
   const q = search.trim().toLowerCase();
   const filtered = q
     ? payments.filter((p) =>
-        [p.method, p.bankTransactionRef ?? p.mobileMoneyTransactionId ?? p.referenceNumber, p.status, new Date(p.paymentDate).toLocaleDateString()].some((f) =>
+        [p.method, p.bankTransactionRef ?? p.mobileMoneyTransactionId ?? p.referenceNumber, p.status, p.weekLabel, new Date(p.paymentDate).toLocaleDateString()].some((f) =>
           (f ?? "").toLowerCase().includes(q),
         ),
       )
@@ -44,6 +44,7 @@ export function PaymentHistoryTable({ organizationId, payments }: { organization
               <tr>
                 <th className="px-5 py-2.5">{t("paymentDateLabel")}</th>
                 <th className="px-5 py-2.5">{t("amountLabel")}</th>
+                <th className="px-5 py-2.5">{t("weekColLabel")}</th>
                 <th className="px-5 py-2.5">{t("paymentMethodLabel")}</th>
                 <th className="px-5 py-2.5">{t("referenceNumberLabel")}</th>
                 <th className="px-5 py-2.5">{t("paymentStatusLabel")}</th>
@@ -54,6 +55,7 @@ export function PaymentHistoryTable({ organizationId, payments }: { organization
                 <tr key={p.id} onClick={() => setViewing(p)} className="cursor-pointer hover:bg-brand-50/40">
                   <td className="px-5 py-2.5 font-medium text-ink">{new Date(p.paymentDate).toLocaleDateString()}</td>
                   <td className="nums px-5 py-2.5">{p.currency} {p.amount.toLocaleString()}</td>
+                  <td className="px-5 py-2.5 text-muted">{p.weekLabel ?? "—"}</td>
                   <td className="px-5 py-2.5 text-muted">{p.method ?? "—"}</td>
                   <td className="px-5 py-2.5 text-muted">{p.bankTransactionRef ?? p.mobileMoneyTransactionId ?? p.referenceNumber ?? "—"}</td>
                   <td className="px-5 py-2.5">

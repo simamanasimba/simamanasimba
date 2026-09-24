@@ -460,6 +460,11 @@ export interface Payment {
    * its target — a deliberate override, always paired with conditionalReason. */
   isConditional?: boolean;
   conditionalReason?: string | null;
+  /** Which week/folder this payment's linked posting-agreement evaluation belongs to (e.g.
+   * "Week 3"), or null when it isn't linked to any evaluation at all — see
+   * PaymentsService.list()'s own weekLabel resolution. Only present on responses from that
+   * endpoint (GET .../payments). */
+  weekLabel?: string | null;
   createdByUserId?: string;
   createdByName?: string | null;
   approvedByUserId?: string | null;
@@ -505,10 +510,14 @@ export interface FinanceDashboard {
   totalSpend: number;
   paymentCount: number;
   pendingCount: number;
-  spendByCampaign: Array<{ campaignId: string | null; name: string; amount: number }>;
-  spendByMediaHost: Array<{ mediaHostId: string | null; name: string; amount: number }>;
-  spendByInfluencer: Array<{ influencerId: string | null; name: string; amount: number }>;
-  spendByMember: Array<{ memberId: string | null; name: string; amount: number }>;
+  /** Every completed centralized Campaign Week, org-wide — the ceiling a beneficiary's own
+   * week-linked payment count can never legitimately exceed. See spendByMediaHost/spendByInfluencer's
+   * own paymentCount for the number to compare it against. */
+  completedWeeksCount: number;
+  spendByCampaign: Array<{ campaignId: string | null; name: string; amount: number; paymentCount: number }>;
+  spendByMediaHost: Array<{ mediaHostId: string | null; name: string; amount: number; paymentCount: number }>;
+  spendByInfluencer: Array<{ influencerId: string | null; name: string; amount: number; paymentCount: number }>;
+  spendByMember: Array<{ memberId: string | null; name: string; amount: number; paymentCount: number }>;
   spendByEvent: Array<{ eventId: string; name: string; amount: number }>;
   leaderSpend: number;
   meetingSpend: number;

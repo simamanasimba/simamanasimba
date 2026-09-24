@@ -22,7 +22,7 @@ const PAGE_SIZE = 25;
 const CONTENT_TYPES: Influencer2ContentType[] = ["VIDEO", "IMAGE", "REEL", "STORY", "ARTICLE", "PODCAST", "AUDIO", "OTHER"];
 const STATUSES: Influencer2CampaignStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"];
 
-type SortKey = "name" | "contentType" | "campaign" | "views" | "engagement" | "status";
+type SortKey = "name" | "contentType" | "campaign" | "views" | "engagement" | "status" | "updated";
 type FilterMode = "week" | "monthly" | "allTime" | "custom";
 
 const ALL_TIME_FROM = "2000-01-01T00:00:00.000Z";
@@ -221,6 +221,8 @@ export default function InfluencerCampaignsPage() {
           return sign * (a.totals.totalEngagement - b.totals.totalEngagement);
         case "status":
           return sign * (a.campaign.paymentProgress ?? "UNPAID").localeCompare(b.campaign.paymentProgress ?? "UNPAID");
+        case "updated":
+          return sign * (new Date(a.campaign.updatedAt).getTime() - new Date(b.campaign.updatedAt).getTime());
         default:
           return 0;
       }
@@ -364,6 +366,7 @@ export default function InfluencerCampaignsPage() {
                     <SortableHeader label={t("influencer2ViewsColLabel")} sortKey="views" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
                     <SortableHeader label={t("influencer2EngagementColLabel")} sortKey="engagement" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
                     <SortableHeader label={t("statusColLabel")} sortKey="status" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                    <SortableHeader label={t("updatedColLabel")} sortKey="updated" active={sortKey} dir={sortDir} onClick={toggleSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -391,6 +394,7 @@ export default function InfluencerCampaignsPage() {
                           {t(PAYMENT_PROGRESS_LABEL_KEYS[campaign.paymentProgress ?? "UNPAID"])}
                         </span>
                       </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted">{new Date(campaign.updatedAt).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
