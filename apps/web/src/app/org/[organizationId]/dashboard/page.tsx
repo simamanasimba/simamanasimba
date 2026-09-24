@@ -21,8 +21,6 @@ import { isOrgAdmin } from "@/lib/permissions";
 import type { EventRecord, FinanceDashboard, RegionTarget } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 
-type DashboardView = "members" | "media" | "influencers";
-
 interface MembershipSummary {
   total: number;
   active: number;
@@ -92,7 +90,6 @@ export default function DashboardPage() {
   const { data: me } = useAuth();
   const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
   const [showEditTargets, setShowEditTargets] = useState(false);
-  const [view, setView] = useState<DashboardView>("members");
   const dateRangeFilter = useDateRangeFilter("weekly");
 
   // The Finance role's "dashboard" IS the Payments page now — there's no separate stripped-down
@@ -182,27 +179,23 @@ export default function DashboardPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-extrabold text-ink">{t("navDashboard")}</h1>
-        <div>
-          <label className="label">{t("dashboardViewLabel")}</label>
-          <select className="input" value={view} onChange={(e) => setView(e.target.value as DashboardView)}>
-            <option value="members">{t("navWanachamaEngagement")}</option>
-            <option value="media">{t("navMediaEngagementView")}</option>
-            <option value="influencers">{t("navInfluencersView")}</option>
-          </select>
-        </div>
       </div>
 
-      {/* Own row, below the title/selector — its width changes on its own (custom date inputs,
-          the saved-views list appearing/disappearing) used to sit in the same wrapping flex row as
-          the view selector, so those width changes shoved the selector around mid-interaction.
-          Keeping it on a separate row means neither can ever move the other. */}
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
-      {view === "media" && <MediaEngagementOverview organizationId={organizationId} range={dateRangeFilter.range} />}
-      {view === "influencers" && <CollectiveCampaignSummary organizationId={organizationId} scope="ALL_INFLUENCERS" range={dateRangeFilter.range} />}
+      {/* Members, Media, and Influencer statistics together on one page — a stat here always
+          redirects into that category's own dashboard (Members/Media Hosts/Influencers) rather
+          than opening an in-page report, so "click a number, land where the detail actually
+          lives" is consistent across all three, the same way the Members stat tiles below already
+          worked before Media/Influencer joined them here. */}
+      <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navMediaEngagementView")}</h2>
+      <MediaEngagementOverview organizationId={organizationId} range={dateRangeFilter.range} />
 
-      {view === "members" && (
-        <>
+      <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navInfluencersView")}</h2>
+      <CollectiveCampaignSummary organizationId={organizationId} scope="ALL_INFLUENCERS" range={dateRangeFilter.range} />
+
+      <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navWanachamaEngagement")}</h2>
+
       {/* Compact stat tiles instead of the bigger StatCards — leaves more room for the charts
           below without pushing the page past one screen. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -394,8 +387,6 @@ export default function DashboardPage() {
             queryClient.invalidateQueries({ queryKey: ["region-targets", organizationId] });
           }}
         />
-      )}
-        </>
       )}
     </div>
   );

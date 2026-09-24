@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
 import { Radio, Tv, Newspaper, Globe, FileText, MessageSquare, BookOpen, Mic, Building2, Users, Trophy, Megaphone, Target, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { StatTile } from "@/components/StatTile";
-import { CampaignReportModal } from "@/components/CampaignReportModal";
 import { formatRangeLabel } from "@/components/DateRangeFilter";
 import { useLang } from "@/lib/i18n";
 import type { MediaEngagementOverview as OverviewData, Influencer2CampaignSummary, Influencer2CampaignReportDetails } from "@/lib/types";
@@ -52,7 +51,8 @@ function total(row: { likes: number; comments: number; views: number; shares: nu
  * engagement are shown in the chart. */
 export function MediaEngagementOverview({ organizationId, range }: { organizationId: string; range: { from: string; to: string } }) {
   const { t } = useLang();
-  const [showReport, setShowReport] = useState(false);
+  const router = useRouter();
+  const mediaHostsHref = `/org/${organizationId}/media-hosts`;
 
   const { data } = useQuery({
     queryKey: ["media-engagement-overview", organizationId, range.from, range.to],
@@ -85,11 +85,11 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
       <p className="text-xs text-muted">{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label={t("activeMediaLabel")} value={data.activeMediaCount} icon={Building2} onClick={() => setShowReport(true)} />
-        <StatTile label={t("activeMediaHostsLabel")} value={data.activeHostCount} icon={Users} onClick={() => setShowReport(true)} />
-        <StatTile label={t("totalPostsLabel")} value={summary?.totalPosts ?? "—"} icon={Megaphone} onClick={() => setShowReport(true)} />
-        <StatTile label={t("avgEngagementPerPostLabel")} value={summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"} icon={Target} onClick={() => setShowReport(true)} />
-        <StatTile label={t("influencer2TotalEngagementLabel")} value={summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—"} icon={Trophy} onClick={() => setShowReport(true)} />
+        <StatTile label={t("activeMediaLabel")} value={data.activeMediaCount} icon={Building2} href={mediaHostsHref} />
+        <StatTile label={t("activeMediaHostsLabel")} value={data.activeHostCount} icon={Users} href={mediaHostsHref} />
+        <StatTile label={t("totalPostsLabel")} value={summary?.totalPosts ?? "—"} icon={Megaphone} href={mediaHostsHref} />
+        <StatTile label={t("avgEngagementPerPostLabel")} value={summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—"} icon={Target} href={mediaHostsHref} />
+        <StatTile label={t("influencer2TotalEngagementLabel")} value={summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—"} icon={Trophy} href={mediaHostsHref} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
@@ -191,7 +191,7 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
                     {typeRows.map(({ type, count }) => {
                       const Icon = TYPE_ICONS[type] ?? Globe;
                       return (
-                        <tr key={type} className="cursor-pointer hover:bg-brand-50/40" onClick={() => setShowReport(true)}>
+                        <tr key={type} className="cursor-pointer hover:bg-brand-50/40" onClick={() => router.push(mediaHostsHref)}>
                           <td className="flex items-center gap-1.5 py-1.5 font-medium text-ink">
                             <Icon size={13} className="shrink-0 text-muted" /> {sentenceCase(type)}
                           </td>
@@ -206,10 +206,6 @@ export function MediaEngagementOverview({ organizationId, range }: { organizatio
           </div>
         </div>
       </div>
-
-      {showReport && (
-        <CampaignReportModal organizationId={organizationId} scope="ALL_MEDIA_HOSTS" range={range} onClose={() => setShowReport(false)} />
-      )}
     </div>
   );
 }

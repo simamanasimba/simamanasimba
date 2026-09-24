@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { CampaignReportModal } from "@/components/CampaignReportModal";
 import { formatRangeLabel } from "@/components/DateRangeFilter";
 import { useLang } from "@/lib/i18n";
 import type { Influencer2CampaignSummary } from "@/lib/types";
@@ -22,7 +21,6 @@ export function CollectiveCampaignSummary({
   range: { from: string; to: string };
 }) {
   const { t } = useLang();
-  const [showReport, setShowReport] = useState(false);
   const { data: summary } = useQuery({
     queryKey: ["influencer2-summary", "collective", scope, organizationId, range.from, range.to],
     queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=${scope}&from=${range.from}&to=${range.to}`),
@@ -33,16 +31,13 @@ export function CollectiveCampaignSummary({
   // registered host. Those are two different numbers and were easy to confuse when this reused
   // the generic "Total media" label.
   const beneficiaryLabel = scope === "ALL_MEDIA_HOSTS" ? t("mediaHostsWithCampaignsLabel") : t("totalInfluencersLabel");
+  const sectionHref = `/org/${organizationId}/${scope === "ALL_MEDIA_HOSTS" ? "media-hosts" : "influencers"}`;
 
   const tile = (label: string, value: string | number, accent = false) => (
-    <button
-      type="button"
-      onClick={() => setShowReport(true)}
-      className="card text-left transition hover:-translate-y-0.5 hover:shadow-lg"
-    >
+    <Link href={sectionHref} className="card block text-left transition hover:-translate-y-0.5 hover:shadow-lg">
       <p className="text-xs text-muted">{label}</p>
       <p className={`nums text-lg font-bold ${accent ? "text-brand-700" : "text-ink"}`}>{value}</p>
-    </button>
+    </Link>
   );
 
   return (
@@ -56,10 +51,6 @@ export function CollectiveCampaignSummary({
         {tile(t("influencer2TotalEngagementLabel"), summary?.totalEngagement != null ? summary.totalEngagement.toLocaleString() : "—", true)}
         {tile(t("avgEngagementPerPostLabel"), summary?.engagementPerPost != null ? summary.engagementPerPost.toLocaleString() : "—")}
       </div>
-
-      {showReport && (
-        <CampaignReportModal organizationId={organizationId} scope={scope} range={range} onClose={() => setShowReport(false)} />
-      )}
     </div>
   );
 }
