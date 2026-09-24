@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { PaymentBeneficiaryType, PaymentStatus, Prisma } from "@event-intel/database";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolveWeekLabels } from "../../common/payment-week-label.util";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { BulkCreatePaymentDto } from "./dto/bulk-create-payment.dto";
 import { EditPaymentDto } from "./dto/edit-payment.dto";
@@ -87,7 +88,7 @@ export class PaymentsService {
   async list(organizationId: string, filters: PaymentFilters) {
     const payments = await this.prisma.payment.findMany({
       where: this.buildWhere(organizationId, filters),
-      include: { campaign: { select: { id: true, name: true } }, mediaHost: true, influencer: true, member: true, mediaEngagement: true, postingAgreementEvaluation: true },
+      include: { campaign: { select: { id: true, name: true } }, mediaHost: true, influencer: true, member: true, mediaEngagement: true },
       orderBy: { paymentDate: "desc" },
     });
 
@@ -99,28 +100,7 @@ export class PaymentsService {
     );
     const users = userIds.length ? await this.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } }) : [];
     const nameById = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`]));
-
-    // Which week/campaign each payment is actually for — the exact thing missing from a plain
-    // payment-history table that would otherwise let two payments for the same real week sit right
-    // next to each other looking unremarkable. weekDefinitionId/folderId are plain columns (same
-    // isolation choice as everywhere else here), so their names are resolved with one batch lookup
-    // each rather than a join.
-    const weekDefIds = Array.from(new Set(payments.map((p) => p.postingAgreementEvaluation?.weekDefinitionId).filter((v): v is string => Boolean(v))));
-    const folderIds = Array.from(new Set(payments.map((p) => p.postingAgreementEvaluation?.folderId).filter((v): v is string => Boolean(v))));
-    const [weekDefs, folders]: [Array<{ id: string; name: string }>, Array<{ id: string; name: string }>] = await Promise.all([
-      weekDefIds.length ? this.prisma.postingWeekDefinition.findMany({ where: { id: { in: weekDefIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
-      folderIds.length ? this.prisma.influencer2Folder.findMany({ where: { id: { in: folderIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
-    ]);
-    const weekDefName = new Map<string, string>(weekDefs.map((w) => [w.id, w.name]));
-    const folderName = new Map<string, string>(folders.map((f) => [f.id, f.name]));
-    function weekLabel(p: (typeof payments)[number]): string | null {
-      const e = p.postingAgreementEvaluation;
-      if (!e) return null;
-      if (e.weekNumber != null) return `Week ${e.weekNumber}`;
-      if (e.weekDefinitionId) return weekDefName.get(e.weekDefinitionId) ?? null;
-      if (e.folderId) return folderName.get(e.folderId) ?? null;
-      return null;
-    }
+    const weekLabelById = await resolveWeekLabels(this.prisma, payments.map((p) => p.id));
 
     // Prisma's Decimal serializes to a JSON string (decimal.js deliberately avoids lossy numeric
     // coercion) — left unconverted, `amount` arrives on the frontend as e.g. "50000.00" and any
@@ -133,7 +113,7 @@ export class PaymentsService {
       createdByName: nameById.get(p.createdByUserId) ?? null,
       approvedByName: p.approvedByUserId ? (nameById.get(p.approvedByUserId) ?? null) : null,
       rejectedByName: p.rejectedByUserId ? (nameById.get(p.rejectedByUserId) ?? null) : null,
-      weekLabel: weekLabel(p),
+      weekLabel: weekLabelById.get(p.id) ?? null,
       mediaEngagement: p.mediaEngagement
         ? { ...p.mediaEngagement, rateTzs: p.mediaEngagement.rateTzs != null ? Number(p.mediaEngagement.rateTzs) : null, totalTzs: p.mediaEngagement.totalTzs != null ? Number(p.mediaEngagement.totalTzs) : null }
         : p.mediaEngagement,

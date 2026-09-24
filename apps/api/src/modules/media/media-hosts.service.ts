@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolveWeekLabels } from "../../common/payment-week-label.util";
 import { CreateMediaHostDto } from "./dto/create-media-host.dto";
 import { UpdateMediaHostDto } from "./dto/update-media-host.dto";
 
@@ -71,9 +72,10 @@ export class MediaHostsService {
     }
 
     const totalPaid = payments.filter((p) => p.status === "PAID").reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
+    const weekLabelById = await resolveWeekLabels(this.prisma, payments.map((p) => p.id));
     // Decimal fields serialize to JSON strings unless converted — fix here so the payment-history
     // table and any campaign totals on the frontend get real numbers, not "50000.00" strings.
-    const numericPayments = payments.map((p) => ({ ...p, amount: Number(p.amount), paidAmount: p.paidAmount != null ? Number(p.paidAmount) : null }));
+    const numericPayments = payments.map((p) => ({ ...p, amount: Number(p.amount), paidAmount: p.paidAmount != null ? Number(p.paidAmount) : null, weekLabel: weekLabelById.get(p.id) ?? null }));
     const numericEngagements = engagements.map((e) => ({ ...e, rateTzs: e.rateTzs != null ? Number(e.rateTzs) : null, totalTzs: e.totalTzs != null ? Number(e.totalTzs) : null }));
 
     return {

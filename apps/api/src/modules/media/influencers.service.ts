@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolveWeekLabels } from "../../common/payment-week-label.util";
 import { CreateInfluencerDto } from "./dto/create-influencer.dto";
 import { UpdateInfluencerDto } from "./dto/update-influencer.dto";
 
@@ -76,7 +77,8 @@ export class InfluencersService {
     }
 
     const totalPaid = payments.filter((p) => p.status === "PAID").reduce((sum, p) => sum + Number(p.paidAmount ?? p.amount), 0);
-    const numericPayments = payments.map((p) => ({ ...p, amount: Number(p.amount), paidAmount: p.paidAmount != null ? Number(p.paidAmount) : null }));
+    const weekLabelById = await resolveWeekLabels(this.prisma, payments.map((p) => p.id));
+    const numericPayments = payments.map((p) => ({ ...p, amount: Number(p.amount), paidAmount: p.paidAmount != null ? Number(p.paidAmount) : null, weekLabel: weekLabelById.get(p.id) ?? null }));
     const numericEngagements = engagements.map((e) => ({ ...e, rateTzs: e.rateTzs != null ? Number(e.rateTzs) : null, totalTzs: e.totalTzs != null ? Number(e.totalTzs) : null }));
 
     return {
