@@ -3,9 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { CheckCircle2, Undo2 } from "lucide-react";
+import { api, ApiError } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/components/Toast";
+import { isSuperAdmin } from "@/lib/permissions";
 import { MarkPaidModal } from "@/components/MarkPaidModal";
 import { TableSearchInput } from "@/components/TableSearchInput";
 import type { Payment } from "@/lib/types";
@@ -25,14 +28,35 @@ export function ProcessingPaymentsPanel({ organizationId }: { organizationId: st
           ? `/org/${organizationId}/members/${p.memberId}`
           : null;
   const { t } = useLang();
+  const { showToast } = useToast();
+  const { data: me } = useAuth();
+  const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
+  const canUndo = isSuperAdmin(myRole);
   const queryClient = useQueryClient();
   const [marking, setMarking] = useState<Payment | null>(null);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const { data: processing } = useQuery({
     queryKey: ["payments", organizationId, "PROCESSING"],
     queryFn: () => api.get<Payment[]>(`/api/v1/organizations/${organizationId}/payments?status=PROCESSING`),
   });
+
+  async function onUndo(p: Payment) {
+    if (!confirm(t("confirmUndoPayment"))) return;
+    const reason = window.prompt(t("undoPaymentReasonPrompt"));
+    if (!reason?.trim()) return;
+    setUndoingId(p.id);
+    try {
+      await api.post(`/api/v1/organizations/${organizationId}/payments/${p.id}/undo`, { reason: reason.trim() });
+      showToast("success", t("undoPaymentSuccessToast"));
+      refresh();
+    } catch (err) {
+      showToast("error", err instanceof ApiError ? err.message : t("failedUndoPayment"));
+    } finally {
+      setUndoingId(null);
+    }
+  }
 
   const q = search.trim().toLowerCase();
   const filtered = q
@@ -87,9 +111,21 @@ export function ProcessingPaymentsPanel({ organizationId }: { organizationId: st
                     <td className="nums px-4 py-2.5">{p.currency} {p.amount.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-muted">{p.approvedByName ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                      <button onClick={(e) => { e.stopPropagation(); setMarking(p); }} className="btn-primary text-sm">
-                        <CheckCircle2 size={14} /> {t("markPaidCta")}
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); setMarking(p); }} className="btn-primary text-sm">
+                          <CheckCircle2 size={14} /> {t("markPaidCta")}
+                        </button>
+                        {canUndo && (
+                          <button
+                            title={t("undoPaymentCta")}
+                            disabled={undoingId === p.id}
+                            onClick={(e) => { e.stopPropagation(); onUndo(p); }}
+                            className="btn-secondary !p-2"
+                          >
+                            <Undo2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

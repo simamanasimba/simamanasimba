@@ -603,7 +603,15 @@ export class PostingAgreementsService {
           createdByUserId: userId,
         },
       });
-      await tx.postingAgreementEvaluation.update({ where: { id: evaluation.id }, data: { paymentId: created.id } });
+      // updateMany with paymentId: null as part of the WHERE (not a separate read-then-write) is
+      // what makes this an atomic claim — two concurrent requests for the same evaluation (a
+      // double-click before the button disabled, two tabs, two people) can both pass
+      // resolvePayableEvaluation's own upfront check, since neither has committed yet when the
+      // other reads. Only one of these updateMany calls can actually match a still-null paymentId;
+      // the loser's `count` comes back 0, and throwing here rolls back its own just-created Payment
+      // too (same $transaction) — so a race can no longer leave a second, orphaned Payment behind.
+      const claimed = await tx.postingAgreementEvaluation.updateMany({ where: { id: evaluation.id, paymentId: null }, data: { paymentId: created.id } });
+      if (claimed.count === 0) throw new BadRequestException("A payment already exists for this week/campaign");
       return created;
     });
 
@@ -664,7 +672,12 @@ export class PostingAgreementsService {
           approvedAt: new Date(),
         },
       });
-      await tx.postingAgreementEvaluation.update({ where: { id: evaluation.id }, data: { paymentId: created.id } });
+      // Atomic claim — see the identical comment on createTicket() above for why this has to be an
+      // updateMany-with-paymentId:null guard rather than a plain update, and what it protects
+      // against (two concurrent "Mark as paid" clicks each creating their own real Payment for the
+      // same week — the exact shape of the duplicate-payment reports this was built to stop).
+      const claimed = await tx.postingAgreementEvaluation.updateMany({ where: { id: evaluation.id, paymentId: null }, data: { paymentId: created.id } });
+      if (claimed.count === 0) throw new BadRequestException("A payment already exists for this week/campaign");
       return created;
     });
 
@@ -697,7 +710,10 @@ export class PostingAgreementsService {
     const beneficiaryMatches = agreement.mediaHostId ? payment.mediaHostId === agreement.mediaHostId : payment.influencerId === agreement.influencerId;
     if (!beneficiaryMatches) throw new BadRequestException("This payment doesn't belong to the same media host/influencer as this agreement");
 
-    await this.prisma.postingAgreementEvaluation.update({ where: { id: evaluationId }, data: { paymentId } });
+    // Same atomic-claim reasoning as markPaidDirectly/createTicket — a plain update here could
+    // silently overwrite a link another request made in between the check above and this write.
+    const claimed = await this.prisma.postingAgreementEvaluation.updateMany({ where: { id: evaluationId, paymentId: null }, data: { paymentId } });
+    if (claimed.count === 0) throw new BadRequestException("This week/campaign is already linked to a payment");
     return { success: true };
   }
 }
