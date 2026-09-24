@@ -28,6 +28,7 @@ import { Influencer2Module } from "./modules/influencer2/influencer2.module";
 import { BackupsModule } from "./modules/backups/backups.module";
 import { DashboardSavedViewsModule } from "./modules/dashboard-saved-views/dashboard-saved-views.module";
 import { PostingAgreementsModule } from "./modules/posting-agreements/posting-agreements.module";
+import { PostingWeekDefinitionsModule } from "./modules/posting-week-definitions/posting-week-definitions.module";
 import { SessionAuthGuard } from "./common/guards/session-auth.guard";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
@@ -63,6 +64,7 @@ const appLogger = createLogger("api");
     BackupsModule,
     DashboardSavedViewsModule,
     PostingAgreementsModule,
+    PostingWeekDefinitionsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

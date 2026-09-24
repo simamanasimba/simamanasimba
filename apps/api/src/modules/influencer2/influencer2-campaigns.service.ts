@@ -631,6 +631,47 @@ export class Influencer2CampaignsService {
     };
   }
 
+  /** One org-wide week definition's totals for ONE beneficiary — same shape and same "current
+   * metrics, not a collectedAt window" reasoning as folderAssessment(), just matched by plain
+   * published-date range (publishedDateFilter) since a centralized week has no per-post tagging of
+   * its own, only a shared date window every beneficiary is measured against. */
+  async weekDefinitionAssessment(organizationId: string, filter: { mediaHostId?: string; influencerId?: string; startDate: Date; endDate: Date }) {
+    const beneficiary = filter.mediaHostId ? { mediaHostId: filter.mediaHostId } : { influencerId: filter.influencerId };
+    const campaignWhere: Prisma.Influencer2CampaignWhereInput = {
+      organizationId,
+      ...beneficiary,
+      ...this.publishedDateFilter(filter.startDate, filter.endDate),
+    };
+
+    const [postCount, values] = await Promise.all([
+      this.prisma.influencer2Campaign.count({ where: campaignWhere }),
+      this.prisma.influencer2MetricValue.findMany({
+        where: { isLatest: true, campaignPlatform: { campaign: campaignWhere } },
+        include: { metricDefinition: true },
+      }),
+    ]);
+
+    let totalViews = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalEngagement = 0;
+    let hasViews = false, hasLikes = false, hasComments = false, hasShares = false;
+    for (const v of values) {
+      const value = Number(v.value);
+      if (v.metricDefinition.countsAsEngagement) totalEngagement += value;
+      if (v.metricDefinition.category === "VIEWS") { totalViews += value; hasViews = true; }
+      else if (v.metricDefinition.category === "LIKES") { totalLikes += value; hasLikes = true; }
+      else if (v.metricDefinition.category === "COMMENTS") { totalComments += value; hasComments = true; }
+      else if (v.metricDefinition.category === "SHARES") { totalShares += value; hasShares = true; }
+    }
+
+    return {
+      totalPosts: postCount,
+      totalViews: hasViews ? totalViews : null,
+      totalLikes: hasLikes ? totalLikes : null,
+      totalComments: hasComments ? totalComments : null,
+      totalShares: hasShares ? totalShares : null,
+      totalEngagement,
+    };
+  }
+
   /**
    * The "what's actually behind that number" drill-down for the collective dashboards — every
    * campaign that fed into summary()'s counts for this scope/range, plus the same set broken down

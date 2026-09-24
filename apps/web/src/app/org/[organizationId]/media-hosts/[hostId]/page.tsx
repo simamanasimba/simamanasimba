@@ -13,7 +13,7 @@ import { Collapsible } from "@/components/Collapsible";
 import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { PostingAgreementCard } from "@/components/PostingAgreementCard";
-import { PostingFoldersPanel } from "@/components/PostingFoldersPanel";
+import { PostingWeeksPanel } from "@/components/PostingWeeksPanel";
 import { PostingPaymentSummary } from "@/components/PostingPaymentSummary";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement, canPayPostingAgreement } from "@/lib/permissions";
@@ -79,7 +79,7 @@ export default function MediaHostDetailPage() {
     <>
       <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
       <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} />
-      <PostingFoldersPanel organizationId={organizationId} mediaHostId={hostId} canManage={canManageAgreement} canPay={canPayAgreement} />
+      <PostingWeeksPanel organizationId={organizationId} mediaHostId={hostId} canPay={canPayAgreement} />
     </>
   );
 

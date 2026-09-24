@@ -738,6 +738,9 @@ export interface PostingAgreementEvaluation {
   weekStart: string | null;
   weekEnd: string | null;
   folderId?: string | null;
+  /** Set instead of folderId when this evaluation is against an org-wide PostingWeekDefinition
+   * rather than a per-beneficiary folder — always exactly one of the three linkage modes. */
+  weekDefinitionId?: string | null;
   actualPostCount: number;
   actualViews: number | null;
   actualLikes: number | null;
@@ -754,6 +757,32 @@ export interface PostingAgreementEvaluation {
   payment?: { status: "PENDING" | "PROCESSING" | "PAID" | "REJECTED" | "CANCELLED" } | null;
   evaluatedByUserId: string | null;
   createdAt: string;
+}
+
+/** An org-wide, named date window (e.g. "Week 1": Aug 18–28) set up once and automatically applied
+ * to every media host and influencer — see the Prisma schema doc comment on PostingWeekDefinition.
+ * `assessment`/`agreementId`/`evaluation` are only present on the per-beneficiary
+ * week-definitions list response (GET .../posting-agreements/week-definitions), same shape as
+ * Influencer2Folder's own list(). */
+export interface PostingWeekDefinition {
+  id: string;
+  organizationId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  assessment?: {
+    totalPosts: number;
+    totalViews: number | null;
+    totalLikes: number | null;
+    totalComments: number | null;
+    totalShares: number | null;
+    totalEngagement: number;
+  };
+  agreementId?: string | null;
+  evaluation?: PostingAgreementEvaluation | null;
 }
 
 export type PostingAgreementWeekStatus = "IN_PROGRESS" | "PENDING_EVALUATION" | "EVALUATED";

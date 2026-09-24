@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2ContentType, Influencer2Folder, MediaHostProfile, PaginatedInfluencer2Campaigns } from "@/lib/types";
+import type { Influencer2CampaignStatus, Influencer2CampaignSummary, Influencer2ContentType, Influencer2Folder, MediaHostProfile, PaginatedInfluencer2Campaigns, PostingWeekDefinition } from "@/lib/types";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { BulkWeekAssignBar } from "@/components/BulkWeekAssignBar";
 import { BulkFolderAssignBar } from "@/components/BulkFolderAssignBar";
@@ -54,6 +54,7 @@ export default function MediaHostCampaignsPage() {
   const [contentType, setContentType] = useState<Influencer2ContentType | "">("");
   const [status, setStatus] = useState<Influencer2CampaignStatus | "">("");
   const [folderId, setFolderId] = useState(searchParams.get("folderId") ?? "");
+  const [weekDefinitionId] = useState(searchParams.get("weekDefinitionId") ?? "");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -80,18 +81,28 @@ export default function MediaHostCampaignsPage() {
   });
   const selectedFolder = folders?.find((f) => f.id === folderId);
 
-  // Viewing one campaign's posts means the headline figures should be that campaign's own totals
-  // (folderAssessment, the same numbers the campaign table itself shows), not the beneficiary's
-  // overall range-scoped summary — "Posts in range: 73" was every post ever, not the ~5 in this
-  // campaign, which read as a bug even though it was working as coded.
-  const displayStats = selectedFolder?.assessment
+  // The centralized replacement for per-beneficiary folders (see PostingWeeksPanel) — a week
+  // definition's own assessment already comes back scoped to this one beneficiary.
+  const { data: weekDefinitions } = useQuery({
+    queryKey: ["posting-week-definition-rows", organizationId, hostId],
+    queryFn: () => api.get<PostingWeekDefinition[]>(`/api/v1/organizations/${organizationId}/posting-agreements/week-definitions?mediaHostId=${hostId}`),
+    enabled: Boolean(weekDefinitionId),
+  });
+  const selectedWeek = weekDefinitions?.find((w) => w.id === weekDefinitionId);
+
+  // Viewing one campaign's (or week's) posts means the headline figures should be that scope's
+  // own totals, not the beneficiary's overall range-scoped summary — "Posts in range: 73" was
+  // every post ever, not the ~5 in this campaign, which read as a bug even though it was working
+  // as coded.
+  const scopedAssessment = selectedFolder?.assessment ?? selectedWeek?.assessment;
+  const displayStats = scopedAssessment
     ? {
-        totalPosts: selectedFolder.assessment.totalPosts,
-        totalViews: selectedFolder.assessment.totalViews,
-        totalLikes: selectedFolder.assessment.totalLikes,
+        totalPosts: scopedAssessment.totalPosts,
+        totalViews: scopedAssessment.totalViews,
+        totalLikes: scopedAssessment.totalLikes,
         engagementPerPost:
-          selectedFolder.assessment.totalPosts > 0
-            ? Math.round((selectedFolder.assessment.totalEngagement / selectedFolder.assessment.totalPosts) * 100) / 100
+          scopedAssessment.totalPosts > 0
+            ? Math.round((scopedAssessment.totalEngagement / scopedAssessment.totalPosts) * 100) / 100
             : null,
       }
     : summary;
@@ -105,13 +116,18 @@ export default function MediaHostCampaignsPage() {
     params.set("folderId", folderId);
     if (selectedFolder?.startDate) params.set("folderStart", selectedFolder.startDate);
     if (selectedFolder?.endDate) params.set("folderEnd", selectedFolder.endDate);
+  } else if (selectedWeek) {
+    // A centralized week has no per-post tag of its own — it's plain published-date matching, the
+    // same generic from/to the date-range picker already uses, just pinned to this week's dates.
+    params.set("from", selectedWeek.startDate);
+    params.set("to", selectedWeek.endDate);
   } else {
     params.set("from", range.from);
     params.set("to", range.to);
   }
 
   const { data } = useQuery({
-    queryKey: ["influencer2-campaigns", organizationId, "media-host", hostId, contentType, status, folderId, page, range.from, range.to],
+    queryKey: ["influencer2-campaigns", organizationId, "media-host", hostId, contentType, status, folderId, weekDefinitionId, page, range.from, range.to],
     queryFn: () => api.get<PaginatedInfluencer2Campaigns>(`/api/v1/organizations/${organizationId}/influencer2/campaigns?${params.toString()}`),
   });
 
@@ -193,8 +209,8 @@ export default function MediaHostCampaignsPage() {
         <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
         <p className="text-xs text-muted">
-          {selectedFolder
-            ? <>{t("statsScopedToCampaignLabel")} <span className="font-medium text-ink">{selectedFolder.name}</span></>
+          {selectedFolder || selectedWeek
+            ? <>{t("statsScopedToCampaignLabel")} <span className="font-medium text-ink">{(selectedFolder ?? selectedWeek)!.name}</span></>
             : <>{t("statsScopedToRangeLabel")} <span className="font-medium text-ink">{formatRangeLabel(range, t("dateRangeAllTime"))}</span></>}
         </p>
 

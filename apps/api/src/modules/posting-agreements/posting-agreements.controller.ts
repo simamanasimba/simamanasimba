@@ -37,6 +37,13 @@ export class PostingAgreementsController {
     return this.agreements.listReadyForPayment(organizationId, user.id);
   }
 
+  /** One beneficiary's view of every org-wide week definition — same registration-order reasoning
+   * as ready-for-payment above. */
+  @Get("week-definitions")
+  listWeekDefinitionRows(@Param("organizationId") organizationId: string, @Query("mediaHostId") mediaHostId?: string, @Query("influencerId") influencerId?: string) {
+    return this.agreements.listWeekDefinitionRows(organizationId, { mediaHostId, influencerId });
+  }
+
   @Post()
   async create(@Param("organizationId") organizationId: string, @Body() dto: CreatePostingAgreementDto, @CurrentUser() user: RequestUser) {
     const agreement = await this.agreements.create(organizationId, dto, user.id);
@@ -101,6 +108,16 @@ export class PostingAgreementsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.agreements.evaluateFolder(organizationId, agreementId, folderId, user.id);
+  }
+
+  @Post(":agreementId/week-definitions/:weekDefinitionId/evaluate")
+  async evaluateWeekDefinition(
+    @Param("organizationId") organizationId: string,
+    @Param("agreementId") agreementId: string,
+    @Param("weekDefinitionId") weekDefinitionId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.agreements.evaluateWeekDefinition(organizationId, agreementId, weekDefinitionId, user.id);
   }
 
   @Post("evaluations/:evaluationId/create-ticket")

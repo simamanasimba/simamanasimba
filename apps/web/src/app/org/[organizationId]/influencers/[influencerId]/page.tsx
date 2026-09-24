@@ -13,7 +13,7 @@ import { Collapsible } from "@/components/Collapsible";
 import { RecentActivityList } from "@/components/RecentActivityList";
 import { Influencer2CampaignModal } from "@/components/Influencer2CampaignModal";
 import { PostingAgreementCard } from "@/components/PostingAgreementCard";
-import { PostingFoldersPanel } from "@/components/PostingFoldersPanel";
+import { PostingWeeksPanel } from "@/components/PostingWeeksPanel";
 import { PostingPaymentSummary } from "@/components/PostingPaymentSummary";
 import { useAuth } from "@/hooks/useAuth";
 import { canManageInfluencer2, canRecordPayment, canManagePostingAgreement, canPayPostingAgreement } from "@/lib/permissions";
@@ -81,7 +81,7 @@ export default function InfluencerDetailPage() {
     <>
       <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} compact={!canPayAgreement} />
       <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} />
-      <PostingFoldersPanel organizationId={organizationId} influencerId={influencerId} canManage={canManageAgreement} canPay={canPayAgreement} />
+      <PostingWeeksPanel organizationId={organizationId} influencerId={influencerId} canPay={canPayAgreement} />
     </>
   );
 

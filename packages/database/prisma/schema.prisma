@@ -1936,6 +1936,28 @@ model Influencer2Folder {
   @@map("influencer2_folders")
 }
 
+/// One org-wide, named date window (e.g. "Week 1": Aug 18–28) set up ONCE and automatically applied
+/// to EVERY media host and influencer at once — replaces each beneficiary getting their own
+/// manually-dated Influencer2Folder for the same week. A post counts toward a week purely by its
+/// published date falling in [startDate, endDate] (see Influencer2CampaignsService's
+/// publishedDateFilter) — no separate tagging step, no per-beneficiary setup. This is what a
+/// PostingAgreement's target is checked against for any beneficiary once evaluated via
+/// PostingAgreementEvaluation.weekDefinitionId. Influencer2Folder itself is untouched and still
+/// holds whatever campaigns were created before this existed, purely as historical record.
+model PostingWeekDefinition {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  name            String
+  startDate       DateTime @db.Date @map("start_date")
+  endDate         DateTime @db.Date @map("end_date")
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("posting_week_definitions")
+}
+
 enum PostingAgreementEngagementMetric {
   VIEWS
   LIKES
@@ -1999,13 +2021,15 @@ model PostingAgreementEvaluation {
   id                  String    @id @default(uuid())
   agreementId         String    @map("agreement_id")
   /// weekNumber/weekStart/weekEnd are set for the older auto-computed weekly cycle; folderId is
-  /// set for a user-created folder ("campaign") instead — an evaluation is always exactly one or
-  /// the other, never both, and every row here still means the same thing either way: one group's
-  /// actual posts/engagement measured against its agreement's target(s).
+  /// set for a user-created folder ("campaign") instead; weekDefinitionId is set for the org-wide
+  /// centralized week ("Week 1" applied to every beneficiary at once) — an evaluation is always
+  /// exactly one of the three, never more than one, and every row here still means the same thing
+  /// either way: one group's actual posts/engagement measured against its agreement's target(s).
   weekNumber          Int?      @map("week_number")
   weekStart           DateTime? @map("week_start") @db.Date
   weekEnd             DateTime? @map("week_end") @db.Date
   folderId            String?   @map("folder_id")
+  weekDefinitionId    String?   @map("week_definition_id")
   actualPostCount     Int       @map("actual_post_count")
   actualViews         Int?      @map("actual_views")
   actualLikes         Int?      @map("actual_likes")
@@ -2024,6 +2048,7 @@ model PostingAgreementEvaluation {
 
   @@unique([agreementId, weekNumber])
   @@unique([agreementId, folderId])
+  @@unique([agreementId, weekDefinitionId])
   @@index([agreementId])
   @@map("posting_agreement_evaluations")
 }

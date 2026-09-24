@@ -3,6 +3,7 @@ import type { PaymentBeneficiaryType, PostingAgreementEngagementMetric, PostingA
 import { PrismaService } from "../../prisma/prisma.service";
 import { Influencer2CampaignsService } from "../influencer2/influencer2-campaigns.service";
 import { Influencer2FoldersService } from "../influencer2/influencer2-folders.service";
+import { PostingWeekDefinitionsService } from "../posting-week-definitions/posting-week-definitions.service";
 import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
 import { UpdatePostingAgreementDto } from "./dto/update-posting-agreement.dto";
 import { MarkAgreementPaidDto } from "./dto/mark-agreement-paid.dto";
@@ -28,6 +29,7 @@ export class PostingAgreementsService {
     private readonly prisma: PrismaService,
     private readonly campaigns: Influencer2CampaignsService,
     private readonly folders: Influencer2FoldersService,
+    private readonly weekDefinitions: PostingWeekDefinitionsService,
   ) {}
 
   private validateTarget(dto: { mediaHostId?: string; influencerId?: string; postsPerWeek?: number; engagementMetric?: string; engagementTarget?: number }) {
@@ -198,6 +200,46 @@ export class PostingAgreementsService {
       .sort((a, b) => b.weekNumber - a.weekNumber);
   }
 
+  /** Every org-wide week definition, each with this ONE beneficiary's assessment (totals) and —
+   * when this beneficiary has an active posting agreement — that agreement's evaluation of the
+   * week, if one exists yet. Mirrors Influencer2FoldersService.list()'s shape exactly, so the
+   * frontend's weekly table can render either the same way. */
+  async listWeekDefinitionRows(organizationId: string, filters: { mediaHostId?: string; influencerId?: string }) {
+    const weeks = await this.weekDefinitions.list(organizationId);
+    const assessments = await Promise.all(
+      weeks.map((w) =>
+        this.campaigns.weekDefinitionAssessment(organizationId, {
+          mediaHostId: filters.mediaHostId,
+          influencerId: filters.influencerId,
+          startDate: w.startDate,
+          endDate: w.endDate,
+        }),
+      ),
+    );
+
+    const agreement = (filters.mediaHostId || filters.influencerId)
+      ? await this.prisma.postingAgreement.findFirst({
+          where: { organizationId, mediaHostId: filters.mediaHostId, influencerId: filters.influencerId, isActive: true },
+        })
+      : null;
+    // `payment` included so the frontend can tell "has a paymentId" apart from "is actually PAID"
+    // — see the same note on listWeeks.
+    const evaluations = agreement
+      ? await this.prisma.postingAgreementEvaluation.findMany({
+          where: { agreementId: agreement.id, weekDefinitionId: { in: weeks.map((w) => w.id) } },
+          include: { payment: { select: { status: true } } },
+        })
+      : [];
+    const evaluationByWeekId = new Map(evaluations.map((e) => [e.weekDefinitionId as string, e]));
+
+    return weeks.map((w, i) => ({
+      ...w,
+      assessment: assessments[i],
+      agreementId: agreement?.id ?? null,
+      evaluation: evaluationByWeekId.get(w.id) ?? null,
+    }));
+  }
+
   private pickEngagementValue(summary: { totalViews: number | null; totalLikes: number | null; totalComments: number | null; totalShares: number | null; totalEngagement: number }, metric: PostingAgreementEngagementMetric) {
     switch (metric) {
       case "VIEWS":
@@ -326,6 +368,54 @@ export class PostingAgreementsService {
     });
   }
 
+  /** Evaluates one org-wide week definition against a beneficiary's agreement — the same target
+   * check evaluateFolder() does, just measured against weekDefinitionAssessment() instead of a
+   * per-beneficiary folder. A week whose endDate is still in the future can't be evaluated yet.
+   * Idempotent — re-requesting an already-evaluated week just returns the stored result. */
+  async evaluateWeekDefinition(organizationId: string, agreementId: string, weekDefinitionId: string, userId: string): Promise<PostingAgreementEvaluation> {
+    const agreement = await this.ensure(organizationId, agreementId);
+    const week = await this.weekDefinitions.ensure(organizationId, weekDefinitionId);
+
+    const existing = await this.prisma.postingAgreementEvaluation.findUnique({ where: { agreementId_weekDefinitionId: { agreementId, weekDefinitionId } } });
+    if (existing) return existing;
+
+    if (week.endDate.getTime() > Date.now()) {
+      throw new BadRequestException("This week isn't finished yet — it can be evaluated once its end date passes");
+    }
+
+    const summary = await this.campaigns.weekDefinitionAssessment(organizationId, {
+      mediaHostId: agreement.mediaHostId ?? undefined,
+      influencerId: agreement.influencerId ?? undefined,
+      startDate: week.startDate,
+      endDate: week.endDate,
+    });
+
+    const postTargetMet = agreement.postsPerWeek != null ? summary.totalPosts >= agreement.postsPerWeek : null;
+    const engagementTargetMet =
+      agreement.engagementMetric && agreement.engagementTarget != null
+        ? this.pickEngagementValue(summary, agreement.engagementMetric) >= agreement.engagementTarget
+        : null;
+    const checks = [postTargetMet, engagementTargetMet].filter((v): v is boolean => v != null);
+    const targetMet = checks.length > 0 && checks.every((v) => v === true);
+
+    return this.prisma.postingAgreementEvaluation.create({
+      data: {
+        agreementId,
+        weekDefinitionId,
+        actualPostCount: summary.totalPosts,
+        actualViews: summary.totalViews,
+        actualLikes: summary.totalLikes,
+        actualComments: summary.totalComments,
+        actualShares: summary.totalShares,
+        actualEngagement: summary.totalEngagement,
+        postTargetMet,
+        engagementTargetMet,
+        targetMet,
+        evaluatedByUserId: userId,
+      },
+    });
+  }
+
   /** Finance's own queue: every completed week, across every agreement in the org, that met its
    * target(s) but hasn't been turned into a payment ticket yet — the whole point of "we pay by
    * agreement, not by post" only works if Finance can see this without hunting through each host's
@@ -336,6 +426,10 @@ export class PostingAgreementsService {
   async listReadyForPayment(organizationId: string, userId: string) {
     const agreements = await this.prisma.postingAgreement.findMany({ where: { organizationId, isActive: true } });
     const now = Date.now();
+
+    // Org-wide week definitions apply to every agreement's own beneficiary the same way folders
+    // do — evaluated once per (agreement, week), same auto-evaluate-then-list pattern as below.
+    const weekDefinitions = await this.weekDefinitions.list(organizationId);
 
     for (const agreement of agreements) {
       const weeks = this.computeWeeks(agreement.startDate);
@@ -363,6 +457,17 @@ export class PostingAgreementsService {
         if (folder.endDate && folder.endDate.getTime() > now) continue; // not finished yet
         await this.evaluateFolder(organizationId, agreement.id, folder.id, userId);
       }
+
+      const existingWeekDefEvals = await this.prisma.postingAgreementEvaluation.findMany({
+        where: { agreementId: agreement.id, weekDefinitionId: { not: null } },
+        select: { weekDefinitionId: true },
+      });
+      const evaluatedWeekDefIds = new Set(existingWeekDefEvals.map((e) => e.weekDefinitionId));
+      for (const week of weekDefinitions) {
+        if (evaluatedWeekDefIds.has(week.id)) continue;
+        if (week.endDate.getTime() > now) continue; // not finished yet
+        await this.evaluateWeekDefinition(organizationId, agreement.id, week.id, userId);
+      }
     }
 
     const evaluations = await this.prisma.postingAgreementEvaluation.findMany({
@@ -374,22 +479,25 @@ export class PostingAgreementsService {
     const hostIds = [...new Set(evaluations.map((e) => e.agreement.mediaHostId).filter((v): v is string => Boolean(v)))];
     const influencerIds = [...new Set(evaluations.map((e) => e.agreement.influencerId).filter((v): v is string => Boolean(v)))];
     const folderIds = [...new Set(evaluations.map((e) => e.folderId).filter((v): v is string => Boolean(v)))];
-    const [hosts, influencers, folderRows] = await Promise.all([
+    const weekDefIds = [...new Set(evaluations.map((e) => e.weekDefinitionId).filter((v): v is string => Boolean(v)))];
+    const [hosts, influencers, folderRows, weekDefRows] = await Promise.all([
       this.prisma.mediaHost.findMany({ where: { id: { in: hostIds } }, select: { id: true, name: true } }),
       this.prisma.influencer.findMany({ where: { id: { in: influencerIds } }, select: { id: true, name: true } }),
       this.prisma.influencer2Folder.findMany({ where: { id: { in: folderIds } }, select: { id: true, name: true } }),
+      this.prisma.postingWeekDefinition.findMany({ where: { id: { in: weekDefIds } }, select: { id: true, name: true, startDate: true, endDate: true } }),
     ]);
     const hostName = new Map<string, string>(hosts.map((h) => [h.id, h.name]));
     const influencerName = new Map<string, string>(influencers.map((i) => [i.id, i.name]));
     const folderName = new Map<string, string>(folderRows.map((f) => [f.id, f.name]));
+    const weekDefById = new Map(weekDefRows.map((w) => [w.id, w]));
 
     return evaluations.map((e) => ({
       evaluationId: e.id,
       agreementId: e.agreementId,
-      // Either the auto-computed week's own label, or the folder's own name — never both.
-      groupLabel: e.weekNumber != null ? `Week ${e.weekNumber}` : (folderName.get(e.folderId!) ?? "—"),
-      periodStart: e.weekStart,
-      periodEnd: e.weekEnd,
+      // Whichever of the three linkage modes this evaluation uses — never more than one.
+      groupLabel: e.weekNumber != null ? `Week ${e.weekNumber}` : e.weekDefinitionId != null ? (weekDefById.get(e.weekDefinitionId)?.name ?? "—") : (folderName.get(e.folderId!) ?? "—"),
+      periodStart: e.weekStart ?? weekDefById.get(e.weekDefinitionId ?? "")?.startDate ?? null,
+      periodEnd: e.weekEnd ?? weekDefById.get(e.weekDefinitionId ?? "")?.endDate ?? null,
       beneficiaryType: e.agreement.mediaHostId ? ("MEDIA_HOST" as const) : ("INFLUENCER" as const),
       beneficiaryId: e.agreement.mediaHostId ?? e.agreement.influencerId,
       beneficiaryName: e.agreement.mediaHostId ? (hostName.get(e.agreement.mediaHostId) ?? "—") : (influencerName.get(e.agreement.influencerId!) ?? "—"),
@@ -419,7 +527,9 @@ export class PostingAgreementsService {
     const groupLabel =
       evaluation.weekNumber != null
         ? `week ${evaluation.weekNumber} (${evaluation.weekStart!.toISOString().slice(0, 10)} to ${evaluation.weekEnd!.toISOString().slice(0, 10)})`
-        : ((await this.prisma.influencer2Folder.findUnique({ where: { id: evaluation.folderId! }, select: { name: true } }))?.name ?? "campaign");
+        : evaluation.weekDefinitionId != null
+          ? ((await this.prisma.postingWeekDefinition.findUnique({ where: { id: evaluation.weekDefinitionId }, select: { name: true } }))?.name ?? "week")
+          : ((await this.prisma.influencer2Folder.findUnique({ where: { id: evaluation.folderId! }, select: { name: true } }))?.name ?? "campaign");
     const amount = this.computeAmount(agreement);
     const notesParts: string[] = [];
     if (agreement.postsPerWeek != null) {
