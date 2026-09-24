@@ -18,7 +18,7 @@ import { MediaEngagementOverview } from "@/components/MediaEngagementOverview";
 import { DateRangeFilterControl, useDateRangeFilter } from "@/components/DateRangeFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { isOrgAdmin } from "@/lib/permissions";
-import type { EventRecord, FinanceDashboard, RegionTarget } from "@/lib/types";
+import type { EventRecord, FinanceDashboard, RegionTarget, Influencer2CampaignSummary } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 
 type DashboardView = "general" | "members" | "media" | "influencers";
@@ -156,6 +156,18 @@ export default function DashboardPage() {
   const { data: mediaReach, refetch: refetchMediaReach } = useQuery({
     queryKey: ["media-reach", organizationId],
     queryFn: () => api.get<{ totalReach: number; mediaReach: number; influencerReach: number; target: number | null }>(`/api/v1/organizations/${organizationId}/analytics/media-reach`),
+  });
+
+  // Just the two headline numbers General needs (posts + engagement) — not the full drill-down
+  // MediaEngagementOverview/CollectiveCampaignSummary fetch, since General is a curated summary,
+  // not those two sections glued together.
+  const { data: generalMediaSummary } = useQuery({
+    queryKey: ["influencer2-summary", "collective", "ALL_MEDIA_HOSTS", organizationId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=ALL_MEDIA_HOSTS&from=${range.from}&to=${range.to}`),
+  });
+  const { data: generalInfluencerSummary } = useQuery({
+    queryKey: ["influencer2-summary", "collective", "ALL_INFLUENCERS", organizationId, range.from, range.to],
+    queryFn: () => api.get<Influencer2CampaignSummary>(`/api/v1/organizations/${organizationId}/influencer2/campaigns/summary?scope=ALL_INFLUENCERS&from=${range.from}&to=${range.to}`),
   });
 
   const targetsByRegion = new Map((regionTargets ?? []).map((rt) => [rt.region, rt]));
@@ -367,6 +379,89 @@ export default function DashboardPage() {
     </>
   );
 
+  // Cross-category totals for the two "General" charts — not a re-fetch of any single category's
+  // own drill-down data, just the few numbers each category's summary/finance query already has.
+  const mediaSpendTotal = (financeDashboard?.spendByMediaHost ?? []).reduce((sum, r) => sum + r.amount, 0);
+  const influencerSpendTotal = (financeDashboard?.spendByInfluencer ?? []).reduce((sum, r) => sum + r.amount, 0);
+  const postActivityData = [
+    { category: t("generalMediaPostsLabel"), posts: generalMediaSummary?.totalPosts ?? 0 },
+    { category: t("generalInfluencerPostsLabel"), posts: generalInfluencerSummary?.totalPosts ?? 0 },
+  ];
+  const paymentsByCategoryData = [
+    { category: t("generalMembersLabel"), amount: financeDashboard?.leaderSpend ?? 0 },
+    { category: t("generalMediaPostsLabel"), amount: mediaSpendTotal },
+    { category: t("generalInfluencerPostsLabel"), amount: influencerSpendTotal },
+  ];
+
+  // A genuinely different, smaller view — not the three full sections stacked. Just the handful of
+  // cross-category numbers that answer "how's everything doing overall": total reach (members +
+  // audience), how much each category is posting, and how much each has cost so far. Anyone who
+  // wants the full drill-down for one category already has its own dropdown option below.
+  const generalSection = (
+    <>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <StatTile
+          label={t("statTotalMembers")}
+          value={(summary?.total ?? 0).toLocaleString()}
+          hint={summary?.target ? `${Math.min(100, Math.round(((summary?.total ?? 0) / summary.target) * 100))}% ${t("ofLabel")} ${summary.target.toLocaleString()}` : undefined}
+          icon={Users}
+          href={`/org/${organizationId}/members`}
+        />
+        <StatTile label={t("generalMediaPostsLabel")} value={(generalMediaSummary?.totalPosts ?? 0).toLocaleString()} icon={CalendarDays} href={`/org/${organizationId}/media-hosts`} />
+        <StatTile label={t("generalInfluencerPostsLabel")} value={(generalInfluencerSummary?.totalPosts ?? 0).toLocaleString()} icon={CalendarDays} href={`/org/${organizationId}/influencers`} />
+        <StatTile label={t("totalSpend")} value={(financeDashboard?.totalSpend ?? 0).toLocaleString()} icon={Wallet} href={`/org/${organizationId}/finance/reports?view=finance`} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <OverallReachGauge
+          organizationId={organizationId}
+          totalReach={mediaReach?.totalReach ?? 0}
+          mediaReach={mediaReach?.mediaReach ?? 0}
+          influencerReach={mediaReach?.influencerReach ?? 0}
+          target={mediaReach?.target ?? null}
+          canEditTarget={isOrgAdmin(myRole)}
+          onTargetSaved={() => refetchMediaReach()}
+        />
+
+        <div className="card">
+          <div className="mb-1">
+            <h2 className="font-display text-sm font-bold text-ink">{t("generalPostActivityTitle")}</h2>
+            <p className="text-xs text-muted">{t("generalPostActivityHint")}</p>
+          </div>
+          <div className="h-[160px] sm:h-[190px] xl:h-[210px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={postActivityData} margin={{ top: 20, left: 8, right: 16, bottom: 8 }} barCategoryGap="35%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#EFE7E5" vertical={false} />
+                <XAxis type="category" dataKey="category" stroke="#8A7F7C" fontSize={11} axisLine={false} tickLine={false} />
+                <YAxis type="number" stroke="#8A7F7C" fontSize={11} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #EFE7E5" }} />
+                <Bar dataKey="posts" radius={[6, 6, 0, 0]} maxBarSize={64} fill="#DC2626" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="mb-1">
+          <h2 className="font-display text-sm font-bold text-ink">{t("generalPaymentsByCategoryTitle")}</h2>
+          <p className="text-xs text-muted">{t("generalPaymentsByCategoryHint")}</p>
+        </div>
+        <div className="h-[160px] sm:h-[190px] xl:h-[210px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={paymentsByCategoryData} margin={{ top: 20, left: 8, right: 16, bottom: 8 }} barCategoryGap="35%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#EFE7E5" vertical={false} />
+              <XAxis type="category" dataKey="category" stroke="#8A7F7C" fontSize={11} axisLine={false} tickLine={false} />
+              <YAxis type="number" stroke="#8A7F7C" fontSize={11} axisLine={false} tickLine={false} width={40} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #EFE7E5" }} formatter={(v: number) => v.toLocaleString()} />
+              <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={64} fill="#7F1D1D" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -388,21 +483,12 @@ export default function DashboardPage() {
           Keeping it on a separate row means neither can ever move the other. */}
       <DateRangeFilterControl {...dateRangeFilter} organizationId={organizationId} />
 
-      {/* "General" shows all three sections together, each under its own heading so it's clear
-          which is which — the three single-category options below are unchanged from before,
-          still their own exclusive full-page view with no heading needed. Every stat tile in every
-          section redirects into that category's own dashboard on click (Media -> /media-hosts,
-          Influencer -> /influencers, Members -> /members) rather than opening an in-page report. */}
-      {view === "general" && (
-        <>
-          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navMediaEngagementView")}</h2>
-          {mediaSection}
-          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navInfluencersView")}</h2>
-          {influencerSection}
-          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-muted">{t("navWanachamaEngagement")}</h2>
-          {membersSection}
-        </>
-      )}
+      {/* "General" is a curated cross-category summary, not the three full sections stacked — the
+          three single-category options below are unchanged, still their own exclusive full-page
+          view with the full drill-down. Every stat tile redirects into that category's own
+          dashboard on click (Media -> /media-hosts, Influencer -> /influencers, Members -> /members)
+          rather than opening an in-page report. */}
+      {view === "general" && generalSection}
       {view === "media" && mediaSection}
       {view === "influencers" && influencerSection}
       {view === "members" && membersSection}
