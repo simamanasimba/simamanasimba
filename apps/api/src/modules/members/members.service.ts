@@ -49,7 +49,9 @@ export class MembersService {
         id: member.id,
         organizationId: member.organizationId,
         entityType: "member",
-        title: `${member.firstName} ${member.lastName} (${member.membershipNumber ?? member.campaignId})`,
+        // Only the club's own real membership number belongs in a display title — campaignId is
+        // an internal system reference, never shown to anyone as "the" identifier.
+        title: member.membershipNumber ? `${member.firstName} ${member.lastName} (${member.membershipNumber})` : `${member.firstName} ${member.lastName}`,
         body: [member.phone, member.email].filter(Boolean).join(" "),
         createdAt: member.createdAt.toISOString(),
       })

@@ -199,7 +199,7 @@ export function BulkCheckInModal({ organizationId, eventId, onClose, onDone }: {
                         <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm hover:bg-brand-50/40">
                           <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggle(m.id)} />
                           <span className="flex-1 text-ink">{m.firstName} {m.lastName}</span>
-                          <span className="font-mono text-xs text-muted">{m.membershipNumber ?? m.campaignId}</span>
+                          <span className="font-mono text-xs text-muted">{m.membershipNumber ?? "—"}</span>
                         </label>
                       </li>
                     ))}

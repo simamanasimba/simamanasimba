@@ -286,7 +286,7 @@ export default function AttendPage() {
                 <p className="text-lg font-bold text-ink">
                   {lookup.member.firstName} {lookup.member.lastName}
                 </p>
-                <p className="mt-1 font-mono text-sm text-muted">{lookup.member.membershipNumber ?? lookup.member.campaignId}</p>
+                {lookup.member.membershipNumber && <p className="mt-1 font-mono text-sm text-muted">{lookup.member.membershipNumber}</p>}
                 <span className="badge mt-3 bg-green-50 text-success">{lookup.member.membershipStatus}</span>
               </div>
               {lookup.alreadyCheckedIn ? (

@@ -66,7 +66,7 @@ export default function MemberProfilePage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="font-display text-2xl text-ink">{member.firstName} {member.middleName ?? ""} {member.lastName}</h1>
-            <p className="mt-1 font-mono text-sm text-muted">{member.membershipNumber ?? member.campaignId}</p>
+            <p className="mt-1 font-mono text-sm text-muted">{member.membershipNumber ?? "—"}</p>
           </div>
           <div className="flex items-center gap-2">
             {member.isLeader && <span className="badge bg-brand-50 text-brand-700">{t("leaderBadge")}</span>}

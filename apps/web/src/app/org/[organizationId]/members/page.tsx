@@ -376,7 +376,7 @@ export default function MembersPage() {
                 </td>
                 <td className="px-4 py-3">
                   <Link href={`/org/${organizationId}/members/${m.id}`} className="font-mono text-brand-700 hover:underline">
-                    {m.membershipNumber ?? m.campaignId}
+                    {m.membershipNumber ?? "—"}
                   </Link>
                 </td>
                 <td className="px-4 py-3">
@@ -418,7 +418,7 @@ export default function MembersPage() {
             <input type="checkbox" checked={selected.has(m.id)} onChange={() => toggleOne(m.id)} className="mt-1 shrink-0" />
             <Link href={`/org/${organizationId}/members/${m.id}`} className="min-w-0 flex-1">
               <p className="font-medium text-ink">{m.firstName} {m.lastName}</p>
-              <p className="font-mono text-xs text-brand-700">{m.membershipNumber ?? m.campaignId}</p>
+              <p className="font-mono text-xs text-brand-700">{m.membershipNumber ?? "—"}</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                 <span>{m.region ?? "—"}</span>
                 {m.isLeader ? (

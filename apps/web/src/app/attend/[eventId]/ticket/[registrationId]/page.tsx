@@ -88,7 +88,7 @@ export default function TicketCheckInPage() {
 
           <div className="card mt-6 w-full">
             <p className="text-lg font-bold text-ink">{ticket.member.firstName} {ticket.member.lastName}</p>
-            <p className="mt-1 font-mono text-sm text-muted">{ticket.member.membershipNumber ?? ticket.member.campaignId}</p>
+            {ticket.member.membershipNumber && <p className="mt-1 font-mono text-sm text-muted">{ticket.member.membershipNumber}</p>}
           </div>
 
           {ticket.event.hasEnded ? (
