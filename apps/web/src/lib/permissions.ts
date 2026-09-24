@@ -41,7 +41,11 @@ const NAV_ACCESS: Record<NavKey, RoleKey[]> = {
   finance: ["FINANCE_OFFICER"],
   "finance-reports": ["ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER"],
   settings: ["ORG_SUPER_ADMIN", "ORG_ADMIN"],
-  "access-control": ["ORG_SUPER_ADMIN", "ORG_ADMIN"],
+  // ORG_ADMIN deliberately excluded by default — mirrors permissions.constants.ts's
+  // AREA_DEFAULT_ROLES. Only ORG_SUPER_ADMIN sees Access Control out of the box now; an
+  // ORG_ADMIN's access is a plain, revocable/grantable toggle from the live permission matrix
+  // (canAccess() below reads that matrix first — this fallback only matters before it loads).
+  "access-control": ["ORG_SUPER_ADMIN"],
 };
 
 const ADMIN_ROLES: RoleKey[] = ["ORG_SUPER_ADMIN", "ORG_ADMIN"];

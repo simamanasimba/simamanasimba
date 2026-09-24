@@ -62,8 +62,14 @@ export class PermissionsService {
           // "view" defaults to the area's normal default roles; create/edit/delete default OFF
           // for everyone except the two admin roles (who always retain full access regardless —
           // see isLocked) — a fresh org starts with the same narrow write access it always had,
-          // nothing silently opens up write access just because view was already granted.
-          const defaultOn = action === "view" ? AREA_DEFAULT_ROLES[area].includes(role) : role === "ORG_SUPER_ADMIN" || role === "ORG_ADMIN";
+          // nothing silently opens up write access just because view was already granted. That
+          // admin shortcut only applies when the role actually has default VIEW access to the area
+          // at all — otherwise an admin role deliberately left out of an area's defaults (see
+          // "access-control") would still show create/edit/delete as granted, which it isn't.
+          const defaultOn =
+            action === "view"
+              ? AREA_DEFAULT_ROLES[area].includes(role)
+              : (role === "ORG_SUPER_ADMIN" || role === "ORG_ADMIN") && AREA_DEFAULT_ROLES[area].includes(role);
           const override = overrideMap.get(`${role}:${area}:${action}`);
           const allowed = locked ? defaultOn : (override ?? defaultOn);
           matrix[area][action][role] = { allowed, editable: !locked };

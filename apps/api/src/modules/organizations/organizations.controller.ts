@@ -91,15 +91,19 @@ export class OrganizationsController {
     return org;
   }
 
+  // Static baseline is ORG_SUPER_ADMIN only now — ORG_ADMIN's access here is a plain toggle (see
+  // AREA_DEFAULT_ROLES["access-control"]/ALWAYS_LOCKED_AREAS in permissions.constants.ts), off by
+  // default, so it must NOT also be hardcoded into @Roles or it would bypass that toggle entirely.
+  // An ORG_ADMIN granted the override reaches these routes via RolesGuard's isAreaGranted check.
   @Get("users")
-  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+  @Roles("ORG_SUPER_ADMIN")
   @RequiresArea("access-control")
   listMembers(@Param("organizationId") organizationId: string) {
     return this.organizations.listMembers(organizationId);
   }
 
   @Post("users/invite")
-  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+  @Roles("ORG_SUPER_ADMIN")
   @RequiresArea("access-control")
   async invite(@Param("organizationId") organizationId: string, @Body() dto: InviteUserDto, @CurrentUser() user: RequestUser) {
     const membership = await this.organizations.inviteUser(organizationId, dto);
@@ -108,7 +112,7 @@ export class OrganizationsController {
   }
 
   @Patch("users/:userId")
-  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN")
+  @Roles("ORG_SUPER_ADMIN")
   @RequiresArea("access-control")
   async updateMember(
     @Param("organizationId") organizationId: string,

@@ -73,7 +73,11 @@ export const AREA_DEFAULT_ROLES: Record<PermissionArea, RoleKey[]> = {
   // STANDARD_USER) from the Access control page if that's how the club wants to run it.
   "payment-approval": ["ORG_SUPER_ADMIN", "ORG_ADMIN"],
   settings: ["ORG_SUPER_ADMIN", "ORG_ADMIN"],
-  "access-control": ["ORG_SUPER_ADMIN", "ORG_ADMIN"],
+  // ORG_ADMIN is deliberately NOT included by default — per explicit request, only ORG_SUPER_ADMIN
+  // (the permanent HARD_BASELINE_ROLES safety net below) sees Access Control out of the box. An
+  // ORG_ADMIN's access is now a normal, revocable/grantable toggle like any other area (see
+  // ALWAYS_LOCKED_AREAS below, which no longer includes this area), just off by default.
+  "access-control": ["ORG_SUPER_ADMIN"],
 };
 
 /** Areas where an override is actually consulted by a backend guard (RolesGuard, via
@@ -93,8 +97,9 @@ export const BACKEND_ENFORCED_AREAS: PermissionArea[] = [
   "access-control",
 ];
 
-/** "access-control" is the one area where even ORG_ADMIN's default access stays locked
- * (non-editable), on top of ORG_SUPER_ADMIN above — it's the only door back into this page. If
- * an org has no ORG_SUPER_ADMIN account and an ORG_ADMIN revoked their own access here, there
- * would be no self-service way back in at all. Every other area is fully editable for ORG_ADMIN. */
-export const ALWAYS_LOCKED_AREAS: PermissionArea[] = ["access-control"];
+/** No area is unconditionally locked anymore — "access-control" used to be, so even ORG_ADMIN's
+ * default access there couldn't be edited either way; per explicit request it's now a plain
+ * revocable/grantable toggle like every other area (default off — see AREA_DEFAULT_ROLES above).
+ * ORG_SUPER_ADMIN's own access-control access still can't be removed, via HARD_BASELINE_ROLES
+ * above (a global rule, not tied to this array) — that's the permanent door back in. */
+export const ALWAYS_LOCKED_AREAS: PermissionArea[] = [];
