@@ -478,6 +478,22 @@ export interface Payment {
 export const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CHEQUE", "MOBILE_MONEY", "CARD", "ONLINE_PAYMENT"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/** One entry in the general audit log — `metadata`'s shape depends on `action` (e.g. a
+ * "payment.edited" entry carries `{ reason, before, after }`; "posting_agreement.deleted" carries
+ * just `{ reason }`). The Sensitive Actions log (GET .../audit-logs/sensitive-actions) reads the
+ * same shape, filtered to the four Action Access Control action names. */
+export interface AuditLogEntry {
+  id: string;
+  organizationId: string | null;
+  userId: string | null;
+  user: { firstName: string; lastName: string; email: string } | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 /** `totalSpend` is every category counted exactly once: all PAID payments (media + influencer +
  * member/leader together) plus operational/administrative expenses plus the meeting budget total
  * — none of these overlap. `leaderSpend`/`meetingSpend` are their own tiles now, no longer folded

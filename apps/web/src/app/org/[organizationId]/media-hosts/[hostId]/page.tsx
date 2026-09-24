@@ -78,7 +78,7 @@ export default function MediaHostDetailPage() {
   const postingSection = (
     <>
       <PostingPaymentSummary organizationId={organizationId} mediaHostId={hostId} compact={!canPayAgreement} />
-      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} />
+      <PostingAgreementCard organizationId={organizationId} mediaHostId={hostId} beneficiaryName={host.name} canManage={canManageAgreement} canPay={canPayAgreement} myRole={myRole} />
       <PostingWeeksPanel organizationId={organizationId} mediaHostId={hostId} canPay={canPayAgreement} />
     </>
   );

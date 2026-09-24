@@ -3,6 +3,7 @@ import type { PaymentBeneficiaryType, PaymentStatus, Prisma } from "@event-intel
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { BulkCreatePaymentDto } from "./dto/bulk-create-payment.dto";
+import { EditPaymentDto } from "./dto/edit-payment.dto";
 
 export interface PaymentFilters {
   campaignId?: string;
@@ -214,6 +215,68 @@ export class PaymentsService {
     // frontend — this one skipped that, so a client that trusts this response's amount/paidAmount
     // as numbers (e.g. calling .toLocaleString() or doing arithmetic) got a Decimal object instead.
     return { ...updated, amount: Number(updated.amount), paidAmount: updated.paidAmount != null ? Number(updated.paidAmount) : null };
+  }
+
+  /** Super Admin's "fix a mistake on an existing payment record" action — see EditPaymentDto.
+   * Every field is optional (only what's actually changing is sent); `reason` is mandatory and
+   * never touches the row itself, it's recorded in the audit log by the controller alongside the
+   * before/after values this returns. Works regardless of the payment's current status — a
+   * correction can be needed on a PENDING, PROCESSING, or already-PAID payment alike. */
+  async editPayment(organizationId: string, paymentId: string, dto: EditPaymentDto) {
+    const before = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
+    if (!before) throw new NotFoundException("Payment not found");
+
+    const after = await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        amount: dto.amount,
+        paidAmount: dto.paidAmount,
+        paymentDate: dto.paymentDate ? new Date(`${dto.paymentDate}T00:00:00.000Z`) : undefined,
+        method: dto.method,
+        referenceNumber: dto.referenceNumber,
+        bankName: dto.bankName,
+        bankAccountName: dto.bankAccountName,
+        bankAccountNumber: dto.bankAccountNumber,
+        bankTransactionRef: dto.bankTransactionRef,
+        mobileMoneyNumber: dto.mobileMoneyNumber,
+        mobileMoneyTransactionId: dto.mobileMoneyTransactionId,
+      },
+    });
+
+    return {
+      before: { ...before, amount: Number(before.amount), paidAmount: before.paidAmount != null ? Number(before.paidAmount) : null },
+      after: { ...after, amount: Number(after.amount), paidAmount: after.paidAmount != null ? Number(after.paidAmount) : null },
+    };
+  }
+
+  /** Super Admin's "this shouldn't have been recorded" action — reverses a payment, including an
+   * already-PAID one, to CANCELLED. A CANCELLED payment is invisible to getFinanceDashboard() (it
+   * only ever reads status: "PAID" rows), so this takes the money back out of every spend total
+   * automatically, with no separate cleanup needed there. What DOES need explicit cleanup: any
+   * linked posting-agreement evaluation, media engagement, or Influencer2 campaign that this
+   * payment had flipped to "paid" — those are reverted too, so the underlying week/campaign
+   * becomes payable again instead of being stuck forever behind a payment that no longer counts. */
+  async undoPayment(organizationId: string, paymentId: string) {
+    const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId }, include: { postingAgreementEvaluation: true } });
+    if (!payment) throw new NotFoundException("Payment not found");
+    if (payment.status === "CANCELLED") throw new BadRequestException("This payment is already cancelled");
+
+    const previousStatus = payment.status;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.payment.update({ where: { id: paymentId }, data: { status: "CANCELLED" } });
+      if (payment.postingAgreementEvaluation) {
+        await tx.postingAgreementEvaluation.update({ where: { id: payment.postingAgreementEvaluation.id }, data: { paymentId: null } });
+      }
+      if (payment.mediaEngagementId) {
+        await tx.mediaEngagement.update({ where: { id: payment.mediaEngagementId }, data: { status: "NOT_PAID" } });
+      }
+      if (payment.influencer2CampaignId) {
+        await tx.influencer2Campaign.update({ where: { id: payment.influencer2CampaignId }, data: { paymentStatus: "NOT_PAID" } });
+      }
+      return result;
+    });
+
+    return { payment: { ...updated, amount: Number(updated.amount), paidAmount: updated.paidAmount != null ? Number(updated.paidAmount) : null }, previousStatus };
   }
 
   async setAttachment(organizationId: string, paymentId: string, documentUrl: string) {

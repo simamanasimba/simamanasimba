@@ -153,3 +153,10 @@ export function canManageInfluencer2(role: string | undefined | null): boolean {
 export function isOrgAdmin(role: string | undefined | null): boolean {
   return Boolean(role && ADMIN_ROLES.includes(role as RoleKey));
 }
+
+/** "Action Access Control": edit/delete a posting agreement, edit or undo a payment — locked to
+ * Super Admin only (matching the backend's own @Roles("ORG_SUPER_ADMIN") on each of those routes),
+ * always with a mandatory reason, flagged in the Sensitive Actions log for review. */
+export function isSuperAdmin(role: string | undefined | null): boolean {
+  return role === "ORG_SUPER_ADMIN";
+}

@@ -10,6 +10,7 @@ import { WeekPostsModal } from "@/components/WeekPostsModal";
 import { MarkAgreementPaidModal } from "@/components/MarkAgreementPaidModal";
 import { TableSearchInput } from "@/components/TableSearchInput";
 import { printAgreement } from "@/lib/printAgreement";
+import { isSuperAdmin } from "@/lib/permissions";
 import type { PostingAgreement, PostingAgreementEngagementMetric, PostingAgreementWeek } from "@/lib/types";
 
 /** A small ✓/✗/— pill for one of the two possible per-week checks — "—" when that check isn't
@@ -30,19 +31,27 @@ export function PostingAgreementCard({
   beneficiaryName,
   canManage,
   canPay,
+  myRole,
 }: {
   organizationId: string;
   mediaHostId?: string;
   influencerId?: string;
   /** Only needed to label the printed document — falls back to a generic word if omitted. */
   beneficiaryName?: string;
-  /** Set up/edit the agreement, evaluate weeks — admins and Finance. */
+  /** Set up the agreement (when none exists yet), attach documents, evaluate weeks — admins and
+   * Finance. Editing or deleting an EXISTING agreement is a sensitive action gated separately, see
+   * `myRole`/isSuperAdmin below. */
   canManage: boolean;
   /** Mark a met-target week as paid — Finance only, even for an admin who can otherwise manage
    * this agreement. */
   canPay: boolean;
+  /** Gates editing/deleting an existing agreement to Super Admin only — a sensitive, reason-
+   * required, audit-flagged action (see PostingAgreementModal's reason field and removeAgreement
+   * below). */
+  myRole: string | undefined | null;
 }) {
   const { t } = useLang();
+  const canEditOrDelete = isSuperAdmin(myRole);
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [viewingWeek, setViewingWeek] = useState<PostingAgreementWeek | null>(null);
@@ -117,9 +126,11 @@ export function PostingAgreementCard({
   async function removeAgreement() {
     if (!agreement) return;
     if (!confirm(t("confirmDeleteAgreement"))) return;
+    const reason = window.prompt(t("deleteAgreementReasonPrompt"));
+    if (!reason?.trim()) return;
     setError(null);
     try {
-      await api.delete(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement.id}`);
+      await api.delete(`/api/v1/organizations/${organizationId}/posting-agreements/${agreement.id}`, { reason: reason.trim() });
       await refetchAgreements();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("failedSaveAgreement"));
@@ -201,12 +212,17 @@ export function PostingAgreementCard({
               )}
             </>
           )}
-          {canManage && (
+          {!agreement && canManage && (
             <button className="btn-secondary text-sm" onClick={() => setShowModal(true)}>
-              {agreement ? <><Pencil size={14} /> {t("editAgreementCta")}</> : t("setUpAgreementCta")}
+              {t("setUpAgreementCta")}
             </button>
           )}
-          {agreement && canManage && (
+          {agreement && canEditOrDelete && (
+            <button className="btn-secondary text-sm" onClick={() => setShowModal(true)}>
+              <Pencil size={14} /> {t("editAgreementCta")}
+            </button>
+          )}
+          {agreement && canEditOrDelete && (
             <button title={t("clearAgreementCta")} className="btn-secondary !p-2" onClick={removeAgreement}>
               <Trash2 size={14} />
             </button>

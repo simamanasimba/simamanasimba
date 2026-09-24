@@ -2,11 +2,12 @@
 
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload, FileText, Lock } from "lucide-react";
+import { Upload, FileText, Lock, Pencil, Undo2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
 import { api, ApiError } from "@/lib/api";
+import { isSuperAdmin } from "@/lib/permissions";
 import { PAYMENT_STATUS_LABEL_KEYS, PAYMENT_STATUS_BADGE } from "@/lib/paymentStatusDisplay";
 import { PAYMENT_METHODS, type Payment, type PaymentMethod } from "@/lib/types";
 
@@ -59,6 +60,74 @@ export function PaymentDetailModal({
   const isLocked = LOCKED_STATUSES.includes(payment.status);
   const canComplete = isFinance && payment.status === "PROCESSING";
   const amountDiffers = Number(paidAmount) !== payment.amount;
+
+  // "Action Access Control": correcting or reversing an already-recorded payment is a sensitive,
+  // Super-Admin-only action — every use requires a stated reason and is flagged in the Sensitive
+  // Actions log for review (see AuditLogsController.listSensitive). Available regardless of the
+  // payment's own PENDING/PROCESSING/PAID lock state, since a correction is often needed
+  // *because* something was already marked paid incorrectly.
+  const canManageSensitive = isSuperAdmin(myRole);
+  const [editingPayment, setEditingPayment] = useState(false);
+  const [editForm, setEditForm] = useState({
+    amount: String(payment.amount),
+    paidAmount: payment.paidAmount != null ? String(payment.paidAmount) : "",
+    paymentDate: payment.paymentDate.slice(0, 10),
+    method: payment.method ?? "",
+    referenceNumber: payment.referenceNumber ?? "",
+    bankTransactionRef: payment.bankTransactionRef ?? "",
+    mobileMoneyTransactionId: payment.mobileMoneyTransactionId ?? "",
+    reason: "",
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
+  async function onSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editForm.reason.trim()) {
+      setEditError(t("conditionalReasonRequired"));
+      return;
+    }
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const updated = await api.patch<Payment>(`/api/v1/organizations/${orgId}/payments/${payment.id}/edit`, {
+        amount: Number(editForm.amount),
+        paidAmount: editForm.paidAmount ? Number(editForm.paidAmount) : undefined,
+        paymentDate: editForm.paymentDate,
+        method: editForm.method || undefined,
+        referenceNumber: editForm.referenceNumber || undefined,
+        bankTransactionRef: editForm.bankTransactionRef || undefined,
+        mobileMoneyTransactionId: editForm.mobileMoneyTransactionId || undefined,
+        reason: editForm.reason.trim(),
+      });
+      setPayment((p) => ({ ...p, ...updated }));
+      setEditingPayment(false);
+      refreshProfiles();
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : t("failedEditPayment"));
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function onUndoPayment() {
+    if (!confirm(t("confirmUndoPayment"))) return;
+    const reason = window.prompt(t("undoPaymentReasonPrompt"));
+    if (!reason?.trim()) return;
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      const updated = await api.post<Payment>(`/api/v1/organizations/${orgId}/payments/${payment.id}/undo`, { reason: reason.trim() });
+      setPayment((p) => ({ ...p, ...updated }));
+      refreshProfiles();
+    } catch (err) {
+      setUndoError(err instanceof ApiError ? err.message : t("failedUndoPayment"));
+    } finally {
+      setUndoing(false);
+    }
+  }
 
   function refreshProfiles() {
     queryClient.invalidateQueries({ predicate: (q) => ["influencer-profile", "media-host-profile", "member"].includes(q.queryKey[0] as string) });
@@ -217,6 +286,65 @@ export function PaymentDetailModal({
 
         {payment.status === "PENDING" && (
           <p className="rounded-xl border border-line bg-surface px-3.5 py-2.5 text-xs text-muted">{t("awaitingApprovalNote")}</p>
+        )}
+
+        {canManageSensitive && (
+          <div className="rounded-xl border border-warning/40 bg-warning/10 p-3.5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-warning">{t("sensitiveActionsTitle")}</p>
+            <div className="flex flex-wrap gap-2">
+              {!editingPayment && (
+                <button type="button" className="btn-secondary text-sm" onClick={() => setEditingPayment(true)}>
+                  <Pencil size={13} /> {t("editPaymentCta")}
+                </button>
+              )}
+              {payment.status !== "CANCELLED" && (
+                <button type="button" className="btn-secondary text-sm" disabled={undoing} onClick={onUndoPayment}>
+                  <Undo2 size={13} /> {undoing ? t("saving") : t("undoPaymentCta")}
+                </button>
+              )}
+            </div>
+            {undoError && <p className="mt-2 text-sm text-brand">{undoError}</p>}
+
+            {editingPayment && (
+              <form onSubmit={onSaveEdit} className="mt-3 space-y-3 border-t border-warning/30 pt-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">{t("amountLabel")}</label>
+                    <input required type="number" min="0" step="0.01" className="input" value={editForm.amount} onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">{t("paidAmountLabel")}</label>
+                    <input type="number" min="0" step="0.01" className="input" value={editForm.paidAmount} onChange={(e) => setEditForm((f) => ({ ...f, paidAmount: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">{t("paymentDateLabel")}</label>
+                    <input required type="date" className="input" value={editForm.paymentDate} onChange={(e) => setEditForm((f) => ({ ...f, paymentDate: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">{t("paymentMethodLabel")}</label>
+                    <input className="input" value={editForm.method} onChange={(e) => setEditForm((f) => ({ ...f, method: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">{t("referenceNumberLabel")}</label>
+                    <input className="input" value={editForm.referenceNumber} onChange={(e) => setEditForm((f) => ({ ...f, referenceNumber: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="label">{t("bankTransactionRefLabel")}</label>
+                    <input className="input" value={editForm.bankTransactionRef} onChange={(e) => setEditForm((f) => ({ ...f, bankTransactionRef: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">{t("conditionalReasonLabel")}</label>
+                  <textarea required rows={2} className="input" value={editForm.reason} onChange={(e) => setEditForm((f) => ({ ...f, reason: e.target.value }))} placeholder={t("editPaymentReasonPlaceholder")} />
+                </div>
+                {editError && <p className="text-sm text-brand">{editError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button type="button" className="btn-secondary text-sm" onClick={() => setEditingPayment(false)}>{t("cancel")}</button>
+                  <button type="submit" disabled={savingEdit} className="btn-primary text-sm">{savingEdit ? t("saving") : t("save")}</button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
 
         <div className="flex justify-end border-t border-line pt-3">

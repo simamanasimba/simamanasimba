@@ -80,7 +80,7 @@ export default function InfluencerDetailPage() {
   const postingSection = (
     <>
       <PostingPaymentSummary organizationId={organizationId} influencerId={influencerId} compact={!canPayAgreement} />
-      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} />
+      <PostingAgreementCard organizationId={organizationId} influencerId={influencerId} beneficiaryName={influencer.name} canManage={canManageAgreement} canPay={canPayAgreement} myRole={myRole} />
       <PostingWeeksPanel organizationId={organizationId} influencerId={influencerId} canPay={canPayAgreement} />
     </>
   );

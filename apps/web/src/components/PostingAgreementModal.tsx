@@ -53,6 +53,7 @@ export function PostingAgreementModal({
     currency: agreement?.currency ?? "TZS",
     notes: agreement?.notes ?? "",
   });
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -92,6 +93,10 @@ export function PostingAgreementModal({
       setError(t("engagementTargetMissingValueError"));
       return;
     }
+    if (isEdit && !reason.trim()) {
+      setError(t("conditionalReasonRequired"));
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -100,6 +105,7 @@ export function PostingAgreementModal({
         influencerId,
         startDate: form.startDate,
         notes: form.notes || undefined,
+        reason: isEdit ? reason.trim() : undefined,
       };
       // Locked fields are simply left out of the request — the backend treats an omitted field as
       // "not changing it", so a paid agreement's notes/start date can still be edited freely
@@ -142,6 +148,20 @@ export function PostingAgreementModal({
         </div>
 
         {locked && <p className="rounded-xl border border-line bg-surface px-3.5 py-2.5 text-xs text-muted">{t("agreementLockedHint")}</p>}
+
+        {isEdit && (
+          <div className="rounded-xl border border-warning/40 bg-warning/10 p-3.5">
+            <label className="label">{t("conditionalReasonLabel")}</label>
+            <textarea
+              required
+              rows={2}
+              className="input"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={t("editAgreementReasonPlaceholder")}
+            />
+          </div>
+        )}
 
         {isEdit && (
           <div>

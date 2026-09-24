@@ -3,6 +3,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { PostingAgreementsService } from "./posting-agreements.service";
 import { CreatePostingAgreementDto } from "./dto/create-posting-agreement.dto";
 import { UpdatePostingAgreementDto } from "./dto/update-posting-agreement.dto";
+import { RemovePostingAgreementDto } from "./dto/remove-posting-agreement.dto";
 import { MarkAgreementPaidDto } from "./dto/mark-agreement-paid.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -51,21 +52,26 @@ export class PostingAgreementsController {
     return agreement;
   }
 
+  /** Sensitive action — Super Admin only (overrides the controller's broader class-level roles):
+   * editing a posting agreement's terms/beneficiary/status always requires a stated reason,
+   * flagged in the audit log for review (see AuditLogsController.listSensitive). */
   @Patch(":agreementId")
+  @Roles("ORG_SUPER_ADMIN")
   async update(@Param("organizationId") organizationId: string, @Param("agreementId") agreementId: string, @Body() dto: UpdatePostingAgreementDto, @CurrentUser() user: RequestUser) {
     const agreement = await this.agreements.update(organizationId, agreementId, dto);
-    await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.updated", entityType: "posting_agreement", entityId: agreementId });
+    await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.updated", entityType: "posting_agreement", entityId: agreementId, metadata: { reason: dto.reason } });
     return agreement;
   }
 
   /** Deletes the agreement entirely ("clear agreement") — cascades to its evaluations (a DB-level
    * onDelete: Cascade), but any Payment already created from one of those evaluations is left
-   * alone; money already tracked stays tracked even once its originating agreement is gone. */
+   * alone; money already tracked stays tracked even once its originating agreement is gone.
+   * Sensitive action — Super Admin only, always requires a stated reason, flagged for review. */
   @Delete(":agreementId")
-  @Roles("ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER")
-  async remove(@Param("organizationId") organizationId: string, @Param("agreementId") agreementId: string, @CurrentUser() user: RequestUser) {
+  @Roles("ORG_SUPER_ADMIN")
+  async remove(@Param("organizationId") organizationId: string, @Param("agreementId") agreementId: string, @Body() dto: RemovePostingAgreementDto, @CurrentUser() user: RequestUser) {
     const result = await this.agreements.remove(organizationId, agreementId);
-    await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.deleted", entityType: "posting_agreement", entityId: agreementId });
+    await this.audit.record({ organizationId, userId: user.id, action: "posting_agreement.deleted", entityType: "posting_agreement", entityId: agreementId, metadata: { reason: dto.reason } });
     return result;
   }
 

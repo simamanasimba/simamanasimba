@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X, Ban, RotateCcw, Trash2, Lock, Clock } from "lucide-react";
+import { Check, X, Ban, RotateCcw, Trash2, Lock, Clock, ShieldAlert } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
@@ -377,13 +378,25 @@ function TeamMembersCard({ organizationId }: { organizationId: string }) {
 export default function AccessControlPage() {
   const { organizationId } = useParams<{ organizationId: string }>();
   const { t } = useLang();
+  const { data: me } = useAuth();
+  const myRole = me?.organizations.find((o) => o.organizationId === organizationId)?.role;
 
   return (
     <RequireAccess area="access-control">
       <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-extrabold text-ink">{t("accessControlTitle")}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted">{t("accessControlHelp")}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-extrabold text-ink">{t("accessControlTitle")}</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted">{t("accessControlHelp")}</p>
+          </div>
+          {/* Not part of the toggleable permission-area system below — this stays Super Admin only,
+              always, matching the hard @Roles("ORG_SUPER_ADMIN") lock on every sensitive action's
+              own backend route. */}
+          {myRole === "ORG_SUPER_ADMIN" && (
+            <Link href={`/org/${organizationId}/access-control/sensitive-actions`} className="btn-secondary text-sm">
+              <ShieldAlert size={14} /> {t("sensitiveActionsLogCta")}
+            </Link>
+          )}
         </div>
         <TeamMembersCard organizationId={organizationId} />
         <CapabilityMatrix organizationId={organizationId} />

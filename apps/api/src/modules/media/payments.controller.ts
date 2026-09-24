@@ -5,6 +5,8 @@ import { PaymentsService } from "./payments.service";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { BulkCreatePaymentDto } from "./dto/bulk-create-payment.dto";
 import { MarkPaidDto } from "./dto/mark-paid.dto";
+import { EditPaymentDto } from "./dto/edit-payment.dto";
+import { UndoPaymentDto } from "./dto/undo-payment.dto";
 import { OrgMembershipGuard } from "../../common/guards/org-membership.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -119,6 +121,52 @@ export class PaymentsController {
   ) {
     const payment = await this.payments.markPaid(organizationId, paymentId, dto.method, dto.referenceNumber, dto.paidAmount, dto.varianceNote);
     await this.audit.record({ organizationId, userId: user.id, action: "payment.marked_paid", entityType: "payment", entityId: paymentId });
+    return payment;
+  }
+
+  /** Sensitive action — Super Admin only. Corrects an existing payment record after the fact
+   * (amount, date, method, reference, bank/mobile details) with a mandatory reason, flagged in the
+   * audit log for review (see AuditLogsController.listSensitive). */
+  @Patch(":paymentId/edit")
+  @Roles("ORG_SUPER_ADMIN")
+  async edit(
+    @Param("organizationId") organizationId: string,
+    @Param("paymentId") paymentId: string,
+    @Body() dto: EditPaymentDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const { before, after } = await this.payments.editPayment(organizationId, paymentId, dto);
+    await this.audit.record({
+      organizationId,
+      userId: user.id,
+      action: "payment.edited",
+      entityType: "payment",
+      entityId: paymentId,
+      metadata: { reason: dto.reason, before, after },
+    });
+    return after;
+  }
+
+  /** Sensitive action — Super Admin only. Reverses a payment (including an already-PAID one) to
+   * CANCELLED, with a mandatory reason, flagged in the audit log for review. See
+   * PaymentsService.undoPayment for what else gets cleaned up alongside the status change. */
+  @Post(":paymentId/undo")
+  @Roles("ORG_SUPER_ADMIN")
+  async undo(
+    @Param("organizationId") organizationId: string,
+    @Param("paymentId") paymentId: string,
+    @Body() dto: UndoPaymentDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const { payment, previousStatus } = await this.payments.undoPayment(organizationId, paymentId);
+    await this.audit.record({
+      organizationId,
+      userId: user.id,
+      action: "payment.undone",
+      entityType: "payment",
+      entityId: paymentId,
+      metadata: { reason: dto.reason, previousStatus },
+    });
     return payment;
   }
 
