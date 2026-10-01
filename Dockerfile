@@ -15,4 +15,4 @@ RUN pnpm --filter "@event-intel/api..." run build
 WORKDIR /app
 ENV NODE_ENV=production
 EXPOSE 4000
-CMD ["sh", "-c", "pnpm --filter @event-intel/database exec node scripts/fix-legacy-roles.js; pnpm --filter @event-intel/database exec prisma db push --skip-generate --accept-data-loss --schema=prisma/schema.prisma && cd apps/api && node dist/main.js"]
+CMD ["sh", "-c", "pnpm --filter @event-intel/database exec node scripts/fix-legacy-roles.js; pnpm --filter @event-intel/database exec prisma db push --skip-generate --schema=prisma/schema.prisma && cd apps/api && node dist/main.js"]

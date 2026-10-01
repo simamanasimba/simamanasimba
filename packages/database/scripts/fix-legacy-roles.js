@@ -6,9 +6,15 @@
 // plain SQL without decoding through the (already-regenerated) typed enum, so
 // it works even while the DB still has the old values. Safe to run every boot:
 // once no legacy values remain, both statements affect zero rows.
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient, RoleKey } = require("@prisma/client");
 
-const VALID_ROLES = ["PLATFORM_OWNER", "ORG_SUPER_ADMIN", "ORG_ADMIN", "FINANCE_OFFICER", "STANDARD_USER"];
+// Derived from the generated client instead of a hand-maintained list — that list silently fell
+// out of sync with the schema once before (GUEST_USER was added to RoleKey but never added here,
+// so this script spent some time quietly reassigning every guest account to STANDARD_USER on
+// every single boot, indistinguishable from "data going missing"). Reading it straight from
+// RoleKey means it can never drift again: whatever the schema currently defines as valid IS what
+// this treats as valid, automatically.
+const VALID_ROLES = Object.values(RoleKey);
 const inList = VALID_ROLES.map((r) => `'${r}'`).join(",");
 
 async function main() {
