@@ -21,3 +21,4 @@ apps/api/storage/
 .vercel
 .env*
 .claude/
+docs/PROJECT-TECHNICAL-REFERENCE.pdf
