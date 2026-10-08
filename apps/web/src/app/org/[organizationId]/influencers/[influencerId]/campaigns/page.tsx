@@ -69,10 +69,10 @@ export default function InfluencerCampaignsPage() {
   const [weekDefinitionId, setWeekDefinitionId] = useState(initialWeekId);
   // "Week" isn't a rolling 7 days here — it's a pick from the org's own centrally-defined weeks
   // (see Settings' Campaign Weeks), same ones the profile page's Campaigns table breaks down by
-  // and links in from. Landing via that link means a week is already picked, so it opens straight
-  // into "week" mode showing that exact week selected — never "All time" while actually showing a
-  // week-scoped table, which is what a generic always-"All time" range control used to do.
-  const [filterMode, setFilterMode] = useState<FilterMode>(initialWeekId ? "week" : "allTime");
+  // and links in from. "Weekly" is the default view regardless of how the page is reached — either
+  // the week already picked via the link (initialWeekId), or, landing with none, the earliest
+  // defined week (picked by the effect below) — never "All time" as the opening view.
+  const [filterMode, setFilterMode] = useState<FilterMode>("week");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showAddCampaign, setShowAddCampaign] = useState(false);
@@ -111,14 +111,24 @@ export default function InfluencerCampaignsPage() {
     }
   }, [filterMode, weekDefinitionId, weekDefinitions]);
 
-  const range =
-    filterMode === "week" && selectedWeek
-      ? { from: selectedWeek.startDate, to: selectedWeek.endDate }
-      : filterMode === "monthly"
-        ? { from: isoDaysAgo(30), to: new Date().toISOString() }
-        : filterMode === "custom"
-          ? { from: customFrom ? `${customFrom}T00:00:00.000Z` : isoDaysAgo(7), to: customTo ? `${customTo}T23:59:59.999Z` : new Date().toISOString() }
-          : { from: ALL_TIME_FROM, to: new Date().toISOString() };
+  // Memoized on the actual filter inputs, not recomputed on every render — otherwise `to: new
+  // Date().toISOString()` below would mint a fresh timestamp on every render, which feeds straight
+  // into the summary/list queries' queryKeys below and made them look like a brand-new query every
+  // time (cache miss), never settling: each fetch's own completion triggers a re-render, which
+  // recomputes `to` again before the resolved data ever gets to stick, so "Posts in range"/"Total
+  // Views"/etc. stayed on "—" forever for every mode that falls through to `new Date()` here
+  // (monthly, custom-without-explicit-dates, and "All time", which is this page's own default).
+  const range = useMemo(
+    () =>
+      filterMode === "week" && selectedWeek
+        ? { from: selectedWeek.startDate, to: selectedWeek.endDate }
+        : filterMode === "monthly"
+          ? { from: isoDaysAgo(30), to: new Date().toISOString() }
+          : filterMode === "custom"
+            ? { from: customFrom ? `${customFrom}T00:00:00.000Z` : isoDaysAgo(7), to: customTo ? `${customTo}T23:59:59.999Z` : new Date().toISOString() }
+            : { from: ALL_TIME_FROM, to: new Date().toISOString() },
+    [filterMode, selectedWeek, customFrom, customTo],
+  );
 
   const { data: summary } = useQuery({
     queryKey: ["influencer2-summary", influencerId, range.from, range.to],
