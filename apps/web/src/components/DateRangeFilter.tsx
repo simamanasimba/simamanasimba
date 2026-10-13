@@ -29,7 +29,13 @@ export function formatRangeLabel(range: { from: string; to: string }, allTimeLab
   if (range.from === EPOCH && allTimeLabel) return allTimeLabel;
   const from = new Date(range.from);
   const to = new Date(range.to);
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  // Dates are stored as UTC day-boundaries (a week's end is T23:59:59.999Z so the whole day
+  // counts) -- formatting with the browser's LOCAL timezone instead of UTC pushed that boundary
+  // into the next calendar day for anyone east of UTC (e.g. 23:59:59.999Z on the 26th becomes
+  // 02:59 on the 27th at UTC+3), so a week saved to end on the 26th displayed as ending the 27th.
+  // timeZone: "UTC" keeps this consistent with every other date-range display in the app, which
+  // reads the same ISO strings via .slice(0, 10) instead of a local-time Date conversion.
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: "UTC" };
   return `${from.toLocaleDateString(undefined, opts)} – ${to.toLocaleDateString(undefined, opts)}`;
 }
 

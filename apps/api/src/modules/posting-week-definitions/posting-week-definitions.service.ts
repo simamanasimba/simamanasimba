@@ -43,7 +43,14 @@ export class PostingWeekDefinitionsService {
     const normalizedName = name.trim().toLowerCase();
     const sameName = existing.find((w) => w.name.trim().toLowerCase() === normalizedName);
     if (sameName) throw new BadRequestException(`A week named "${sameName.name}" already exists`);
-    const overlapping = existing.find((w) => startDate <= w.endDate && endDate >= w.startDate);
+    // Strict inequalities, not <=/>= : a week's `endDate` already behaves as an EXCLUSIVE boundary
+    // everywhere a post's publish date is matched against it (publishedPlatformFilter's `lte: to`,
+    // compared against a @db.Date column that reads back as that day's UTC midnight, excludes
+    // anything published later that same day) — so one week ending exactly where the next begins
+    // is the normal, intended back-to-back case (every week before this check existed was created
+    // that way), not a real overlap. The inclusive version rejected exactly that case, which is
+    // what made it impossible to add a new week right after an existing one.
+    const overlapping = existing.find((w) => startDate < w.endDate && endDate > w.startDate);
     if (overlapping) throw new BadRequestException(`This date range overlaps the existing week "${overlapping.name}" (${overlapping.startDate.toISOString().slice(0, 10)} to ${overlapping.endDate.toISOString().slice(0, 10)})`);
   }
 
