@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Wallet } from "lucide-react";
+import { Plus, Search, Upload, Wallet } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Payment, MediaCampaign, MediaHost, Influencer, Member, PaginatedMembers, Expense, ExpenseCategory } from "@/lib/types";
 import { Modal } from "@/components/Modal";
@@ -14,6 +14,7 @@ import { ReadyForPaymentPanel } from "@/components/ReadyForPaymentPanel";
 import { ProcessingPaymentsPanel } from "@/components/ProcessingPaymentsPanel";
 import { Collapsible } from "@/components/Collapsible";
 import { ExpenseModal } from "@/components/ExpenseModal";
+import { ImportExpensesModal } from "@/components/ImportExpensesModal";
 import { FinanceStatCards } from "@/components/FinanceStatCards";
 import { TableSearchInput } from "@/components/TableSearchInput";
 import { useToast } from "@/components/Toast";
@@ -211,6 +212,7 @@ function ExpenseSection({ organizationId, category, title, help }: { organizatio
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [search, setSearch] = useState("");
 
@@ -234,7 +236,10 @@ function ExpenseSection({ organizationId, category, title, help }: { organizatio
       <Collapsible title={title} subtitle={help} bare>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <TableSearchInput value={search} onChange={setSearch} placeholder={t("searchGenericPlaceholder")} />
-          <button className="btn-primary text-sm" onClick={() => setShowAdd(true)}><Plus size={15} /> {t("addExpenseCta")}</button>
+          <div className="flex gap-2">
+            <button className="btn-secondary text-sm" onClick={() => setShowImport(true)}><Upload size={15} /> {t("import")}</button>
+            <button className="btn-primary text-sm" onClick={() => setShowAdd(true)}><Plus size={15} /> {t("addExpenseCta")}</button>
+          </div>
         </div>
         {!expenses || expenses.length === 0 ? (
           <p className="text-sm text-muted">{t("noExpensesYet")}</p>
@@ -281,6 +286,15 @@ function ExpenseSection({ organizationId, category, title, help }: { organizatio
           initial={editing ?? undefined}
           onClose={() => { setShowAdd(false); setEditing(null); }}
           onDone={() => { setShowAdd(false); setEditing(null); refresh(); }}
+        />
+      )}
+
+      {showImport && (
+        <ImportExpensesModal
+          organizationId={organizationId}
+          category={category}
+          onClose={() => setShowImport(false)}
+          onImported={refresh}
         />
       )}
     </div>

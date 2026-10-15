@@ -40,8 +40,13 @@ export class PostingAgreementsController {
   }
 
   /** One beneficiary's view of every org-wide week definition — same registration-order reasoning
-   * as ready-for-payment above. */
+   * as ready-for-payment above. Open to any org member (overrides the class-level admin/finance-only
+   * roles for this one route), same reasoning and precedent as PostingWeekDefinitionsController's own
+   * GET: this just supplies the "Week" filter dropdown on a beneficiary's own Campaigns page, which
+   * whoever can already see that page (media/influencer/members access, not just Admin/Finance)
+   * should be able to use — not reading or changing anything finance-sensitive. */
   @Get("week-definitions")
+  @Roles()
   listWeekDefinitionRows(@Param("organizationId") organizationId: string, @Query("mediaHostId") mediaHostId?: string, @Query("influencerId") influencerId?: string) {
     return this.agreements.listWeekDefinitionRows(organizationId, { mediaHostId, influencerId });
   }

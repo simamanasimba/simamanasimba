@@ -593,6 +593,8 @@ const DICT = {
     importCreatedPrefix: "Created",
     importSkippedPrefix: "skipped",
     importAlreadyExisted: "(already existed).",
+    importExpensesTitle: "Import costs from CSV",
+    csvColumnsExpensesHelp: "CSV columns: item, quantity, unitCost, dateIssued (YYYY-MM-DD), purpose, concernedParty, notes. Category is set by which section you import into.",
 
     titleLabel: "Title",
     descriptionLabel: "Description",
@@ -1868,6 +1870,8 @@ const DICT = {
     importFailed: "Upakiaji umeshindwa",
     csvColumnsHelp: "Safu za CSV: membershipNumber, firstName, lastName, phone, email, region, district, membershipType.",
     membershipNumberImportHelp: "Namba ya uanachama si lazima — acha wazi kama mtu bado hana.",
+    importExpensesTitle: "Pakia gharama kutoka CSV",
+    csvColumnsExpensesHelp: "Safu za CSV: item, quantity, unitCost, dateIssued (YYYY-MM-DD), purpose, concernedParty, notes. Aina ya gharama inatokana na sehemu unayopakia.",
     importCreatedPrefix: "Waliongezwa",
     importSkippedPrefix: "waliorukwa",
     importAlreadyExisted: "(walikuwepo tayari).",

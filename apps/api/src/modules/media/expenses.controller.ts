@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import type { ExpenseCategory } from "@event-intel/database";
 import { ExpensesService } from "./expenses.service";
 import { CreateExpenseDto } from "./dto/create-expense.dto";
@@ -10,6 +11,8 @@ import { RequiresArea } from "../../common/decorators/requires-area.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { RequestUser } from "../../common/types";
 import { AuditService } from "../../common/audit.service";
+import { MAX_UPLOAD_BYTES } from "../storage/storage.service";
+import { parseCsv } from "../../common/csv.util";
 
 /** Operational and administrative spending — separate from Payments (which pay influencers/media
  * hosts). Finance-only: same role set as payment write access. */
@@ -31,6 +34,22 @@ export class ExpensesController {
   @Get("totals")
   totals(@Param("organizationId") organizationId: string) {
     return this.expenses.totalsByCategory(organizationId);
+  }
+
+  @Post("import")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  async import(
+    @Param("organizationId") organizationId: string,
+    @Query("category") category: ExpenseCategory,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!category) throw new BadRequestException("category query param is required");
+    if (!file) throw new BadRequestException("No file uploaded — expected a CSV file under field name 'file'");
+    const rows = parseCsv(file.buffer.toString("utf-8"));
+    const result = await this.expenses.importRows(organizationId, category, rows, user.id);
+    await this.audit.record({ organizationId, userId: user.id, action: "expense.imported", entityType: "expense", metadata: result });
+    return result;
   }
 
   @Post()

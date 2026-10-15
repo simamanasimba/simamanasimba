@@ -72,6 +72,44 @@ export class ExpensesService {
     return { success: true };
   }
 
+  /** CSV import — one category per file (the section it was imported into on the Finance page),
+   * so the sheet itself only needs item/quantity/unitCost/dateIssued/purpose/concernedParty/notes,
+   * same as filling in the "Add" form by hand, just many rows at once. No per-row duplicate concept
+   * exists for expenses (unlike members' membershipNumber), so every valid row is created. */
+  async importRows(organizationId: string, category: ExpenseCategory, rows: Array<Record<string, string>>, createdByUserId: string) {
+    const results = { created: 0, errors: [] as string[] };
+    for (const [index, row] of rows.entries()) {
+      const item = row.item?.trim();
+      const quantity = Number(row.quantity);
+      const unitCost = Number(row.unitCost);
+      const dateIssued = row.dateIssued?.trim();
+      if (!item || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitCost) || unitCost < 0 || !dateIssued) {
+        results.errors.push(`Row ${index + 2}: item, quantity (> 0), unitCost (>= 0), and dateIssued are required`);
+        continue;
+      }
+      try {
+        await this.create(
+          organizationId,
+          {
+            category,
+            item,
+            purpose: row.purpose?.trim() || undefined,
+            quantity,
+            unitCost,
+            dateIssued,
+            concernedParty: row.concernedParty?.trim() || undefined,
+            notes: row.notes?.trim() || undefined,
+          },
+          createdByUserId,
+        );
+        results.created++;
+      } catch (err) {
+        results.errors.push(`Row ${index + 2}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    return results;
+  }
+
   /** Grand totals per category — used by the Finance overview (stat cards, no per-row detail). */
   async totalsByCategory(organizationId: string): Promise<Record<ExpenseCategory, number>> {
     const rows = await this.prisma.expense.groupBy({ by: ["category"], where: { organizationId }, _sum: { totalCost: true } });
